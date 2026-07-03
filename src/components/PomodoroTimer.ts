@@ -8118,13 +8118,9 @@ export class PomodoroTimer {
                     }
                     console.log('[PomodoroTimer] 使用保存的正常窗口位置:', this.normalWindowBounds);
                 } else if (this.inheritedWindowBounds) {
-                    // 如果没有保存的正常位置，使用继承的窗口位置（任务切换时）
+                    // 只继承位置，不继承大小，避免 getBounds() 的阴影/缩放误差累积导致窗口越来越大
                     x = this.inheritedWindowBounds.x;
                     y = this.inheritedWindowBounds.y;
-                    if (this.inheritedWindowBounds.width && this.inheritedWindowBounds.height) {
-                        winWidth = this.inheritedWindowBounds.width;
-                        winHeight = this.inheritedWindowBounds.height;
-                    }
                     console.log('[PomodoroTimer] 使用继承的窗口位置:', this.inheritedWindowBounds);
                 }
             }
@@ -10164,9 +10160,7 @@ document.body.classList.remove('docked-mode');
             // 加载完成后，根据当前实例的模式（迷你/吸附）修正窗口大小、bounds 和 DOM class
             try {
                 if (this.isMiniMode) {
-                    if (!this.normalWindowBounds) {
-                        try { this.normalWindowBounds = pomodoroWindow.getBounds(); } catch (e) { this.normalWindowBounds = null; }
-                    }
+                    // 不要在复用/重载内容时缓存当前 bounds，避免把迷你尺寸误存为正常尺寸
                     try {
                         const bounds = pomodoroWindow.getBounds();
                         const targetBounds = this.resolveMiniWindowBounds(this.inheritedWindowBounds || bounds);
@@ -10180,9 +10174,7 @@ document.body.classList.remove('docked-mode');
                         await pomodoroWindow.webContents.executeJavaScript(`document.body.classList.add('mini-mode');document.body.classList.remove('docked-mode');`);
                     } catch (e) { }
                 } else if (this.isDocked) {
-                    if (!this.normalWindowBounds) {
-                        try { this.normalWindowBounds = pomodoroWindow.getBounds(); } catch (e) { this.normalWindowBounds = null; }
-                    }
+                    // 不要在复用/重载内容时缓存当前 bounds，避免把吸附尺寸误存为正常尺寸
                     try {
                         const electronReq = (window as any).require;
                         const remote = electronReq?.('@electron/remote') || electronReq?.('electron')?.remote || (window as any).require('electron')?.remote;
