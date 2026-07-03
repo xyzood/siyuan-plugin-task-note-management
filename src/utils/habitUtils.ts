@@ -307,6 +307,7 @@ export function getTodayHabitBuckets(
     completedHabits: HabitLike[];
 } {
     const dueHabits = habits.filter((habit) => {
+        if (habit?.abandoned === true) return false;
         if (!isHabitActiveOnDate(habit, today)) return false;
         return shouldCheckInOnDate(habit, today);
     });
