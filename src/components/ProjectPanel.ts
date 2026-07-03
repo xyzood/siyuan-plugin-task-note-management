@@ -1,4 +1,4 @@
-import { showMessage, confirm, Menu, Dialog, getAllModels, platformUtils, openEmoji } from "siyuan";
+import { showMessage, confirm, Menu, Dialog, getAllModels, platformUtils, openEmoji, getFrontend } from "siyuan";
 import { getLastStatsMode } from "./stats/statsMode";
 import { showStatsDialog } from "./stats/ShowStatsDialog";
 
@@ -248,6 +248,7 @@ export class ProjectPanel {
     // 缓存提醒数据，避免为每个项目重复读取
     private reminderDataCache: any = null;
     private currentViewMode: 'card' | 'list' = 'card';
+    private isMobileClient: boolean = false;
 
     constructor(container: HTMLElement, plugin?: any) {
         this.container = container;
@@ -291,6 +292,7 @@ export class ProjectPanel {
     }
 
     private async initializeAsync() {
+        this.isMobileClient = getFrontend().endsWith('mobile') || (this.plugin && this.plugin.isInMobileApp);
         await this.categoryManager.initialize();
         await this.statusManager.initialize();
         await this.restorePanelSettings();
@@ -1584,7 +1586,7 @@ export class ProjectPanel {
     }
     // 新增：添加拖拽功能
     private addDragFunctionality(projectEl: HTMLElement, project: any) {
-        if (this.plugin?.isInMobileApp) return;
+        if (this.isMobileClient || (this.plugin && this.plugin.isInMobileApp)) return;
 
         projectEl.draggable = true;
         projectEl.style.cursor = 'grab';
@@ -3372,7 +3374,7 @@ export class ProjectPanel {
     }
 
     private bindFolderDragEvents(groupEl: HTMLElement, headerEl: HTMLElement, folder: any) {
-        if (!this.plugin?.isInMobileApp) {
+        if (!this.isMobileClient && !(this.plugin && this.plugin.isInMobileApp)) {
             headerEl.draggable = true;
             headerEl.style.cursor = 'grab';
 

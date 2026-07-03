@@ -1406,6 +1406,10 @@
 .reminder-list {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
 }
 
 .reminder-empty {
@@ -1916,8 +1920,10 @@
 
 // 提醒面板样式
 .reminder-panel {
+    height: 100%;
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
 }
 
 .reminder-panel__header {

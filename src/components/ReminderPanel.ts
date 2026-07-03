@@ -103,6 +103,7 @@ export class ReminderPanel {
     // 项目看板状态缓存：projectId -> (statusId -> statusMeta)
     private projectKanbanStatusCache: Map<string, Map<string, KanbanStatus>> = new Map();
     private defaultKanbanStatusCache: Map<string, KanbanStatus> = new Map();
+    private isMobileClient: boolean = false;
 
     // 分页相关状态
     private currentPage: number = 1;
@@ -118,6 +119,7 @@ export class ReminderPanel {
     constructor(container: HTMLElement, plugin?: any, closeCallback?: () => void) {
         this.container = container;
         this.plugin = plugin;
+        this.isMobileClient = getFrontend().endsWith('mobile') || (this.plugin && this.plugin.isInMobileApp);
         // 唯一 ID，用于标记由本面板发出的全局事件，避免自身响应
         this.panelId = `ReminderPanel_${Date.now()}_${Math.random().toString(36).slice(2)}`;
         this.categoryManager = CategoryManager.getInstance(this.plugin); // 初始化分类管理器
@@ -5514,7 +5516,7 @@ export class ReminderPanel {
     // 新增：添加拖拽功能
     private addDragFunctionality(element: HTMLElement, reminder: any) {
 
-        if (this.plugin.isInMobileApp) return; // 华为平板不能添加lement.draggable = true;
+        if (this.isMobileClient || (this.plugin && this.plugin.isInMobileApp)) return; // 移动端不启用拖拽，避免手势冲突导致无法滑动
         if (this.isDragDisabledBySortMode()) return;
 
         element.draggable = true;
