@@ -491,6 +491,20 @@
                 display: none;
             }
 
+            .reminder-selection-mirror {
+                .reminder-selection-mirror-frame {
+                    justify-content: flex-start;
+                    gap: 0;
+                }
+
+                .reminder-selection-mirror-time {
+                    display: block !important;
+                    flex-shrink: 0;
+                    max-height: none;
+                    margin-bottom: 0;
+                }
+            }
+
             /* 当高度非常小时隐藏非关键信息 */
             .fc-timegrid-event:not(.fc-timegrid-event-short) .fc-event-main-frame {
                 justify-content: flex-start;

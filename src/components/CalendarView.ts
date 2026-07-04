@@ -1707,7 +1707,19 @@ export class CalendarView {
                 meridiem: false,
                 hour12: false
             },
-            eventClassNames: 'reminder-calendar-event',
+            eventClassNames: (arg: any) => {
+                const classNames = ['reminder-calendar-event'];
+                const isEmptySelectionMirror = arg.isMirror === true &&
+                    arg.isDragging !== true &&
+                    arg.isResizing !== true &&
+                    !String(arg.event?.title || '').trim();
+
+                if (isEmptySelectionMirror) {
+                    classNames.push('reminder-selection-mirror');
+                }
+
+                return classNames;
+            },
             eventOrder: (a: any, b: any) => this.compareEventsForOrder(a, b),
             displayEventTime: true,
             // Custom Lunar Date and Holiday Rendering using DidMount hooks to preserve default behavior
@@ -5214,6 +5226,26 @@ export class CalendarView {
     private renderEventContent(eventInfo) {
         const { event, timeText } = eventInfo;
         const props = event.extendedProps;
+        const isEmptySelectionMirror = eventInfo.isMirror === true &&
+            eventInfo.isDragging !== true &&
+            eventInfo.isResizing !== true &&
+            !String(event.title || '').trim() &&
+            !props.type;
+
+        if (isEmptySelectionMirror) {
+            const mainFrame = document.createElement('div');
+            mainFrame.className = 'fc-event-main-frame reminder-selection-mirror-frame';
+
+            if (timeText) {
+                const timeEl = document.createElement('div');
+                timeEl.className = 'fc-event-time reminder-selection-mirror-time';
+                timeEl.textContent = timeText;
+                mainFrame.appendChild(timeEl);
+            }
+
+            return { domNodes: [mainFrame] };
+        }
+
         const isReminderTimeEvent = props.type === 'reminderTime';
 
         // Special rendering for Pomodoro events
