@@ -11533,6 +11533,10 @@ export class CalendarView {
             // 移除所有已有的折叠行，避免状态残留
             const existingRows = slotsTbody.querySelectorAll('.calendar-collapsed-night-row');
             existingRows.forEach(r => r.remove());
+            const colsContainer = this.container.querySelector('.fc-timegrid-cols') as HTMLElement;
+            if (colsContainer) {
+                colsContainer.style.removeProperty('top');
+            }
 
             const collapseStart = settings.calendarCollapseStartTime || '00:00';
             const collapseEnd = settings.calendarCollapseEndTime || '08:00';
@@ -11588,18 +11592,19 @@ export class CalendarView {
             // 1. 渲染顶部折叠行
             if (hasTopCollapse) {
                 const row = document.createElement('tr');
-                row.className = 'fc-timegrid-slot calendar-collapsed-night-row';
+                // 不能使用 fc-timegrid-slot* 类，否则 FullCalendar 会把折叠提示行纳入 slatCoords。
+                row.className = 'calendar-collapsed-night-row';
                 row.style.height = '28px';
 
                 row.innerHTML = `
-                    <td class="fc-timegrid-slot-label fc-scrollgrid-shrink" style="background-color: var(--b3-theme-background-page); text-align: center; vertical-align: middle; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); padding: 0;">
-                        <div class="fc-timegrid-slot-label-frame fc-scrollgrid-shrink-frame">
-                            <div class="fc-timegrid-slot-label-cushion fc-scrollgrid-shrink-cushion" style="font-size: 0.8em; color: var(--b3-theme-on-surface-light); line-height: 1.2; padding: 2px;">
+                    <td class="calendar-collapsed-night-label fc-scrollgrid-shrink" style="background-color: var(--b3-theme-background-page); text-align: center; vertical-align: middle; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); padding: 0;">
+                        <div class="calendar-collapsed-night-label-frame fc-scrollgrid-shrink-frame">
+                            <div class="calendar-collapsed-night-label-cushion fc-scrollgrid-shrink-cushion" style="font-size: 0.8em; color: var(--b3-theme-on-surface-light); line-height: 1.2; padding: 2px;">
                                 ${topStartLabel}<br>- ${topEndLabel}
                             </div>
                         </div>
                     </td>
-                    <td class="fc-timegrid-slot-lane" style="background-color: var(--b3-theme-background-page); opacity: 0.8; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); vertical-align: middle; text-align: center; font-size: 0.85em; color: var(--b3-theme-on-surface-light); padding: 0;">
+                    <td class="calendar-collapsed-night-lane" style="background-color: var(--b3-theme-background-page); opacity: 0.8; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); vertical-align: middle; text-align: center; font-size: 0.85em; color: var(--b3-theme-on-surface-light); padding: 0;">
                         <div style="display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 100%;">
                             <svg style="width: 12px; height: 12px; fill: var(--b3-theme-on-surface-light);"><use xlink:href="#iconDown"></use></svg>
                         </div>
@@ -11615,33 +11620,24 @@ export class CalendarView {
                 });
 
                 slotsTbody.insertBefore(row, slotsTbody.firstChild);
-
-                const colsContainer = this.container.querySelector('.fc-timegrid-cols') as HTMLElement;
-                if (colsContainer) {
-                    colsContainer.style.setProperty('top', '28px', 'important');
-                }
-            } else {
-                const colsContainer = this.container.querySelector('.fc-timegrid-cols') as HTMLElement;
-                if (colsContainer) {
-                    colsContainer.style.removeProperty('top');
-                }
             }
 
             // 2. 渲染底部折叠行
             if (hasBottomCollapse) {
                 const row = document.createElement('tr');
-                row.className = 'fc-timegrid-slot calendar-collapsed-night-row';
+                // 不能使用 fc-timegrid-slot* 类，否则 FullCalendar 会把折叠提示行纳入 slatCoords。
+                row.className = 'calendar-collapsed-night-row';
                 row.style.height = '28px';
 
                 row.innerHTML = `
-                    <td class="fc-timegrid-slot-label fc-scrollgrid-shrink" style="background-color: var(--b3-theme-background-page); text-align: center; vertical-align: middle; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); padding: 0;">
-                        <div class="fc-timegrid-slot-label-frame fc-scrollgrid-shrink-frame">
-                            <div class="fc-timegrid-slot-label-cushion fc-scrollgrid-shrink-cushion" style="font-size: 0.8em; color: var(--b3-theme-on-surface-light); line-height: 1.2; padding: 2px;">
+                    <td class="calendar-collapsed-night-label fc-scrollgrid-shrink" style="background-color: var(--b3-theme-background-page); text-align: center; vertical-align: middle; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); padding: 0;">
+                        <div class="calendar-collapsed-night-label-frame fc-scrollgrid-shrink-frame">
+                            <div class="calendar-collapsed-night-label-cushion fc-scrollgrid-shrink-cushion" style="font-size: 0.8em; color: var(--b3-theme-on-surface-light); line-height: 1.2; padding: 2px;">
                                 ${bottomStartLabel}<br>- ${bottomEndLabel}
                             </div>
                         </div>
                     </td>
-                    <td class="fc-timegrid-slot-lane" style="background-color: var(--b3-theme-background-page); opacity: 0.8; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); vertical-align: middle; text-align: center; font-size: 0.85em; color: var(--b3-theme-on-surface-light); padding: 0;">
+                    <td class="calendar-collapsed-night-lane" style="background-color: var(--b3-theme-background-page); opacity: 0.8; cursor: pointer; border-bottom: 1px solid var(--b3-border-color); vertical-align: middle; text-align: center; font-size: 0.85em; color: var(--b3-theme-on-surface-light); padding: 0;">
                         <div style="display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 100%;">
                             <svg style="width: 12px; height: 12px; fill: var(--b3-theme-on-surface-light);"><use xlink:href="#iconDown"></use></svg>
                         </div>
@@ -11738,7 +11734,7 @@ export class CalendarView {
             return { startMin, endMin, hasNoRange };
         });
 
-        const rows = Array.from(this.container.querySelectorAll('.fc-timegrid-slots tbody tr')) as HTMLElement[];
+        const rows = Array.from(this.container.querySelectorAll('.fc-timegrid-slots tbody tr:not(.calendar-collapsed-night-row)')) as HTMLElement[];
         for (const row of rows) {
             const labelCell = row.querySelector('.fc-timegrid-slot-label') as HTMLElement;
             if (labelCell) {
@@ -11845,7 +11841,7 @@ export class CalendarView {
                 
                 const startY = e.clientY;
                 // 获取当前网格所有带时间轴标签行的 top 与高度数据
-                const rows = Array.from(this.container.querySelectorAll('.fc-timegrid-slots tbody tr')) as HTMLElement[];
+                const rows = Array.from(this.container.querySelectorAll('.fc-timegrid-slots tbody tr:not(.calendar-collapsed-night-row)')) as HTMLElement[];
                 const rowCoords = rows.map(r => {
                     const labelTd = r.querySelector('.fc-timegrid-slot-label') as HTMLElement;
                     const rect = r.getBoundingClientRect();
