@@ -329,7 +329,7 @@ export class RepeatSettingsDialog {
                     <div id="repeatOptions" class="repeat-options" style="display: ${this.repeatConfig.enabled ? 'block' : 'none'}">
                         <!-- 重复类型选择 -->
                         <div class="b3-form__group">
-                            <label class="b3-form__label">${i18n("repeatType")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("repeatType")}</label>
                             <select id="repeatType" class="b3-select">
                                 <option value="daily" ${this.repeatConfig.type === 'daily' ? 'selected' : ''}>${i18n("daily")}</option>
                                 <option value="weekly" ${this.repeatConfig.type === 'weekly' ? 'selected' : ''}>${i18n("weekly")}</option>
@@ -343,7 +343,7 @@ export class RepeatSettingsDialog {
 
                         <!-- 间隔设置 -->
                         <div id="intervalGroup" class="b3-form__group">
-                            <label class="b3-form__label">${i18n("repeatInterval")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("repeatInterval")}</label>
                             <div class="repeat-interval-container">
                                 <span>${i18n("every")}</span>
                                 <input type="number" id="repeatInterval" class="b3-text-field" min="1" max="99" value="${this.repeatConfig.interval || 1}" style="width: 60px; margin: 0 8px;">
@@ -351,26 +351,9 @@ export class RepeatSettingsDialog {
                             </div>
                         </div>
 
-                        <div id="repeatReminderSkipOptions" class="b3-form__group">
-                            <label class="b3-form__label">${i18n('reminderSkipDateOptions') || '提醒跳过'}</label>
-                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-                                <label style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 13px;">${i18n('reminderSkipWeekendsTask') || '任务提醒跳过周末'}</span>
-                                    <select id="repeatReminderSkipWeekendMode" class="b3-select" style="min-width: 138px;">
-                                        ${this.createSkipWeekendModeOptions()}
-                                    </select>
-                                </label>
-                                <label class="b3-checkbox" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                    <input type="checkbox" class="b3-switch" id="repeatReminderSkipHolidays" ${this.repeatConfig.reminderSkipHolidays === true ? 'checked' : ''}>
-                                    <span class="b3-checkbox__graphic"></span>
-                                    <span class="b3-checkbox__label">跳过节假日</span>
-                                </label>
-                            </div>
-                        </div>
-
                         <!-- 每周选项（星期选择） -->
                         <div id="weeklyOptions" class="b3-form__group" style="display: none;">
-                            <label class="b3-form__label">${i18n("repeatOnDays")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("repeatOnDays")}</label>
                             <div class="weekday-selector">
                                 ${this.createWeekdaySelector()}
                             </div>
@@ -378,7 +361,7 @@ export class RepeatSettingsDialog {
 
                         <!-- 每月选项（日期选择） -->
                         <div id="monthlyOptions" class="b3-form__group" style="display: none;">
-                            <label class="b3-form__label">${this.tr('repeatMonthlyRule', '每月重复')}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${this.tr('repeatMonthlyRule', '每月重复')}</label>
                             ${this.createMonthlyRepeatModeSelector()}
                             <div id="monthlyDateOptions">
                                 <div class="monthday-selector">
@@ -392,7 +375,7 @@ export class RepeatSettingsDialog {
 
                         <!-- 每年选项（日期输入框 MM-DD） -->
                         <div id="yearlyOptions" class="b3-form__group" style="display: none;">
-                            <label class="b3-form__label">${i18n("repeatDate")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("repeatDate")}</label>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <input type="text" id="yearlyDateInput" class="b3-text-field" placeholder="例如: 01-01 或 06-15" style="width: 120px;" value="${this.getYearlyDateValue()}">
                                 <span style="font-size: 12px; color: var(--b3-theme-on-surface-light);">${i18n("dateFormatDesc")}</span>
@@ -410,7 +393,7 @@ export class RepeatSettingsDialog {
 
                         <!-- 农历日期选择 -->
                         <div id="lunarOptions" class="b3-form__group" style="display: none;">
-                            <label class="b3-form__label">${i18n("lunarDate")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("lunarDate")}</label>
                             <div class="lunar-date-selector">
                                 <span id="lunarMonthlyGroup" style="display: none;">
                                     ${i18n("lunarDay")}: 
@@ -425,14 +408,31 @@ export class RepeatSettingsDialog {
                                     <input type="number" id="lunarDayYearly" class="b3-text-field" min="1" max="30" value="${this.repeatConfig.lunarDay || 1}" style="width: 60px; margin: 0 8px;">
                                 </span>
                             </div>
-                            <div class="b3-form__desc" style="margin-top: 8px;">
+                            <div class="b3-form__desc">
                                 ${i18n("lunarDateDesc")}
+                            </div>
+                        </div>
+
+                        <div id="repeatReminderSkipOptions" class="b3-form__group">
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n('reminderSkipDateOptions') || '提醒跳过'}</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 13px;">${i18n('reminderSkipWeekendsTask') || '任务提醒跳过周末'}</span>
+                                    <select id="repeatReminderSkipWeekendMode" class="b3-select" style="min-width: 138px;">
+                                        ${this.createSkipWeekendModeOptions()}
+                                    </select>
+                                </label>
+                                <label class="b3-checkbox" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" class="b3-switch" id="repeatReminderSkipHolidays" ${this.repeatConfig.reminderSkipHolidays === true ? 'checked' : ''}>
+                                    <span class="b3-checkbox__graphic"></span>
+                                    <span class="b3-checkbox__label">跳过节假日</span>
+                                </label>
                             </div>
                         </div>
 
                         <!-- 结束条件 -->
                         <div class="b3-form__group">
-                            <label class="b3-form__label">${i18n("repeatEnd")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("repeatEnd")}</label>
                             <div class="repeat-end-options">
                                 <label class="b3-radio">
                                     <input type="radio" name="endType" value="never" ${this.repeatConfig.endType === 'never' ? 'checked' : ''}>
@@ -454,13 +454,13 @@ export class RepeatSettingsDialog {
 
                         <!-- 结束日期 -->
                         <div id="endDateGroup" class="b3-form__group" style="display: ${this.repeatConfig.endType === 'date' ? 'block' : 'none'}">
-                            <label class="b3-form__label">${i18n("endDate")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("endDate")}</label>
                             <input type="date" id="endDate" class="b3-text-field" value="${this.repeatConfig.endDate || ''}" max="9999-12-31">
                         </div>
 
                         <!-- 结束次数 -->
                         <div id="endCountGroup" class="b3-form__group" style="display: ${this.repeatConfig.endType === 'count' ? 'block' : 'none'}">
-                            <label class="b3-form__label">${i18n("endAfterCount")}</label>
+                            <label class="b3-form__label" style="font-weight: 600;">${i18n("endAfterCount")}</label>
                             <input type="number" id="endCount" class="b3-text-field" min="1" max="999" value="${this.repeatConfig.endCount || 10}" style="width: 80px;">
                             <span style="margin-left: 8px;">${i18n("times")}</span>
                         </div>
