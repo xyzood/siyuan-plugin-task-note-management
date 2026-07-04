@@ -329,15 +329,32 @@ function parseIcalRRule(rrule: ICAL.Recur): any {
                 'SU': 0, 'MO': 1, 'TU': 2, 'WE': 3, 'TH': 4, 'FR': 5, 'SA': 6
             };
 
-            repeat.weekDays = rrule.parts.BYDAY.map(day => {
-                // BYDAY 可能包含数字前缀（如 1MO），我们只需要后两个字符
-                const dayStr = typeof day === 'string' ? day.slice(-2) : day;
-                return dayMap[dayStr];
-            }).filter(d => d !== undefined);
+            const byDayItems = Array.isArray(rrule.parts.BYDAY) ? rrule.parts.BYDAY : [rrule.parts.BYDAY];
+            const parsedByDays = byDayItems.map(day => {
+                const dayText = typeof day === 'string' ? day : String(day);
+                const match = dayText.match(/^(-?\d+)?([A-Z]{2})$/);
+                const order = match?.[1] ? parseInt(match[1], 10) : undefined;
+                const dayStr = match?.[2] || dayText.slice(-2);
+                return {
+                    order,
+                    weekday: dayMap[dayStr]
+                };
+            }).filter(item => item.weekday !== undefined);
 
-            // 如果有多个星期几，使用 custom 类型
-            if (repeat.weekDays.length > 1) {
-                repeat.type = 'custom';
+            const monthlyWeekdayRule = repeat.type === 'monthly' && parsedByDays.length === 1 ? parsedByDays[0] : null;
+            if (monthlyWeekdayRule &&
+                monthlyWeekdayRule.order !== undefined &&
+                (monthlyWeekdayRule.order === -1 || (monthlyWeekdayRule.order >= 1 && monthlyWeekdayRule.order <= 5))) {
+                repeat.monthlyRepeatMode = 'weekday';
+                repeat.monthlyWeekOrder = monthlyWeekdayRule.order;
+                repeat.monthlyWeekday = monthlyWeekdayRule.weekday;
+            } else {
+                repeat.weekDays = parsedByDays.map(item => item.weekday);
+
+                // 如果有多个星期几，使用 custom 类型
+                if (repeat.weekDays.length > 1) {
+                    repeat.type = 'custom';
+                }
             }
         }
 

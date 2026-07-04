@@ -506,7 +506,13 @@ export async function exportIcsFile(
                     break;
                 case 'monthly':
                     parts.push('FREQ=MONTHLY');
-                    if (Array.isArray(repeat.monthDays) && repeat.monthDays.length) {
+                    if (repeat.monthlyRepeatMode === 'weekday' &&
+                        (repeat.monthlyWeekOrder === -1 || (repeat.monthlyWeekOrder >= 1 && repeat.monthlyWeekOrder <= 5)) &&
+                        repeat.monthlyWeekday >= 0 && repeat.monthlyWeekday <= 6) {
+                        const map = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+                        const weekday = map[repeat.monthlyWeekday];
+                        if (weekday) parts.push(`BYDAY=${repeat.monthlyWeekOrder}${weekday}`);
+                    } else if (Array.isArray(repeat.monthDays) && repeat.monthDays.length) {
                         parts.push(`BYMONTHDAY=${repeat.monthDays.join(',')}`);
                     }
                     break;

@@ -19,7 +19,7 @@ import { CategoryManageDialog } from "./CategoryManageDialog";
 import { ProjectColorDialog } from "./ProjectColorDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { i18n } from "../pluginInstance";
-import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes } from "../utils/repeatUtils";
+import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate } from "../utils/repeatUtils";
 import { getAllReminders, saveReminders, loadHolidays, loadSubscriptions } from "../utils/icsSubscription";
 import { CalendarConfigManager, CALENDAR_CONFIG_UPDATED_EVENT } from "../utils/calendarConfigManager";
 import { showStatsDialog } from "./stats/ShowStatsDialog";
@@ -10682,6 +10682,9 @@ export class CalendarView {
             case 'weekly':
                 return this.calculateWeeklyNext(startDate, repeat.interval || 1);
             case 'monthly':
+                if (repeat.monthlyRepeatMode === 'weekday') {
+                    return this.calculateMonthlyWeekdayNext(startDate, repeat);
+                }
                 return this.calculateMonthlyNext(startDate, repeat.interval || 1);
             case 'yearly':
                 return this.calculateYearlyNext(startDate, repeat.interval || 1);
@@ -10726,6 +10729,31 @@ export class CalendarView {
         }
 
         return nextDate;
+    }
+
+    /**
+     * 计算“每月第几个星期几”的下一个日期
+     */
+    private calculateMonthlyWeekdayNext(startDate: Date, repeat: any): Date {
+        const interval = Math.max(1, Math.floor(Number(repeat.interval) || 1));
+        const order = Number(repeat.monthlyWeekOrder);
+        const weekday = Number(repeat.monthlyWeekday);
+
+        if (!(order === -1 || (order >= 1 && order <= 5)) || weekday < 0 || weekday > 6) {
+            return this.calculateMonthlyNext(startDate, interval);
+        }
+
+        const nextDate = new Date(startDate);
+        for (let i = 0; i < 120; i++) {
+            nextDate.setMonth(nextDate.getMonth() + interval, 1);
+            const targetDay = getMonthlyWeekdayDate(nextDate.getFullYear(), nextDate.getMonth(), order, weekday);
+            if (targetDay !== null) {
+                nextDate.setDate(targetDay);
+                return nextDate;
+            }
+        }
+
+        return this.calculateMonthlyNext(startDate, interval);
     }
 
     /**

@@ -4,12 +4,18 @@ import { solarToLunar } from "../utils/lunarUtils";
 import { getLogicalDateString } from "../utils/dateUtils";
 import { normalizeReminderSkipWeekendMode, type ReminderSkipWeekendMode } from "../utils/reminderSkipDate";
 
+export type MonthlyRepeatMode = 'date' | 'weekday';
+export type MonthlyWeekOrder = 1 | 2 | 3 | 4 | 5 | -1;
+
 export interface RepeatConfig {
     enabled: boolean;
     type: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' | 'ebbinghaus' | 'lunar-monthly' | 'lunar-yearly';
     interval: number; // 间隔，如每2天、每3周
     weekDays?: number[]; // 每周的哪几天 (0-6, 0为周日)
     monthDays?: number[]; // 每月的哪几天 (1-31)
+    monthlyRepeatMode?: MonthlyRepeatMode; // 每月重复方式：按日期/按星期
+    monthlyWeekOrder?: MonthlyWeekOrder; // 每月第几个星期几，-1 表示最后一个
+    monthlyWeekday?: number; // 每月按星期重复的星期几 (0-6, 0为周日)
     months?: number[]; // 每年的哪几个月 (1-12)
     lunarDay?: number; // 农历日期（1-30）
     lunarMonth?: number; // 农历月份（1-12）
@@ -87,7 +93,7 @@ export class RepeatSettingsDialog {
             title: i18n("repeatSettings"),
             content: this.createDialogContent(),
             width: "480px",
-            height: "350px"
+            height: "380px"
         });
 
         this.bindEvents();
@@ -114,10 +120,122 @@ export class RepeatSettingsDialog {
         `).join('');
     }
 
+    private tr(key: string, fallback: string): string {
+        return i18n(key) || fallback;
+    }
+
+    private getMonthlyRepeatMode(): MonthlyRepeatMode {
+        if (this.repeatConfig.monthlyRepeatMode === 'weekday') {
+            return this.repeatConfig.monthlyRepeatMode;
+        }
+        if (
+            this.repeatConfig.monthlyRepeatMode !== 'date' &&
+            this.repeatConfig.monthlyWeekOrder !== undefined &&
+            this.repeatConfig.monthlyWeekday !== undefined &&
+            (!this.repeatConfig.monthDays || this.repeatConfig.monthDays.length === 0)
+        ) {
+            return 'weekday';
+        }
+        return 'date';
+    }
+
+    private getDefaultMonthlyWeekOrder(): MonthlyWeekOrder {
+        const configuredOrder = Number(this.repeatConfig.monthlyWeekOrder);
+        if (configuredOrder === -1 || (configuredOrder >= 1 && configuredOrder <= 5)) {
+            return configuredOrder as MonthlyWeekOrder;
+        }
+
+        if (this.startDate) {
+            try {
+                const date = new Date(this.startDate + 'T00:00:00');
+                if (!isNaN(date.getTime())) {
+                    return Math.min(Math.ceil(date.getDate() / 7), 5) as MonthlyWeekOrder;
+                }
+            } catch (e) {
+                // 如果解析失败，使用默认值
+            }
+        }
+
+        return 1;
+    }
+
+    private getDefaultMonthlyWeekday(): number {
+        const configuredWeekday = Number(this.repeatConfig.monthlyWeekday);
+        if (configuredWeekday >= 0 && configuredWeekday <= 6) {
+            return configuredWeekday;
+        }
+
+        if (this.startDate) {
+            try {
+                const date = new Date(this.startDate + 'T00:00:00');
+                if (!isNaN(date.getTime())) {
+                    return date.getDay();
+                }
+            } catch (e) {
+                // 如果解析失败，使用默认值
+            }
+        }
+
+        return new Date().getDay();
+    }
+
+    private createMonthlyRepeatModeSelector(): string {
+        const selectedMode = this.getMonthlyRepeatMode();
+        const options: Array<{ value: MonthlyRepeatMode; label: string }> = [
+            { value: 'date', label: this.tr('repeatMonthlyModeDate', '按日期') },
+            { value: 'weekday', label: this.tr('repeatMonthlyModeWeekday', '按星期') }
+        ];
+
+        return `
+            <div class="monthly-repeat-mode-selector" style="display: flex; gap: 4px; padding: 4px; margin-bottom: 8px; background: var(--b3-theme-surface-lighter); border-radius: 6px;">
+                ${options.map(option => `
+                    <button type="button"
+                            class="b3-button monthly-repeat-mode-btn ${selectedMode === option.value ? 'b3-button--primary' : 'b3-button--outline'}"
+                            data-mode="${option.value}"
+                            style="flex: 1; min-width: 0; justify-content: center;">
+                        ${option.label}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    private createMonthlyWeekOrderOptions(): string {
+        const selectedOrder = this.getDefaultMonthlyWeekOrder();
+        const options: Array<{ value: MonthlyWeekOrder; label: string }> = [
+            { value: 1, label: this.tr('monthlyWeekOrderFirst', '第一个') },
+            { value: 2, label: this.tr('monthlyWeekOrderSecond', '第二个') },
+            { value: 3, label: this.tr('monthlyWeekOrderThird', '第三个') },
+            { value: 4, label: this.tr('monthlyWeekOrderFourth', '第四个') },
+            { value: 5, label: this.tr('monthlyWeekOrderFifth', '第五个') },
+            { value: -1, label: this.tr('monthlyWeekOrderLast', '最后一个') }
+        ];
+
+        return options.map(option => `
+            <option value="${option.value}" ${option.value === selectedOrder ? 'selected' : ''}>${option.label}</option>
+        `).join('');
+    }
+
+    private createMonthlyWeekdayOptions(): string {
+        const selectedWeekday = this.getDefaultMonthlyWeekday();
+        const weekdays = [
+            { value: 1, label: i18n("monday") || '周一' },
+            { value: 2, label: i18n("tuesday") || '周二' },
+            { value: 3, label: i18n("wednesday") || '周三' },
+            { value: 4, label: i18n("thursday") || '周四' },
+            { value: 5, label: i18n("friday") || '周五' },
+            { value: 6, label: i18n("saturday") || '周六' },
+            { value: 0, label: i18n("sunday") || '周日' }
+        ];
+
+        return weekdays.map(day => `
+            <option value="${day.value}" ${day.value === selectedWeekday ? 'selected' : ''}>${day.label}</option>
+        `).join('');
+    }
+
     private createDialogContent(): string {
         return `
-            <div class="repeat-settings-dialog">
-                <div class="b3-dialog__content" style="height: 219px;">
+                <div class="b3-dialog__content">
                     <div class="b3-form__group">
                         <label class="b3-checkbox">
                             <input type="checkbox" id="enableRepeat" ${this.repeatConfig.enabled ? 'checked' : ''}>
@@ -178,9 +296,20 @@ export class RepeatSettingsDialog {
 
                         <!-- 每月选项（日期选择） -->
                         <div id="monthlyOptions" class="b3-form__group" style="display: none;">
-                            <label class="b3-form__label">${i18n("repeatOnDates")}</label>
-                            <div class="monthday-selector">
-                                ${this.createMonthdaySelector()}
+                            <label class="b3-form__label">${this.tr('repeatMonthlyRule', '每月重复')}</label>
+                            ${this.createMonthlyRepeatModeSelector()}
+                            <div id="monthlyDateOptions">
+                                <div class="monthday-selector">
+                                    ${this.createMonthdaySelector()}
+                                </div>
+                            </div>
+                            <div id="monthlyWeekdayOptions" style="display: none; align-items: center; gap: 8px;">
+                                <select id="monthlyWeekOrder" class="b3-select" style="flex: 1; min-width: 0;">
+                                    ${this.createMonthlyWeekOrderOptions()}
+                                </select>
+                                <select id="monthlyWeekday" class="b3-select" style="flex: 1; min-width: 0;">
+                                    ${this.createMonthlyWeekdayOptions()}
+                                </select>
                             </div>
                         </div>
 
@@ -264,7 +393,6 @@ export class RepeatSettingsDialog {
                     <button class="b3-button b3-button--cancel" id="cancelBtn">${i18n("cancel")}</button>
                     <button class="b3-button b3-button--primary" id="confirmBtn">${i18n("save")}</button>
                 </div>
-            </div>
         `;
     }
 
@@ -441,6 +569,16 @@ export class RepeatSettingsDialog {
         confirmBtn.addEventListener('click', () => {
             this.saveSettings();
         });
+
+        const monthlyModeButtons = this.dialog.element.querySelectorAll('.monthly-repeat-mode-btn') as NodeListOf<HTMLButtonElement>;
+        monthlyModeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const mode = button.dataset.mode as MonthlyRepeatMode;
+                if (!mode) return;
+                this.repeatConfig.monthlyRepeatMode = mode;
+                this.updateMonthlyOptionsUI();
+            });
+        });
     }
 
     private updateUI() {
@@ -476,6 +614,7 @@ export class RepeatSettingsDialog {
 
             // 每月重复：显示日期选择器
             monthlyOptions.style.display = this.repeatConfig.type === 'monthly' ? 'block' : 'none';
+            this.updateMonthlyOptionsUI();
 
             // 每年重复：显示日期输入框
             yearlyOptions.style.display = this.repeatConfig.type === 'yearly' ? 'block' : 'none';
@@ -494,6 +633,26 @@ export class RepeatSettingsDialog {
             // 结束条件
             endDateGroup.style.display = this.repeatConfig.endType === 'date' ? 'block' : 'none';
             endCountGroup.style.display = this.repeatConfig.endType === 'count' ? 'block' : 'none';
+        }
+    }
+
+    private updateMonthlyOptionsUI() {
+        const mode = this.getMonthlyRepeatMode();
+        const monthlyDateOptions = this.dialog.element.querySelector('#monthlyDateOptions') as HTMLElement;
+        const monthlyWeekdayOptions = this.dialog.element.querySelector('#monthlyWeekdayOptions') as HTMLElement;
+        const monthlyModeButtons = this.dialog.element.querySelectorAll('.monthly-repeat-mode-btn') as NodeListOf<HTMLButtonElement>;
+
+        monthlyModeButtons.forEach(button => {
+            const isActive = button.dataset.mode === mode;
+            button.classList.toggle('b3-button--primary', isActive);
+            button.classList.toggle('b3-button--outline', !isActive);
+        });
+
+        if (monthlyDateOptions) {
+            monthlyDateOptions.style.display = mode === 'date' ? 'block' : 'none';
+        }
+        if (monthlyWeekdayOptions) {
+            monthlyWeekdayOptions.style.display = mode === 'weekday' ? 'flex' : 'none';
         }
     }
 
@@ -537,13 +696,38 @@ export class RepeatSettingsDialog {
             }
 
             if (this.repeatConfig.type === 'monthly') {
-                // 收集日期选项
-                const monthDayInputs = this.dialog.element.querySelectorAll('#monthlyOptions input[type="checkbox"]:checked') as NodeListOf<HTMLInputElement>;
-                this.repeatConfig.monthDays = Array.from(monthDayInputs).map(input => parseInt(input.value));
-                if (this.repeatConfig.monthDays.length === 0) {
-                    showMessage(i18n("pleaseSelectAtLeastOneDay"), 3000, 'error');
-                    return;
+                const monthlyMode = this.getMonthlyRepeatMode();
+                if (monthlyMode === 'weekday') {
+                    const monthlyWeekOrderSelect = this.dialog.element.querySelector('#monthlyWeekOrder') as HTMLSelectElement;
+                    const monthlyWeekdaySelect = this.dialog.element.querySelector('#monthlyWeekday') as HTMLSelectElement;
+                    const order = parseInt(monthlyWeekOrderSelect?.value, 10);
+                    const weekday = parseInt(monthlyWeekdaySelect?.value, 10);
+
+                    if (!(order === -1 || (order >= 1 && order <= 5)) || weekday < 0 || weekday > 6) {
+                        showMessage(this.tr('pleaseSelectMonthlyWeekday', '请选择每月重复的星期'), 3000, 'error');
+                        return;
+                    }
+
+                    this.repeatConfig.monthlyRepeatMode = 'weekday';
+                    this.repeatConfig.monthlyWeekOrder = order as MonthlyWeekOrder;
+                    this.repeatConfig.monthlyWeekday = weekday;
+                    delete this.repeatConfig.monthDays;
+                } else {
+                    // 收集日期选项
+                    const monthDayInputs = this.dialog.element.querySelectorAll('#monthlyDateOptions input[type="checkbox"]:checked') as NodeListOf<HTMLInputElement>;
+                    this.repeatConfig.monthDays = Array.from(monthDayInputs).map(input => parseInt(input.value)).sort((a, b) => a - b);
+                    if (this.repeatConfig.monthDays.length === 0) {
+                        showMessage(i18n("pleaseSelectAtLeastOneDay"), 3000, 'error');
+                        return;
+                    }
+                    this.repeatConfig.monthlyRepeatMode = 'date';
+                    delete this.repeatConfig.monthlyWeekOrder;
+                    delete this.repeatConfig.monthlyWeekday;
                 }
+            } else {
+                delete this.repeatConfig.monthlyRepeatMode;
+                delete this.repeatConfig.monthlyWeekOrder;
+                delete this.repeatConfig.monthlyWeekday;
             }
 
             if (this.repeatConfig.type === 'yearly') {

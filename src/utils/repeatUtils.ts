@@ -242,6 +242,54 @@ function getEffectiveMonthDays(year: number, month: number, monthDays: number[])
     return Array.from(new Set(monthDays.map(day => Math.min(day, lastDayOfMonth)))).sort((a, b) => a - b);
 }
 
+function isValidMonthlyWeekdayConfig(repeatConfig: RepeatConfig): boolean {
+    const order = repeatConfig.monthlyWeekOrder;
+    const weekday = repeatConfig.monthlyWeekday;
+    return repeatConfig.monthlyRepeatMode === 'weekday' &&
+        (order === -1 || (typeof order === 'number' && order >= 1 && order <= 5)) &&
+        typeof weekday === 'number' &&
+        weekday >= 0 &&
+        weekday <= 6;
+}
+
+export function getMonthlyWeekdayDate(year: number, month: number, order: number, weekday: number): number | null {
+    if (!(order === -1 || (order >= 1 && order <= 5)) || weekday < 0 || weekday > 6) {
+        return null;
+    }
+
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+
+    if (order === -1) {
+        const lastDate = new Date(year, month, lastDayOfMonth);
+        const daysBack = (lastDate.getDay() - weekday + 7) % 7;
+        return lastDayOfMonth - daysBack;
+    }
+
+    const firstDate = new Date(year, month, 1);
+    const daysToFirstWeekday = (weekday - firstDate.getDay() + 7) % 7;
+    const targetDay = 1 + daysToFirstWeekday + (order - 1) * 7;
+    return targetDay <= lastDayOfMonth ? targetDay : null;
+}
+
+function getMonthlyWeekOrderText(order: number): string {
+    switch (order) {
+        case 1:
+            return '第一个';
+        case 2:
+            return '第二个';
+        case 3:
+            return '第三个';
+        case 4:
+            return '第四个';
+        case 5:
+            return '第五个';
+        case -1:
+            return '最后一个';
+        default:
+            return '';
+    }
+}
+
 /**
  * 生成重复事件实例
  */
@@ -467,6 +515,21 @@ function shouldGenerateInstance(currentDate: Date, originalDate: string, repeatC
             const monthsDiff = (currentDate.getFullYear() - originalDateObj.getFullYear()) * 12 +
                 (currentDate.getMonth() - originalDateObj.getMonth());
             const monthlyInterval = repeatConfig.interval || 1;
+            const matchesMonthlyInterval = currentDate >= originalDateObj &&
+                monthsDiff >= 0 &&
+                monthsDiff % monthlyInterval === 0;
+
+            if (isValidMonthlyWeekdayConfig(repeatConfig)) {
+                const targetMonthDay = getMonthlyWeekdayDate(
+                    currentDate.getFullYear(),
+                    currentDate.getMonth(),
+                    repeatConfig.monthlyWeekOrder!,
+                    repeatConfig.monthlyWeekday!
+                );
+                return matchesMonthlyInterval &&
+                    targetMonthDay !== null &&
+                    currentDate.getDate() === targetMonthDay;
+            }
 
             // 如果设置了 monthDays，同时要求命中“每 N 个月”的间隔。
             if (repeatConfig.monthDays && repeatConfig.monthDays.length > 0) {
@@ -475,15 +538,12 @@ function shouldGenerateInstance(currentDate: Date, originalDate: string, repeatC
                     currentDate.getMonth(),
                     repeatConfig.monthDays
                 );
-                return currentDate >= originalDateObj &&
-                    monthsDiff >= 0 &&
-                    monthsDiff % monthlyInterval === 0 &&
-                    effectiveMonthDays.includes(currentDate.getDate());
+                return matchesMonthlyInterval && effectiveMonthDays.includes(currentDate.getDate());
             }
 
             // 否则按原有逻辑：检查与原始日期的日是否相同
             const sameDay = currentDate.getDate() === originalDateObj.getDate();
-            return monthsDiff >= 0 && monthsDiff % monthlyInterval === 0 && sameDay;
+            return matchesMonthlyInterval && sameDay;
 
         case 'yearly':
             // 如果设置了months和monthDays，检查当前日期是否匹配
@@ -677,7 +737,16 @@ export function getRepeatDescription(repeatConfig: RepeatConfig): string {
             }
             break;
         case 'monthly':
-            if (repeatConfig.monthDays && repeatConfig.monthDays.length > 0) {
+            if (isValidMonthlyWeekdayConfig(repeatConfig)) {
+                const keys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+                const fallbackDayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+                const dayNames = keys.map((k, index) => i18n(k) || fallbackDayNames[index]);
+                const orderText = getMonthlyWeekOrderText(repeatConfig.monthlyWeekOrder!);
+                const weekdayText = dayNames[repeatConfig.monthlyWeekday!] || '';
+                description = interval === 1
+                    ? `每月${orderText}${weekdayText}`
+                    : `每${interval}个月的${orderText}${weekdayText}`;
+            } else if (repeatConfig.monthDays && repeatConfig.monthDays.length > 0) {
                 const monthDaysText = repeatConfig.monthDays.join('、');
                 description = interval === 1
                     ? `每月${monthDaysText}号`
