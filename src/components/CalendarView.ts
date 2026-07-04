@@ -19,7 +19,7 @@ import { CategoryManageDialog } from "./CategoryManageDialog";
 import { ProjectColorDialog } from "./ProjectColorDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { i18n } from "../pluginInstance";
-import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate } from "../utils/repeatUtils";
+import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate, getMonthlyWeekRules } from "../utils/repeatUtils";
 import { getAllReminders, saveReminders, loadHolidays, loadSubscriptions } from "../utils/icsSubscription";
 import { CalendarConfigManager, CALENDAR_CONFIG_UPDATED_EVENT } from "../utils/calendarConfigManager";
 import { showStatsDialog } from "./stats/ShowStatsDialog";
@@ -10736,20 +10736,34 @@ export class CalendarView {
      */
     private calculateMonthlyWeekdayNext(startDate: Date, repeat: any): Date {
         const interval = Math.max(1, Math.floor(Number(repeat.interval) || 1));
-        const order = Number(repeat.monthlyWeekOrder);
-        const weekday = Number(repeat.monthlyWeekday);
+        const rules = getMonthlyWeekRules(repeat);
 
-        if (!(order === -1 || (order >= 1 && order <= 5)) || weekday < 0 || weekday > 6) {
+        if (rules.length === 0) {
             return this.calculateMonthlyNext(startDate, interval);
         }
 
-        const nextDate = new Date(startDate);
+        const startTime = startDate.getTime();
         for (let i = 0; i < 120; i++) {
-            nextDate.setMonth(nextDate.getMonth() + interval, 1);
-            const targetDay = getMonthlyWeekdayDate(nextDate.getFullYear(), nextDate.getMonth(), order, weekday);
-            if (targetDay !== null) {
-                nextDate.setDate(targetDay);
-                return nextDate;
+            const targetMonth = new Date(startDate.getFullYear(), startDate.getMonth() + (i * interval), 1, 12, 0, 0, 0);
+            const candidates = rules
+                .map(rule => {
+                    const targetDay = getMonthlyWeekdayDate(targetMonth.getFullYear(), targetMonth.getMonth(), rule.order, rule.weekday);
+                    if (targetDay === null) return null;
+                    return new Date(
+                        targetMonth.getFullYear(),
+                        targetMonth.getMonth(),
+                        targetDay,
+                        startDate.getHours(),
+                        startDate.getMinutes(),
+                        startDate.getSeconds(),
+                        startDate.getMilliseconds()
+                    );
+                })
+                .filter((date): date is Date => !!date && date.getTime() > startTime)
+                .sort((a, b) => a.getTime() - b.getTime());
+
+            if (candidates.length > 0) {
+                return candidates[0];
             }
         }
 

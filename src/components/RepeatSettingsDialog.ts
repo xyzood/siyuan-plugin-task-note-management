@@ -6,6 +6,10 @@ import { normalizeReminderSkipWeekendMode, type ReminderSkipWeekendMode } from "
 
 export type MonthlyRepeatMode = 'date' | 'weekday';
 export type MonthlyWeekOrder = 1 | 2 | 3 | 4 | 5 | -1;
+export interface MonthlyWeekRule {
+    order: MonthlyWeekOrder;
+    weekday: number;
+}
 
 export interface RepeatConfig {
     enabled: boolean;
@@ -14,8 +18,9 @@ export interface RepeatConfig {
     weekDays?: number[]; // 每周的哪几天 (0-6, 0为周日)
     monthDays?: number[]; // 每月的哪几天 (1-31)
     monthlyRepeatMode?: MonthlyRepeatMode; // 每月重复方式：按日期/按星期
-    monthlyWeekOrder?: MonthlyWeekOrder; // 每月第几个星期几，-1 表示最后一个
-    monthlyWeekday?: number; // 每月按星期重复的星期几 (0-6, 0为周日)
+    monthlyWeekRules?: MonthlyWeekRule[]; // 每月按星期重复的规则列表
+    monthlyWeekOrder?: MonthlyWeekOrder; // 旧字段：每月第几个星期几，-1 表示最后一个
+    monthlyWeekday?: number; // 旧字段：每月按星期重复的星期几 (0-6, 0为周日)
     months?: number[]; // 每年的哪几个月 (1-12)
     lunarDay?: number; // 农历日期（1-30）
     lunarMonth?: number; // 农历月份（1-12）
@@ -130,8 +135,8 @@ export class RepeatSettingsDialog {
         }
         if (
             this.repeatConfig.monthlyRepeatMode !== 'date' &&
-            this.repeatConfig.monthlyWeekOrder !== undefined &&
-            this.repeatConfig.monthlyWeekday !== undefined &&
+            (this.getConfiguredMonthlyWeekRules().length > 0 ||
+                (this.repeatConfig.monthlyWeekOrder !== undefined && this.repeatConfig.monthlyWeekday !== undefined)) &&
             (!this.repeatConfig.monthDays || this.repeatConfig.monthDays.length === 0)
         ) {
             return 'weekday';
@@ -139,44 +144,110 @@ export class RepeatSettingsDialog {
         return 'date';
     }
 
-    private getDefaultMonthlyWeekOrder(): MonthlyWeekOrder {
-        const configuredOrder = Number(this.repeatConfig.monthlyWeekOrder);
-        if (configuredOrder === -1 || (configuredOrder >= 1 && configuredOrder <= 5)) {
-            return configuredOrder as MonthlyWeekOrder;
-        }
-
-        if (this.startDate) {
-            try {
-                const date = new Date(this.startDate + 'T00:00:00');
-                if (!isNaN(date.getTime())) {
-                    return Math.min(Math.ceil(date.getDate() / 7), 5) as MonthlyWeekOrder;
-                }
-            } catch (e) {
-                // 如果解析失败，使用默认值
-            }
-        }
-
-        return 1;
+    private isValidMonthlyWeekOrder(order: number): order is MonthlyWeekOrder {
+        return order === -1 || (order >= 1 && order <= 5);
     }
 
-    private getDefaultMonthlyWeekday(): number {
-        const configuredWeekday = Number(this.repeatConfig.monthlyWeekday);
-        if (configuredWeekday >= 0 && configuredWeekday <= 6) {
-            return configuredWeekday;
+    private isValidMonthlyWeekday(weekday: number): boolean {
+        return weekday >= 0 && weekday <= 6;
+    }
+
+    private getMonthlyWeekRuleKey(rule: MonthlyWeekRule): string {
+        return `${rule.order}:${rule.weekday}`;
+    }
+
+    private getConfiguredMonthlyWeekRules(): MonthlyWeekRule[] {
+        const rules: MonthlyWeekRule[] = [];
+        const seen = new Set<string>();
+        const appendRule = (order: number, weekday: number) => {
+            if (!this.isValidMonthlyWeekOrder(order) || !this.isValidMonthlyWeekday(weekday)) return;
+            const rule = { order, weekday };
+            const key = this.getMonthlyWeekRuleKey(rule);
+            if (seen.has(key)) return;
+            seen.add(key);
+            rules.push(rule);
+        };
+
+        if (Array.isArray(this.repeatConfig.monthlyWeekRules)) {
+            this.repeatConfig.monthlyWeekRules.forEach(rule => {
+                appendRule(Number(rule?.order), Number(rule?.weekday));
+            });
+        }
+
+        if (rules.length === 0) {
+            appendRule(Number(this.repeatConfig.monthlyWeekOrder), Number(this.repeatConfig.monthlyWeekday));
+        }
+
+        return this.sortMonthlyWeekRules(rules);
+    }
+
+    private getDefaultMonthlyWeekRules(): MonthlyWeekRule[] {
+        const configuredRules = this.getConfiguredMonthlyWeekRules();
+        if (configuredRules.length > 0) {
+            return configuredRules;
         }
 
         if (this.startDate) {
             try {
                 const date = new Date(this.startDate + 'T00:00:00');
                 if (!isNaN(date.getTime())) {
-                    return date.getDay();
+                    return [{
+                        order: Math.min(Math.ceil(date.getDate() / 7), 5) as MonthlyWeekOrder,
+                        weekday: date.getDay()
+                    }];
                 }
             } catch (e) {
                 // 如果解析失败，使用默认值
             }
         }
 
-        return new Date().getDay();
+        return [{ order: 1, weekday: new Date().getDay() }];
+    }
+
+    private getMonthlyWeekOrderOptions(): Array<{ value: MonthlyWeekOrder; label: string }> {
+        return [
+            { value: 1, label: this.tr('monthlyWeekOrderFirst', '第一个') },
+            { value: 2, label: this.tr('monthlyWeekOrderSecond', '第二个') },
+            { value: 3, label: this.tr('monthlyWeekOrderThird', '第三个') },
+            { value: 4, label: this.tr('monthlyWeekOrderFourth', '第四个') },
+            { value: 5, label: this.tr('monthlyWeekOrderFifth', '第五个') },
+            { value: -1, label: this.tr('monthlyWeekOrderLast', '最后一个') }
+        ];
+    }
+
+    private getMonthlyWeekdayOptions(): Array<{ value: number; label: string; short: string }> {
+        return [
+            { value: 1, label: i18n("monday") || '周一', short: i18n("mon") || '一' },
+            { value: 2, label: i18n("tuesday") || '周二', short: i18n("tue") || '二' },
+            { value: 3, label: i18n("wednesday") || '周三', short: i18n("wed") || '三' },
+            { value: 4, label: i18n("thursday") || '周四', short: i18n("thu") || '四' },
+            { value: 5, label: i18n("friday") || '周五', short: i18n("fri") || '五' },
+            { value: 6, label: i18n("saturday") || '周六', short: i18n("sat") || '六' },
+            { value: 0, label: i18n("sunday") || '周日', short: i18n("sun") || '日' }
+        ];
+    }
+
+    private sortMonthlyWeekRules(rules: MonthlyWeekRule[]): MonthlyWeekRule[] {
+        const orderRank = (order: MonthlyWeekOrder) => order === -1 ? 6 : order;
+        const weekdayRank = (weekday: number) => weekday === 0 ? 7 : weekday;
+        return [...rules].sort((a, b) => {
+            const orderCompare = orderRank(a.order) - orderRank(b.order);
+            if (orderCompare !== 0) return orderCompare;
+            return weekdayRank(a.weekday) - weekdayRank(b.weekday);
+        });
+    }
+
+    private normalizeMonthlyWeekRules(rules: MonthlyWeekRule[]): MonthlyWeekRule[] {
+        const seen = new Set<string>();
+        const normalized: MonthlyWeekRule[] = [];
+        rules.forEach(rule => {
+            if (!this.isValidMonthlyWeekOrder(rule.order) || !this.isValidMonthlyWeekday(rule.weekday)) return;
+            const key = this.getMonthlyWeekRuleKey(rule);
+            if (seen.has(key)) return;
+            seen.add(key);
+            normalized.push(rule);
+        });
+        return this.sortMonthlyWeekRules(normalized);
     }
 
     private createMonthlyRepeatModeSelector(): string {
@@ -200,37 +271,48 @@ export class RepeatSettingsDialog {
         `;
     }
 
-    private createMonthlyWeekOrderOptions(): string {
-        const selectedOrder = this.getDefaultMonthlyWeekOrder();
-        const options: Array<{ value: MonthlyWeekOrder; label: string }> = [
-            { value: 1, label: this.tr('monthlyWeekOrderFirst', '第一个') },
-            { value: 2, label: this.tr('monthlyWeekOrderSecond', '第二个') },
-            { value: 3, label: this.tr('monthlyWeekOrderThird', '第三个') },
-            { value: 4, label: this.tr('monthlyWeekOrderFourth', '第四个') },
-            { value: 5, label: this.tr('monthlyWeekOrderFifth', '第五个') },
-            { value: -1, label: this.tr('monthlyWeekOrderLast', '最后一个') }
-        ];
-
-        return options.map(option => `
+    private createMonthlyWeekOrderSelectOptions(selectedOrder: MonthlyWeekOrder): string {
+        return this.getMonthlyWeekOrderOptions().map(option => `
             <option value="${option.value}" ${option.value === selectedOrder ? 'selected' : ''}>${option.label}</option>
         `).join('');
     }
 
-    private createMonthlyWeekdayOptions(): string {
-        const selectedWeekday = this.getDefaultMonthlyWeekday();
-        const weekdays = [
-            { value: 1, label: i18n("monday") || '周一' },
-            { value: 2, label: i18n("tuesday") || '周二' },
-            { value: 3, label: i18n("wednesday") || '周三' },
-            { value: 4, label: i18n("thursday") || '周四' },
-            { value: 5, label: i18n("friday") || '周五' },
-            { value: 6, label: i18n("saturday") || '周六' },
-            { value: 0, label: i18n("sunday") || '周日' }
-        ];
-
-        return weekdays.map(day => `
+    private createMonthlyWeekdaySelectOptions(selectedWeekday: number): string {
+        return this.getMonthlyWeekdayOptions().map(day => `
             <option value="${day.value}" ${day.value === selectedWeekday ? 'selected' : ''}>${day.label}</option>
         `).join('');
+    }
+
+    private createMonthlyWeekRuleRow(rule: MonthlyWeekRule, canRemove: boolean): string {
+        return `
+            <div class="monthly-week-rule-row" style="display: flex; align-items: center; gap: 8px;">
+                <select class="b3-select monthly-week-order-select" style="flex: 1; min-width: 0;">
+                    ${this.createMonthlyWeekOrderSelectOptions(rule.order)}
+                </select>
+                <select class="b3-select monthly-weekday-select" style="flex: 1; min-width: 0;">
+                    ${this.createMonthlyWeekdaySelectOptions(rule.weekday)}
+                </select>
+                <button type="button"
+                        class="b3-button b3-button--outline monthly-week-rule-remove"
+                        title="${i18n('remove') || '移除'}"
+                        style="width: 32px; min-width: 32px; padding: 0; ${canRemove ? '' : 'visibility: hidden;'}"
+                        ${canRemove ? '' : 'disabled'}>×</button>
+            </div>
+        `;
+    }
+
+    private createMonthlyWeekRuleSelector(): string {
+        const rules = this.getDefaultMonthlyWeekRules();
+        const addLabel = i18n('addCheckIn') || '添加';
+
+        return `
+            <div id="monthlyWeekRulesList" style="display: flex; flex-direction: column; gap: 8px;">
+                ${rules.map(rule => this.createMonthlyWeekRuleRow(rule, rules.length > 1)).join('')}
+            </div>
+            <button type="button" id="addMonthlyWeekRuleBtn" class="b3-button b3-button--outline" style="margin-top: 8px; width: 100%; justify-content: center;">
+                ${addLabel}
+            </button>
+        `;
     }
 
     private createDialogContent(): string {
@@ -303,13 +385,8 @@ export class RepeatSettingsDialog {
                                     ${this.createMonthdaySelector()}
                                 </div>
                             </div>
-                            <div id="monthlyWeekdayOptions" style="display: none; align-items: center; gap: 8px;">
-                                <select id="monthlyWeekOrder" class="b3-select" style="flex: 1; min-width: 0;">
-                                    ${this.createMonthlyWeekOrderOptions()}
-                                </select>
-                                <select id="monthlyWeekday" class="b3-select" style="flex: 1; min-width: 0;">
-                                    ${this.createMonthlyWeekdayOptions()}
-                                </select>
+                            <div id="monthlyWeekdayOptions" style="display: none;">
+                                ${this.createMonthlyWeekRuleSelector()}
                             </div>
                         </div>
 
@@ -579,6 +656,26 @@ export class RepeatSettingsDialog {
                 this.updateMonthlyOptionsUI();
             });
         });
+
+        const addMonthlyWeekRuleBtn = this.dialog.element.querySelector('#addMonthlyWeekRuleBtn') as HTMLButtonElement;
+        addMonthlyWeekRuleBtn?.addEventListener('click', () => {
+            const list = this.dialog.element.querySelector('#monthlyWeekRulesList') as HTMLElement;
+            if (!list) return;
+            list.insertAdjacentHTML('beforeend', this.createMonthlyWeekRuleRow({ order: 1, weekday: 1 }, true));
+            this.updateMonthlyWeekRuleRemoveButtons();
+        });
+
+        this.dialog.element.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement;
+            const removeButton = target.closest('.monthly-week-rule-remove') as HTMLButtonElement;
+            if (!removeButton) return;
+            const rows = this.dialog.element.querySelectorAll('.monthly-week-rule-row') as NodeListOf<HTMLElement>;
+            if (rows.length <= 1) return;
+            removeButton.closest('.monthly-week-rule-row')?.remove();
+            this.updateMonthlyWeekRuleRemoveButtons();
+        });
+
+        this.updateMonthlyWeekRuleRemoveButtons();
     }
 
     private updateUI() {
@@ -652,8 +749,19 @@ export class RepeatSettingsDialog {
             monthlyDateOptions.style.display = mode === 'date' ? 'block' : 'none';
         }
         if (monthlyWeekdayOptions) {
-            monthlyWeekdayOptions.style.display = mode === 'weekday' ? 'flex' : 'none';
+            monthlyWeekdayOptions.style.display = mode === 'weekday' ? 'block' : 'none';
         }
+    }
+
+    private updateMonthlyWeekRuleRemoveButtons() {
+        const rows = this.dialog.element.querySelectorAll('.monthly-week-rule-row') as NodeListOf<HTMLElement>;
+        const canRemove = rows.length > 1;
+        rows.forEach(row => {
+            const removeButton = row.querySelector('.monthly-week-rule-remove') as HTMLButtonElement;
+            if (!removeButton) return;
+            removeButton.disabled = !canRemove;
+            removeButton.style.visibility = canRemove ? 'visible' : 'hidden';
+        });
     }
 
     private getIntervalUnit(): string {
@@ -698,19 +806,32 @@ export class RepeatSettingsDialog {
             if (this.repeatConfig.type === 'monthly') {
                 const monthlyMode = this.getMonthlyRepeatMode();
                 if (monthlyMode === 'weekday') {
-                    const monthlyWeekOrderSelect = this.dialog.element.querySelector('#monthlyWeekOrder') as HTMLSelectElement;
-                    const monthlyWeekdaySelect = this.dialog.element.querySelector('#monthlyWeekday') as HTMLSelectElement;
-                    const order = parseInt(monthlyWeekOrderSelect?.value, 10);
-                    const weekday = parseInt(monthlyWeekdaySelect?.value, 10);
+                    const ruleRows = this.dialog.element.querySelectorAll('.monthly-week-rule-row') as NodeListOf<HTMLElement>;
+                    const rules = this.normalizeMonthlyWeekRules(Array.from(ruleRows)
+                        .map(row => {
+                            const orderSelect = row.querySelector('.monthly-week-order-select') as HTMLSelectElement;
+                            const weekdaySelect = row.querySelector('.monthly-weekday-select') as HTMLSelectElement;
+                            return {
+                                order: parseInt(orderSelect?.value || '', 10) as MonthlyWeekOrder,
+                                weekday: parseInt(weekdaySelect?.value || '', 10)
+                            };
+                        })
+                        .filter(rule => this.isValidMonthlyWeekOrder(rule.order) && this.isValidMonthlyWeekday(rule.weekday)));
 
-                    if (!(order === -1 || (order >= 1 && order <= 5)) || weekday < 0 || weekday > 6) {
+                    if (rules.length === 0) {
                         showMessage(this.tr('pleaseSelectMonthlyWeekday', '请选择每月重复的星期'), 3000, 'error');
                         return;
                     }
 
                     this.repeatConfig.monthlyRepeatMode = 'weekday';
-                    this.repeatConfig.monthlyWeekOrder = order as MonthlyWeekOrder;
-                    this.repeatConfig.monthlyWeekday = weekday;
+                    this.repeatConfig.monthlyWeekRules = rules;
+                    if (rules.length === 1) {
+                        this.repeatConfig.monthlyWeekOrder = rules[0].order;
+                        this.repeatConfig.monthlyWeekday = rules[0].weekday;
+                    } else {
+                        delete this.repeatConfig.monthlyWeekOrder;
+                        delete this.repeatConfig.monthlyWeekday;
+                    }
                     delete this.repeatConfig.monthDays;
                 } else {
                     // 收集日期选项
@@ -721,11 +842,13 @@ export class RepeatSettingsDialog {
                         return;
                     }
                     this.repeatConfig.monthlyRepeatMode = 'date';
+                    delete this.repeatConfig.monthlyWeekRules;
                     delete this.repeatConfig.monthlyWeekOrder;
                     delete this.repeatConfig.monthlyWeekday;
                 }
             } else {
                 delete this.repeatConfig.monthlyRepeatMode;
+                delete this.repeatConfig.monthlyWeekRules;
                 delete this.repeatConfig.monthlyWeekOrder;
                 delete this.repeatConfig.monthlyWeekday;
             }

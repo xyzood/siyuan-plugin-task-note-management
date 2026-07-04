@@ -242,14 +242,46 @@ function getEffectiveMonthDays(year: number, month: number, monthDays: number[])
     return Array.from(new Set(monthDays.map(day => Math.min(day, lastDayOfMonth)))).sort((a, b) => a - b);
 }
 
-function isValidMonthlyWeekdayConfig(repeatConfig: RepeatConfig): boolean {
-    const order = repeatConfig.monthlyWeekOrder;
-    const weekday = repeatConfig.monthlyWeekday;
-    return repeatConfig.monthlyRepeatMode === 'weekday' &&
-        (order === -1 || (typeof order === 'number' && order >= 1 && order <= 5)) &&
-        typeof weekday === 'number' &&
-        weekday >= 0 &&
-        weekday <= 6;
+function isValidMonthlyWeekOrder(order: number): boolean {
+    return order === -1 || (order >= 1 && order <= 5);
+}
+
+function isValidMonthlyWeekday(weekday: number): boolean {
+    return weekday >= 0 && weekday <= 6;
+}
+
+function getMonthlyWeekRuleSortRank(rule: { order: number; weekday: number }): number {
+    const orderRank = rule.order === -1 ? 6 : rule.order;
+    const weekdayRank = rule.weekday === 0 ? 7 : rule.weekday;
+    return orderRank * 10 + weekdayRank;
+}
+
+export function getMonthlyWeekRules(repeatConfig: RepeatConfig | any): Array<{ order: number; weekday: number }> {
+    if (repeatConfig?.monthlyRepeatMode !== 'weekday') {
+        return [];
+    }
+
+    const rules: Array<{ order: number; weekday: number }> = [];
+    const seen = new Set<string>();
+    const appendRule = (orderValue: any, weekdayValue: any) => {
+        const order = Number(orderValue);
+        const weekday = Number(weekdayValue);
+        if (!isValidMonthlyWeekOrder(order) || !isValidMonthlyWeekday(weekday)) return;
+        const key = `${order}:${weekday}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        rules.push({ order, weekday });
+    };
+
+    if (Array.isArray(repeatConfig.monthlyWeekRules)) {
+        repeatConfig.monthlyWeekRules.forEach((rule: any) => appendRule(rule?.order, rule?.weekday));
+    }
+
+    if (rules.length === 0) {
+        appendRule(repeatConfig.monthlyWeekOrder, repeatConfig.monthlyWeekday);
+    }
+
+    return rules.sort((a, b) => getMonthlyWeekRuleSortRank(a) - getMonthlyWeekRuleSortRank(b));
 }
 
 export function getMonthlyWeekdayDate(year: number, month: number, order: number, weekday: number): number | null {
@@ -519,16 +551,17 @@ function shouldGenerateInstance(currentDate: Date, originalDate: string, repeatC
                 monthsDiff >= 0 &&
                 monthsDiff % monthlyInterval === 0;
 
-            if (isValidMonthlyWeekdayConfig(repeatConfig)) {
-                const targetMonthDay = getMonthlyWeekdayDate(
-                    currentDate.getFullYear(),
-                    currentDate.getMonth(),
-                    repeatConfig.monthlyWeekOrder!,
-                    repeatConfig.monthlyWeekday!
-                );
-                return matchesMonthlyInterval &&
-                    targetMonthDay !== null &&
-                    currentDate.getDate() === targetMonthDay;
+            const monthlyWeekRules = getMonthlyWeekRules(repeatConfig);
+            if (monthlyWeekRules.length > 0) {
+                return matchesMonthlyInterval && monthlyWeekRules.some(rule => {
+                    const targetMonthDay = getMonthlyWeekdayDate(
+                        currentDate.getFullYear(),
+                        currentDate.getMonth(),
+                        rule.order,
+                        rule.weekday
+                    );
+                    return targetMonthDay !== null && currentDate.getDate() === targetMonthDay;
+                });
             }
 
             // 如果设置了 monthDays，同时要求命中“每 N 个月”的间隔。
@@ -737,15 +770,17 @@ export function getRepeatDescription(repeatConfig: RepeatConfig): string {
             }
             break;
         case 'monthly':
-            if (isValidMonthlyWeekdayConfig(repeatConfig)) {
+            const monthlyWeekRules = getMonthlyWeekRules(repeatConfig);
+            if (monthlyWeekRules.length > 0) {
                 const keys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
                 const fallbackDayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
                 const dayNames = keys.map((k, index) => i18n(k) || fallbackDayNames[index]);
-                const orderText = getMonthlyWeekOrderText(repeatConfig.monthlyWeekOrder!);
-                const weekdayText = dayNames[repeatConfig.monthlyWeekday!] || '';
+                const ruleText = monthlyWeekRules
+                    .map(rule => `${getMonthlyWeekOrderText(rule.order)}${dayNames[rule.weekday] || ''}`)
+                    .join('、');
                 description = interval === 1
-                    ? `每月${orderText}${weekdayText}`
-                    : `每${interval}个月的${orderText}${weekdayText}`;
+                    ? `每月${ruleText}`
+                    : `每${interval}个月的${ruleText}`;
             } else if (repeatConfig.monthDays && repeatConfig.monthDays.length > 0) {
                 const monthDaysText = repeatConfig.monthDays.join('、');
                 description = interval === 1

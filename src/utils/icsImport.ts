@@ -341,13 +341,22 @@ function parseIcalRRule(rrule: ICAL.Recur): any {
                 };
             }).filter(item => item.weekday !== undefined);
 
-            const monthlyWeekdayRule = repeat.type === 'monthly' && parsedByDays.length === 1 ? parsedByDays[0] : null;
-            if (monthlyWeekdayRule &&
-                monthlyWeekdayRule.order !== undefined &&
-                (monthlyWeekdayRule.order === -1 || (monthlyWeekdayRule.order >= 1 && monthlyWeekdayRule.order <= 5))) {
+            const monthlyWeekdayRules = repeat.type === 'monthly'
+                ? parsedByDays.filter(item =>
+                    item.order !== undefined &&
+                    (item.order === -1 || (item.order >= 1 && item.order <= 5))
+                )
+                : [];
+            if (monthlyWeekdayRules.length > 0 && monthlyWeekdayRules.length === parsedByDays.length) {
                 repeat.monthlyRepeatMode = 'weekday';
-                repeat.monthlyWeekOrder = monthlyWeekdayRule.order;
-                repeat.monthlyWeekday = monthlyWeekdayRule.weekday;
+                repeat.monthlyWeekRules = monthlyWeekdayRules.map(item => ({
+                    order: item.order,
+                    weekday: item.weekday
+                }));
+                if (repeat.monthlyWeekRules.length === 1) {
+                    repeat.monthlyWeekOrder = repeat.monthlyWeekRules[0].order;
+                    repeat.monthlyWeekday = repeat.monthlyWeekRules[0].weekday;
+                }
             } else {
                 repeat.weekDays = parsedByDays.map(item => item.weekday);
 

@@ -17,7 +17,7 @@ import { Constants } from 'siyuan';
 import { getLocalDateString } from './dateUtils';
 import { shouldSkipReminderOnDate, type HolidayData } from './reminderSkipDate';
 import { loadHolidays } from './icsSubscription';
-import { generateRepeatInstances } from './repeatUtils';
+import { generateRepeatInstances, getMonthlyWeekRules } from './repeatUtils';
 
 const useShell = async (cmd: 'showItemInFolder' | 'openPath', filePath: string) => {
     try {
@@ -506,12 +506,14 @@ export async function exportIcsFile(
                     break;
                 case 'monthly':
                     parts.push('FREQ=MONTHLY');
-                    if (repeat.monthlyRepeatMode === 'weekday' &&
-                        (repeat.monthlyWeekOrder === -1 || (repeat.monthlyWeekOrder >= 1 && repeat.monthlyWeekOrder <= 5)) &&
-                        repeat.monthlyWeekday >= 0 && repeat.monthlyWeekday <= 6) {
+                    const monthlyWeekRules = getMonthlyWeekRules(repeat);
+                    if (monthlyWeekRules.length > 0) {
                         const map = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-                        const weekday = map[repeat.monthlyWeekday];
-                        if (weekday) parts.push(`BYDAY=${repeat.monthlyWeekOrder}${weekday}`);
+                        const byday = monthlyWeekRules
+                            .map(rule => `${rule.order}${map[rule.weekday]}`)
+                            .filter(Boolean)
+                            .join(',');
+                        if (byday) parts.push(`BYDAY=${byday}`);
                     } else if (Array.isArray(repeat.monthDays) && repeat.monthDays.length) {
                         parts.push(`BYMONTHDAY=${repeat.monthDays.join(',')}`);
                     }
