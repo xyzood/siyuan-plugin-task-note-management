@@ -5598,10 +5598,16 @@ export default class ReminderPlugin extends Plugin {
         if (!habit || !habit.id || habit.completed) return [];
         if (!(typeof habit.id === 'string' && habit.id.startsWith('habit'))) return [];
 
-        // 已放弃或已结束的习惯不设置通知
-        if (habit.abandoned === true) return [];
+        // 已放弃或已结束的习惯不设置通知，并清理已存在的通知
+        if (habit.abandoned === true) {
+            await this.cancelMobileNotification(habit.id);
+            return [];
+        }
         const today = getLogicalDateString();
-        if (habit.endDate && habit.endDate < today) return [];
+        if (habit.endDate && habit.endDate < today) {
+            await this.cancelMobileNotification(habit.id);
+            return [];
+        }
 
         const systemNotificationEnabled = await this.getReminderSystemNotificationEnabled();
         if (!systemNotificationEnabled) return [];
@@ -6181,17 +6187,23 @@ export default class ReminderPlugin extends Plugin {
 
                 const completedChanged = !oldReminder.completed && reminder.completed;
 
-                if (timeChanged || completedChanged) {
+                // 习惯：已放弃状态变更时也需要取消旧通知，否则旧通知仍会在手机端触发
+                const abandonedChanged = isHabit && !oldReminder.abandoned && reminder.abandoned === true;
+
+                if (timeChanged || completedChanged || abandonedChanged) {
                     await this.cancelMobileNotification(oldReminder.id);
                 }
             } else if (reminder.completed) {
                 // 如果没有旧提醒数据，但当前任务已完成，也取消通知
                 await this.cancelMobileNotification(reminder.id);
+            } else if (isHabit && reminder.abandoned === true) {
+                // 如果没有旧提醒数据，但当前习惯已放弃，也取消通知
+                await this.cancelMobileNotification(reminder.id);
             }
 
-            // 如果已完成，不需要设置新通知
-            if (reminder.completed) {
-                console.log(`[MobileNotification] 已完成，跳过设置通知: id=${reminder.id}`);
+            // 如果已完成或已放弃，不需要设置新通知
+            if (reminder.completed || (isHabit && reminder.abandoned === true)) {
+                console.log(`[MobileNotification] ${reminder.completed ? '已完成' : '已放弃'}，跳过设置通知: id=${reminder.id}`);
                 // 同步从计划快照中移除（通过 ID 前缀区分习惯与任务）
                 if (isHabit) {
                     if (this.mobileHabitNotificationPlansCache && this.mobileHabitNotificationPlansCache[reminder.id]) {
