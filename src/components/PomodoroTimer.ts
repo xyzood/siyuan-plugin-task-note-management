@@ -115,6 +115,7 @@ export class PomodoroTimer {
     private randomRestNextTriggerTime: number = 0; // 下次触发时间
     private randomRestWindow: any = null; // 新增：随机微休息弹窗
     private pomodoroEndWindow: any = null; // 新增：番茄钟结束弹窗
+    private pomodoroEndDialog: Dialog = null; // 新增：番茄钟结束思源Dialog
 
     private systemNotificationEnabled: boolean = true; // 新增：系统弹窗开关
     private randomRestSystemNotificationEnabled: boolean = true; // 新增：随机微休息系统通知开关
@@ -1166,22 +1167,27 @@ export class PomodoroTimer {
         }
     }
 
-    private openPomodoroEndWindow() {
+    private openPomodoroEndWindow(isWorkEnd: boolean = true) {
         if (!this.settings.pomodoroEndPopupWindow) return;
 
         const frontend = getFrontend();
         const isBrowserDesktop = frontend === 'browser-desktop';
 
-        const title = i18n('pomodoroWorkEnd') || '工作结束';
-        const message = i18n('pomodoroWorkEndDesc') || '工作时间结束，起来走走喝喝水吧！';
+        const title = isWorkEnd
+            ? (i18n('pomodoroWorkEnd') || '工作结束')
+            : (i18n('pomodoroBreakEnd') || '休息结束');
+        const message = isWorkEnd
+            ? (i18n('pomodoroWorkEndDesc') || '工作时间结束，起来走走喝喝水吧！')
+            : (i18n('pomodoroBreakEndDesc') || '休息时间结束，准备开始下一个工作阶段吧！');
+        const icon = isWorkEnd ? '🍅' : '☕';
 
         // 非电脑客户端使用思源内部 Dialog
         if (this.plugin?.isInMobileApp || isBrowserDesktop) {
-            this.openSiyuanDialog(title, message, '🍅');
+            this.openSiyuanDialog(title, message, icon, 0, true);
             return;
         }
 
-        this.openPomodoroEndWindowImpl(title, message, '🍅');
+        this.openPomodoroEndWindowImpl(title, message, icon);
     }
 
     private closePomodoroEndWindow() {
@@ -1193,6 +1199,16 @@ export class PomodoroTimer {
             }
             this.pomodoroEndWindow = null;
         }
+        if (this.pomodoroEndDialog) {
+            try {
+                this.pomodoroEndDialog.destroy();
+            } catch (e) {
+                // ignore
+            }
+            this.pomodoroEndDialog = null;
+        }
+        // 关闭弹窗时停止所有提示音
+        this.stopAllAudio();
     }
 
     private async savePomodoroSessionNote(sessionId: string, note: string, showToast: boolean = true) {
@@ -1485,14 +1501,36 @@ export class PomodoroTimer {
      * @param icon 图标
      * @param autoCloseDelay 自动关闭延迟（秒），0表示不自动关闭
      */
-    private openSiyuanDialog(title: string, message: string, icon: string, autoCloseDelay: number = 0) {
+    private openSiyuanDialog(title: string, message: string, icon: string, autoCloseDelay: number = 0, isPomodoroEnd: boolean = false) {
         try {
+            if (isPomodoroEnd) {
+                // 如果是番茄钟结束弹窗，先关闭旧的
+                if (this.pomodoroEndDialog) {
+                    try {
+                        this.pomodoroEndDialog.destroy();
+                    } catch (e) { }
+                    this.pomodoroEndDialog = null;
+                }
+            }
+
             const dialog = new Dialog({
                 title: `${icon} ${title}`,
                 content: `<div style="padding: 20px; text-align: center; font-size: 16px;">${message}</div>`,
                 width: "360px",
-                height: "auto"
+                height: "auto",
+                destroyCallback: () => {
+                    if (isPomodoroEnd) {
+                        if (this.pomodoroEndDialog === dialog) {
+                            this.pomodoroEndDialog = null;
+                        }
+                        this.stopAllAudio();
+                    }
+                }
             });
+
+            if (isPomodoroEnd) {
+                this.pomodoroEndDialog = dialog;
+            }
 
             // 如果设置了自动关闭，延迟关闭弹窗
             if (autoCloseDelay > 0) {
@@ -1884,6 +1922,7 @@ export class PomodoroTimer {
 
             this.pomodoroEndWindow.on('closed', () => {
                 this.pomodoroEndWindow = null;
+                this.stopAllAudio();
             });
 
             this.pomodoroEndWindow.webContents.on('will-navigate', (e: any) => {
@@ -2490,8 +2529,12 @@ export class PomodoroTimer {
         if (!audio) return false;
 
         const isBackgroundAudio = audio === this.workAudio || audio === this.breakAudio || audio === this.longBreakAudio;
+        const isEndAudio = audio === this.workEndAudio || audio === this.breakEndAudio;
         let loop = audio.loop;
-        if (!isBackgroundAudio) {
+        if (isEndAudio) {
+            // 如果开启了结束弹窗，则结束提示音循环播放，直到弹窗被关闭
+            loop = this.settings.pomodoroEndPopupWindow;
+        } else if (!isBackgroundAudio) {
             loop = false;
         }
 
@@ -5181,6 +5224,7 @@ export class PomodoroTimer {
     }
 
     private async startTimer() {
+        this.closePomodoroEndWindow();
         this.isRunning = true;
         this.isPaused = false;
 
@@ -5652,7 +5696,7 @@ export class PomodoroTimer {
             this.timer = null;
         }
 
-        this.stopAllAudio();
+        this.closePomodoroEndWindow();
         this.stopRandomRestTimer(); // 停止随机微休息
         this.cancelAllMobileNotifications(); // 取消移动端通知
 
@@ -6004,6 +6048,9 @@ export class PomodoroTimer {
             // 休息结束，关闭番茄钟结束弹窗
             this.closePomodoroEndWindow();
 
+            // 打开休息结束弹窗（先打开弹窗，再播放提示音，避免 closePomodoroEndWindow 内部的 stopAllAudio 把刚播放的声音切掉）
+            this.openPomodoroEndWindow(false);
+
             // 播放休息结束提示音
             if (this.breakEndAudio) {
                 await this.safePlayAudio(this.breakEndAudio);
@@ -6228,6 +6275,9 @@ export class PomodoroTimer {
             } else {
                 // 休息结束，关闭番茄钟结束弹窗
                 this.closePomodoroEndWindow();
+
+                // 打开休息结束弹窗（先打开弹窗，再播放提示音，避免 closePomodoroEndWindow 内部的 stopAllAudio 把刚播放的声音切掉）
+                this.openPomodoroEndWindow(false);
 
                 // 播放休息结束提示音
                 if (this.breakEndAudio) {
