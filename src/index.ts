@@ -2322,7 +2322,7 @@ export default class ReminderPlugin extends Plugin {
         if (this.registeredDockKeys.has("project_dock")) return;
         this.registerDockPanel({
             type: "project_dock",
-            icon: "iconProject",
+            icon: "iconTNProject",
             title: i18n("projectDockTitle"),
             text: "This is my custom dock",
             init: (element) => {
@@ -2349,7 +2349,7 @@ export default class ReminderPlugin extends Plugin {
         if (this.registeredDockKeys.has("habit_dock")) return;
         this.registerDockPanel({
             type: "habit_dock",
-            icon: "iconCheck",
+            icon: "iconTNHabit",
             title: "习惯打卡侧栏",
             text: "Habit tracking dock",
             init: (element) => {
@@ -5151,7 +5151,7 @@ export default class ReminderPlugin extends Plugin {
                 app: this.app,
                 custom: {
                     title: projectTitle,
-                    icon: "iconProject",
+                    icon: "iconTNProject",
                     id: this.name + PROJECT_KANBAN_TAB_TYPE,
                     data: {
                         projectId: projectId,
@@ -5201,7 +5201,7 @@ export default class ReminderPlugin extends Plugin {
                 app: this.app,
                 custom: {
                     title: i18n("eisenhowerMatrix"),
-                    icon: "iconGrid",
+                    icon: "iconTNGrid",
                     id: this.name + EISENHOWER_TAB_TYPE,
                     data: {}
                 }
