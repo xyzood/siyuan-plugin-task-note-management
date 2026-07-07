@@ -477,6 +477,8 @@
     "enableBackgroundAudio": "开启背景音",
     "backgroundAudioMuted": "背景音已静音",
     "backgroundAudioEnabled": "背景音已开启",
+    "switchPhase": "切换阶段",
+    "backgroundVolume": "背景音量",
     "todayFocus": "今日专注",
     "weekFocus": "本周专注",
     "countUpMode": "正计时",

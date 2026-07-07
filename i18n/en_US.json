@@ -477,6 +477,8 @@
     "enableBackgroundAudio": "Enable background audio",
     "backgroundAudioMuted": "Background audio muted",
     "backgroundAudioEnabled": "Background audio enabled",
+    "switchPhase": "Switch Phase",
+    "backgroundVolume": "Background Volume",
     "todayFocus": "Today",
     "weekFocus": "This Week",
     "countUpMode": "Count Up",
