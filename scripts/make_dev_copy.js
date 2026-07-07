@@ -45,12 +45,13 @@ if (!fs.existsSync(targetDir)) {
 }
 
 /**
- * 2. The dev directory, which contains the compiled plugin code
+ * 2. The dev/dist directory, which contains the compiled plugin code
  */
-const devDir = `${process.cwd()}/dev`;
+const buildDirName = process.argv[2] || 'dev';
+const devDir = `${process.cwd()}/${buildDirName}`;
 if (!fs.existsSync(devDir)) {
-    error(`Failed! Dev directory not exists: "${devDir}"`);
-    error('Please run "pnpm run build" or "pnpm run dev" first to generate the dev directory');
+    error(`Failed! Build directory not exists: "${devDir}"`);
+    error('Please run "pnpm run build" or "pnpm run dev" first to generate the build directory');
     process.exit(1);
 }
 
