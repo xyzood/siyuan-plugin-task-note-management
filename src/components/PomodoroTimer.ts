@@ -8820,19 +8820,19 @@ document.body.classList.remove('docked-mode');
         }
         .switch-menu {
             -webkit-app-region: no-drag;
-            position: absolute;
-            top: 100%;
+            position: fixed;
+            top: 0;
             left: 0;
-            background: ${surfaceColor};
+            background: ${bgColor};
             border: 1px solid ${borderColor};
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
+            z-index: 10000;
             display: none;
             flex-direction: column;
             padding: 4px;
-            min-width: 120px;
-            margin-top: 4px;
+            min-width: 140px;
+            pointer-events: auto;
         }
         .switch-menu.show { display: flex; }
         .menu-item {
@@ -8841,12 +8841,14 @@ document.body.classList.remove('docked-mode');
             border: none;
             color: ${textColor};
             font-family: inherit;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: clamp(11px, 2.8vmin, 1.3vh);
+            cursor: pointer !important;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 13px;
             text-align: left;
             transition: background 0.2s;
+            pointer-events: auto;
+            white-space: nowrap;
         }
         .menu-item:hover { background: ${hoverColor}; }
         .pomodoro-content {
@@ -9389,17 +9391,9 @@ document.body.classList.remove('docked-mode');
                 ${this.getDockPositionEmoji(this.settings.pomodoroDockPosition)}
             </button>
             <div class="switch-container">
-                <button class="titlebar-btn" id="statusBtn" onclick="toggleSwitchMenu(event)">
+                <button class="titlebar-btn" id="statusBtn" onclick="toggleSwitchMenu(event)" title="${i18n('switchPhase') || '切换阶段'}">
                     ⚙️
                 </button>
-                <div class="switch-menu" id="switchMenu">
-                    <button class="menu-item" id="switchModeMenuItem" onclick="callMethod('toggleMode')">
-                        ${currentState.isCountUp ? '🍅' : '⏱'} ${currentState.isCountUp ? switchToCountdownText : switchToCountUpText}
-                    </button>
-                    <button class="menu-item" onclick="callMethod('startWorkTime')">💪 ${workText}</button>
-                    <button class="menu-item" onclick="callMethod('startShortBreak')">🍵 ${shortBreakText}</button>
-                    <button class="menu-item" onclick="callMethod('startLongBreak')">🧘 ${longBreakText}</button>
-                </div>
             </div>
         </div>
         <div class="titlebar-buttons">
@@ -9486,6 +9480,14 @@ document.body.classList.remove('docked-mode');
             </div>
         </div>
     </div>
+    <div class="switch-menu" id="switchMenu">
+        <button class="menu-item" id="switchModeMenuItem" onclick="callMethod('toggleMode')">
+            ${currentState.isCountUp ? '🍅' : '⏱'} ${currentState.isCountUp ? switchToCountdownText : switchToCountUpText}
+        </button>
+        <button class="menu-item" onclick="callMethod('startWorkTime')">💪 ${workText}</button>
+        <button class="menu-item" onclick="callMethod('startShortBreak')">🍵 ${shortBreakText}</button>
+        <button class="menu-item" onclick="callMethod('startLongBreak')">🧘 ${longBreakText}</button>
+    </div>
     <script>
         const { ipcRenderer } = require('electron');
         let remote;
@@ -9544,13 +9546,21 @@ document.body.classList.remove('docked-mode');
         }
         
         document.addEventListener('click', e => {
-            if (!e.target.closest('.switch-container') && !e.target.closest('.mini-layout')) closeSwitchMenu();
+            if (!e.target.closest('#statusBtn') && !e.target.closest('#switchMenu') && !e.target.closest('.mini-layout')) closeSwitchMenu();
         });
-        
+
         function toggleSwitchMenu(e) {
             e.stopPropagation();
             const m = document.getElementById('switchMenu');
-            if (m) m.classList.toggle('show');
+            const btn = document.getElementById('statusBtn');
+            if (!m) return;
+            const willShow = !m.classList.contains('show');
+            if (willShow && btn) {
+                const rect = btn.getBoundingClientRect();
+                m.style.top = (rect.bottom + 4) + 'px';
+                m.style.left = rect.left + 'px';
+            }
+            m.classList.toggle('show');
             const miniMenu = document.getElementById('miniSwitchMenu');
             if (miniMenu) miniMenu.classList.remove('show');
         }
