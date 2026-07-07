@@ -60,7 +60,7 @@ export class MobileTaskShortcut {
         button.setAttribute("aria-label", button.title);
         button.innerHTML = `
             <svg class="mobile-task-shortcut__icon" aria-hidden="true">
-                <use xlink:href="#iconClock"></use>
+                <use xlink:href="#iconTNTodoList"></use>
             </svg>
             <span class="mobile-task-shortcut__badge"></span>
         `;
