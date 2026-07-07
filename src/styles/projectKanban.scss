@@ -1,0 +1,999 @@
+.TN-project-kanban-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--b3-theme-background);
+    position: relative;
+}
+
+.project-kanban-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--b3-theme-border);
+    background: var(--b3-theme-background);
+    gap: 16px;
+}
+
+.project-kanban-title {
+    width: 100%;
+    border-bottom: 1px solid var(--b3-theme-border);
+}
+
+.project-kanban-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+/* 响应式布局 - 窄屏优化 */
+@media (max-width: 600px) {
+    .project-kanban-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .project-kanban-title {
+        width: 100%;
+        min-width: auto;
+    }
+
+    .project-kanban-controls {
+        width: 100%;
+        justify-content: flex-start;
+        margin-left: 0;
+        gap: 6px;
+    }
+
+    .project-kanban-controls .b3-button {
+        flex: 0 1 auto;
+        min-width: auto;
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+}
+
+@media (max-width: 400px) {
+    .project-kanban-toolbar {
+        padding: 8px 12px;
+    }
+
+    .project-kanban-title h2 {
+        font-size: 16px;
+    }
+
+    .project-kanban-description {
+        font-size: 12px;
+    }
+
+    .project-kanban-controls {
+        gap: 4px;
+    }
+
+    .project-kanban-controls .b3-button {
+        padding: 4px 6px;
+        font-size: 11px;
+    }
+    
+    .project-kanban-controls .b3-button__icon {
+        width: 14px;
+        height: 14px;
+    }
+}
+
+.project-kanban-container {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    overflow-x: auto;
+    overflow-y: auto;
+    min-height: 0;
+    /* 水平滚动布局：每列固定宽度 */
+}
+
+/* 确保在极窄屏幕上也能正常显示 */
+@media (max-width: 320px) {
+    .project-kanban-container {
+        padding: 8px;
+        gap: 8px;
+    }
+}
+
+.kanban-column {
+    background: var(--b3-theme-background);
+    border-radius: 8px;
+    border: 2px solid var(--b3-border-color);
+    display: flex;
+    flex-direction: column;
+    min-width: 280px; /* 固定最小宽度 */
+    flex: 1; /* 均匀分布宽度 */
+    max-height: 100%;
+    max-width: 500px;
+    position: relative;
+}
+
+.kanban-column-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--b3-theme-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.kanban-column-content {
+    flex: 1;
+    padding: 0px;
+    overflow-y: auto;
+    min-height: 200px;
+    /* Reserve space for scrollbar so right padding doesn't appear larger
+       when the vertical scrollbar shows up */
+    scrollbar-gutter: stable both-edges;
+    /* Make scrollbar thinner where supported (Firefox) */
+    scrollbar-width: thin;
+}
+
+.kanban-column-count {
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* 基础任务卡片样式 */
+.kanban-task {
+    background: var(--b3-theme-background);
+    border: 1px solid var(--b3-theme-border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+    position: relative;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    &.dragging {
+        opacity: 0.5;
+        cursor: grabbing;
+    }
+}
+
+/* 优先级样式美化 - 使用思源主题颜色 */
+.kanban-task-priority-high:hover {
+    box-shadow: 0 0 0 1px var(--b3-card-error-color), 0 4px 12px rgba(231, 76, 60, 0.25) !important;
+}
+
+.kanban-task-priority-medium:hover {
+    box-shadow: 0 0 0 1px var(--b3-card-warning-color), 0 4px 12px rgba(243, 156, 18, 0.25) !important;
+}
+
+.kanban-task-priority-low:hover {
+    box-shadow: 0 0 0 1px var(--b3-card-info-color), 0 4px 12px rgba(52, 152, 219, 0.25) !important;
+}
+
+.kanban-task-title {
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--b3-theme-on-surface);
+    line-height: 1.4;
+}
+
+.kanban-task-title-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    min-width: 0;
+}
+
+.kanban-task-title-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+
+    .kanban-task-title {
+        margin-bottom: 0;
+    }
+}
+
+.kanban-task-pin-badge {
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+    pointer-events: none;
+}
+
+.kanban-task-more-button {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+
+    .b3-button__icon {
+        width: 14px;
+        height: 14px;
+    }
+}
+
+.kanban-task:hover .kanban-task-more-button,
+.kanban-task:focus-within .kanban-task-more-button {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.kanban-task-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kanban-task-date {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 优先级标签样式 - 参考 project-priority-label */
+.kanban-task-priority {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
+    margin-top: 2px;
+    width: fit-content;
+    align-self: flex-start;
+}
+
+.priority-label-high {
+    background-color: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+}
+
+.priority-label-medium {
+    background-color: rgba(243, 156, 18, 0.1);
+    color: #f39c12;
+}
+
+.priority-label-low {
+    background-color: rgba(52, 152, 219, 0.1);
+    color: #3498db;
+}
+
+.priority-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    &.high {
+        background: #e74c3c;
+    }
+
+    &.medium {
+        background: #f39c12;
+    }
+
+    &.low {
+        background: #3498db;
+    }
+
+    &.none {
+        background: #95a5a6;
+    }
+}
+
+.kanban-task-category {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: white;
+    font-weight: 500;
+    align-self: flex-start;
+}
+
+.kanban-task-note {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.8;
+    margin-top: 4px;
+    line-height: 1.3;
+    max-height: 40px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--b3-border-color);
+    transition: all 0.2s ease;
+
+    &:hover {
+        background-color: var(--b3-theme-surface-lighter) !important;
+        color: var(--b3-theme-primary) !important;
+    }
+}
+
+/* 优先级任务的备注样式 */
+.kanban-task-priority-high .kanban-task-note {
+    background-color: rgba(231, 76, 60, 0.08);
+    border-color: rgba(231, 76, 60, 0.2);
+    color: var(--b3-card-error-color);
+}
+
+.kanban-task-priority-medium .kanban-task-note {
+    background-color: rgba(243, 156, 18, 0.08);
+    border-color: rgba(243, 156, 18, 0.2);
+    color: var(--b3-card-warning-color);
+}
+
+.kanban-task-priority-low .kanban-task-note {
+    background-color: rgba(52, 152, 219, 0.08);
+    border-color: rgba(52, 152, 219, 0.2);
+    color: var(--b3-card-info-color);
+}
+
+.kanban-drop-zone-active {
+    background: var(--b3-theme-primary-lightest);
+    border-color: var(--b3-theme-primary);
+}
+
+.kanban-column-header.kanban-drop-zone-active {
+    background: var(--b3-theme-primary-lightest) !important;
+    box-shadow: inset 0 0 0 2px var(--b3-theme-primary);
+}
+
+/* 父子任务拖拽样式 */
+.parent-child-drop-target {
+    border: 2px dashed var(--b3-theme-primary) !important;
+    background: var(--b3-theme-primary-lightest) !important;
+    transform: scale(1.02) !important;
+    box-shadow: 0 4px 20px rgba(0, 123, 255, 0.3) !important;
+    position: relative;
+}
+
+.parent-child-indicator {
+    animation: fadeInUp 0.2s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+.parent-child-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 排序拖拽提示样式 */
+.sort-hint {
+    animation: fadeInRight 0.2s ease-out;
+}
+
+@keyframes fadeInRight {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.task-status-selector {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.task-status-option {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin: 6px 8px 0 0;
+    border-radius: 20px;
+    cursor: pointer;
+    border: 2px solid var(--b3-theme-border);
+    transition: all 0.2s ease;
+    background-color: var(--b3-theme-surface);
+    white-space: nowrap;
+
+    &:hover {
+        background-color: var(--b3-theme-surface-lighter);
+        border-color: var(--b3-theme-primary-lighter);
+    }
+
+    &.selected {
+        font-weight: 600;
+        border-color: var(--b3-theme-primary);
+        background-color: var(--b3-theme-primary-lightest);
+        color: var(--b3-theme-primary);
+    }
+}
+
+.kanban-task-block-info {
+    font-size: 11px;
+    color: var(--b3-theme-on-background);
+    margin-top: 4px;
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background-color: var(--b3-theme-surface-lighter);
+    border-radius: 4px;
+    border: 1px solid var(--b3-theme-border);
+    transition: all 0.2s ease;
+
+    &:hover {
+        background-color: var(--b3-theme-primary-lightest);
+        border-color: var(--b3-theme-primary);
+    }
+
+    span[data-type="a"] {
+        cursor: pointer;
+        color: var(--b3-theme-primary);
+        text-decoration: underline dotted;
+        text-decoration-style: dotted;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        transition: color 0.2s ease;
+
+        &:hover {
+            color: var(--b3-theme-primary-light);
+        }
+    }
+}
+
+.kanban-task-pomodoro-count {
+    /* Styles for pomodoro count */
+}
+
+/* 倒计时样式 */
+.countdown-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+    margin-left: 4px;
+    display: inline-block;
+}
+
+.countdown-start {
+    color: var(--b3-font-color4);
+    background: var(--b3-font-background4);
+    border: 1px solid var(--b3-font-color4);
+}
+
+.countdown-end {
+    color: var(--b3-font-color2);
+    background: var(--b3-font-background2);
+    border: 1px solid var(--b3-font-color2);
+}
+
+.countdown-started {
+    color: var(--b3-card-success-color);
+    background: var(--b3-card-success-background);
+    border: 1px solid var(--b3-card-success-color);
+}
+
+.countdown-overdue {
+    color: var(--b3-font-color1);
+    background: var(--b3-font-background1);
+    border: 1px solid var(--b3-font-color1);
+}
+
+.kanban-task-checkbox {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    margin-top: 5px; /* 微调对齐 */
+    font: inherit;
+    color: var(--b3-theme-on-surface);
+    width: 1.15em;
+    height: 1.15em;
+    border: 0.1em solid var(--b3-theme-on-surface);
+    border-radius: 0.25em;
+    transform: translateY(-0.075em);
+    display: grid;
+    place-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+
+    &:hover {
+        border-color: var(--b3-theme-primary);
+    }
+
+    &::before {
+        content: "";
+        width: 0.65em;
+        height: 0.65em;
+        transform: scale(0);
+        transition: 120ms transform ease-in-out;
+        box-shadow: inset 1em 1em var(--b3-theme-primary);
+        transform-origin: bottom left;
+        clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    }
+
+    &:checked {
+        background: var(--b3-theme-primary);
+        border-color: var(--b3-theme-primary);
+
+        &::before {
+            transform: scale(1);
+            box-shadow: inset 1em 1em var(--b3-theme-surface);
+        }
+    }
+}
+
+.kanban-task-collapse-btn {
+    width: 10px;
+    min-width: auto;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .b3-button__icon {
+        margin: 0;
+    }
+
+    svg {
+        height: 10px;
+        width: 10px;
+    }
+
+    &:hover {
+        opacity: 1;
+        color: var(--b3-theme-primary);
+        background: var(--b3-theme-surface-lighter);
+    }
+}
+
+/* 项目标题点击样式 */
+.project-kanban-title {
+    h2 {
+        cursor: pointer;
+        transition: color 0.2s ease;
+
+        &:hover {
+            color: var(--b3-theme-primary);
+        }
+
+        &[data-has-note="true"] {
+            text-decoration: underline dotted;
+            text-decoration-style: dotted;
+
+            &:hover {
+                color: var(--b3-theme-primary);
+            }
+        }
+    }
+}
+
+/* 父任务子任务进度条 */
+.kanban-task-progress-container {
+    margin-top: 8px;
+}
+
+.kanban-task-progress-wrap {
+    background: rgba(0,0,0,0.06);
+    height: 8px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.kanban-task-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #2ecc71, #27ae60);
+    transition: width 0.3s ease;
+    border-radius: 6px 0 0 6px;
+}
+
+.kanban-task-progress-text {
+    font-size: 12px;
+    color: var(--b3-theme-on-surface);
+    opacity: 0.9;
+    min-width: 34px;
+    text-align: right;
+}
+
+/* 自定义分组样式 */
+.custom-group-in-status {
+    background: var(--b3-theme-background);
+    border-radius: 8px;
+    border: 1px solid var(--b3-border-color);
+}
+
+.custom-group-header {
+    user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    margin-bottom: 6px;
+
+    &:hover {
+        background: var(--b3-theme-primary-lightest) !important;
+    }
+}
+
+.custom-group-title {
+    font-weight: 600 !important;
+}
+
+.custom-group-collapse-btn {
+    width: 16px;
+    height: 16px;
+    min-width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+        opacity: 1;
+    }
+
+    svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+.custom-group-tasks {
+    transition: all 0.3s ease;
+}
+
+.status-column-groups {
+    padding: 4px;
+}
+
+/* 自定义分组页签模式 */
+.custom-group-tabs-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+}
+
+.custom-group-tabs-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    padding: 0 4px;
+}
+
+.custom-group-tab-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+
+    .kanban-column.kanban-column-tabbed {
+        width: 100%;
+        min-width: 100%;
+        max-width: none;
+        flex: 1;
+    }
+}
+
+/* 自定义分组状态容器样式 */
+.custom-group-status-container {
+    padding: 4px;
+}
+
+.custom-status-group {
+    background: var(--b3-theme-background);
+    border-radius: 8px;
+    border: 1px solid var(--b3-border-color);
+}
+
+.custom-status-group-header {
+    user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+
+    &:hover {
+        background: var(--b3-theme-primary-lightest) !important;
+    }
+
+    &.kanban-drop-zone-active {
+        background: var(--b3-theme-primary-lightest) !important;
+        box-shadow: inset 0 0 0 2px var(--b3-theme-primary);
+        border-radius: 6px;
+    }
+}
+
+.custom-status-group-title {
+    font-weight: 600 !important;
+}
+
+.custom-status-group-collapse-btn {
+    width: 16px;
+    height: 16px;
+    min-width: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+        opacity: 1;
+    }
+
+    svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+.custom-status-group-tasks {
+    transition: all 0.3s ease;
+}
+
+/* 分组管理对话框样式 */
+.manage-groups-dialog {
+    .groups-container {
+        border: 1px solid var(--b3-theme-border);
+        border-radius: 4px;
+    }
+}
+
+.group-item:hover {
+    background: var(--b3-theme-primary-lightest) !important;
+}
+
+.color-option {
+    position: relative;
+    transition: transform 0.2s ease;
+
+    &.selected {
+        border-color: var(--b3-theme-primary) !important;
+        box-shadow: 0 0 0 2px var(--b3-theme-primary-lightest);
+    }
+
+    &:hover {
+        transform: scale(1.1);
+    }
+}
+
+.group-form {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 删除分组对话框样式 */
+.delete-group-dialog {
+    .b3-radio {
+        margin-top: 8px;
+
+        label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+    }
+
+    .b3-radio__mark {
+        margin-right: 8px;
+    }
+}
+
+/* 看板模式选择下拉框样式 */
+.kanban-mode-select {
+    background: var(--b3-theme-background) !important;
+    border: 1px solid var(--b3-theme-border) !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    color: var(--b3-theme-on-surface) !important;
+    cursor: pointer !important;
+    min-width: 140px !important;
+    transition: all 0.2s ease !important;
+
+    &:hover {
+        border-color: var(--b3-theme-primary) !important;
+        background: var(--b3-theme-primary-lightest) !important;
+    }
+
+    &:focus {
+        outline: none !important;
+        border-color: var(--b3-theme-primary) !important;
+        box-shadow: 0 0 0 2px var(--b3-theme-primary-lightest) !important;
+    }
+
+    option {
+        background: var(--b3-theme-background) !important;
+        color: var(--b3-theme-on-surface) !important;
+        padding: 4px 8px !important;
+    }
+}
+
+/* ==================== 批量多选样式 ==================== */
+
+/* 多选复选框样式 - 圆形 */
+.kanban-task-multiselect-checkbox {
+    width: 20px !important;
+    height: 20px !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    margin-top: 2px !important;
+    border-radius: 50% !important;
+    border: 2px solid var(--b3-theme-primary) !important;
+    background: var(--b3-theme-background) !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    position: relative !important;
+    transition: all 0.2s ease !important;
+
+    &:checked {
+        background: var(--b3-theme-primary) !important;
+
+        &::after {
+            content: '' !important;
+            position: absolute !important;
+            left: 5px !important;
+            top: 2px !important;
+            width: 6px !important;
+            height: 10px !important;
+            border: solid white !important;
+            border-width: 0 2px 2px 0 !important;
+            transform: rotate(45deg) !important;
+        }
+    }
+
+    &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 2px var(--b3-theme-primary-lightest) !important;
+    }
+}
+
+/* 选中状态的任务卡片 */
+.kanban-task-selected,
+.kanban-task.reminder-item--selected {
+    box-shadow: 0 0 0 2px var(--b3-theme-primary) !important;
+    border-color: var(--b3-theme-primary) !important;
+
+    &:hover {
+        box-shadow: 0 0 0 3px var(--b3-theme-primary), 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+}
+
+/* 批量操作工具栏 */
+.kanban-batch-toolbar {
+    animation: batchToolbarSlideUp 0.3s ease-out;
+
+    .batch-toolbar-count {
+        font-weight: 600;
+        color: var(--b3-theme-primary);
+        min-width: 100px;
+        white-space: nowrap;
+    }
+}
+
+@keyframes batchToolbarSlideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* 多选模式下的任务卡片悬停效果 */
+.kanban-task:has(.kanban-task-multiselect-checkbox):hover {
+    background-color: var(--b3-theme-surface) !important;
+}
+
+/* 响应式：批量工具栏在窄屏下的适配 */
+@media (max-width: 768px) {
+    .kanban-batch-toolbar {
+        min-width: auto !important;
+        width: 95vw !important;
+        padding: 10px 12px !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+
+        .batch-toolbar-count {
+            width: 100%;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        & > div:nth-child(2) {
+            display: none;
+        }
+
+        & > div:nth-child(3) {
+            width: 100%;
+            justify-content: center;
+            margin: 4px 0;
+        }
+
+        & > div:last-child {
+            width: 100%;
+            justify-content: center;
+            margin-left: 0 !important;
+        }
+    }
+}
+
+/* 看板列宽度调整手柄 */
+.kanban-column-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+    background: transparent;
+    transition: background 0.15s ease;
+    border-radius: 3px;
+
+    &:hover,
+    &.resizing {
+        background: var(--b3-theme-primary);
+        opacity: 0.5;
+    }
+}
