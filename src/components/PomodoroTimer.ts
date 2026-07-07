@@ -706,8 +706,9 @@ export class PomodoroTimer {
 
     private supportsGlobalPomodoroWindow(): boolean {
         const frontend = getFrontend();
-        const isBrowserDesktop = frontend === 'browser-desktop';
-        return !this.isTabMode && !this.plugin?.isInMobileApp && !isBrowserDesktop;
+        const isBrowser = frontend.startsWith('browser');
+        const hasElectron = typeof (window as any).require === 'function';
+        return !this.isTabMode && !this.plugin?.isInMobileApp && !isBrowser && hasElectron;
     }
 
     private shouldUseGlobalPomodoroWindow(settings: any = this.settings): boolean {
@@ -1175,7 +1176,8 @@ export class PomodoroTimer {
         if (!this.settings.pomodoroEndPopupWindow) return;
 
         const frontend = getFrontend();
-        const isBrowserDesktop = frontend === 'browser-desktop';
+        const isBrowser = frontend.startsWith('browser');
+        const hasElectron = typeof (window as any).require === 'function';
 
         const title = isWorkEnd
             ? (i18n('pomodoroWorkEnd') || '工作结束')
@@ -1186,7 +1188,7 @@ export class PomodoroTimer {
         const icon = isWorkEnd ? '🍅' : '☕';
 
         // 非电脑客户端使用思源内部 Dialog
-        if (this.plugin?.isInMobileApp || isBrowserDesktop) {
+        if (this.plugin?.isInMobileApp || isBrowser || !hasElectron) {
             this.openSiyuanDialog(title, message, icon, 0, true);
             return;
         }
@@ -1483,14 +1485,15 @@ export class PomodoroTimer {
         if (!this.settings.randomRestPopupWindow) return;
 
         const frontend = getFrontend();
-        const isBrowserDesktop = frontend === 'browser-desktop';
+        const isBrowser = frontend.startsWith('browser');
+        const hasElectron = typeof (window as any).require === 'function';
 
         const title = i18n('randomRestTitle') || '随机微休息';
         const message = i18n('randomRest', { duration: this.settings.randomRestBreakDuration }) || 'Time for a quick break!';
         const autoCloseDelay = Number(this.settings.randomRestBreakDuration) || 0;
 
         // 非电脑客户端使用思源内部 Dialog
-        if (this.plugin?.isInMobileApp || isBrowserDesktop) {
+        if (this.plugin?.isInMobileApp || isBrowser || !hasElectron) {
             this.openSiyuanDialog(title, message, '🎲', autoCloseDelay);
             return;
         }
@@ -1769,6 +1772,7 @@ export class PomodoroTimer {
                 electron = (window as any).require('electron');
             } catch (e) {
                 console.error("[PomodoroTimer] Failed to require electron", e);
+                this.openSiyuanDialog(title, message, icon, 0, true);
                 return;
             }
 
@@ -1781,18 +1785,21 @@ export class PomodoroTimer {
 
             if (!remote) {
                 console.error("[PomodoroTimer] Failed to get electron remote");
+                this.openSiyuanDialog(title, message, icon, 0, true);
                 return;
             }
 
             const BrowserWindowConstructor = remote.BrowserWindow;
             if (!BrowserWindowConstructor) {
                 console.error("[PomodoroTimer] Failed to get BrowserWindow constructor");
+                this.openSiyuanDialog(title, message, icon, 0, true);
                 return;
             }
 
             const screen = remote.screen || electron.screen;
             if (!screen) {
                 console.error("[PomodoroTimer] Failed to get screen object");
+                this.openSiyuanDialog(title, message, icon, 0, true);
                 return;
             }
 
@@ -1938,6 +1945,7 @@ export class PomodoroTimer {
 
         } catch (e) {
             console.error("[PomodoroTimer] Failed to open pomodoro end window", e);
+            this.openSiyuanDialog(title, message, icon, 0, true);
         }
     }
 
@@ -1951,6 +1959,7 @@ export class PomodoroTimer {
                 electron = (window as any).require('electron');
             } catch (e) {
                 console.error("[PomodoroTimer] Failed to require electron", e);
+                this.openSiyuanDialog(title, message, icon, autoCloseDelay || 0);
                 return;
             }
 
@@ -1966,12 +1975,14 @@ export class PomodoroTimer {
 
             if (!remote) {
                 console.error("[PomodoroTimer] Failed to get electron remote");
+                this.openSiyuanDialog(title, message, icon, autoCloseDelay || 0);
                 return;
             }
 
             const BrowserWindowConstructor = remote.BrowserWindow;
             if (!BrowserWindowConstructor) {
                 console.error("[PomodoroTimer] Failed to get BrowserWindow constructor");
+                this.openSiyuanDialog(title, message, icon, autoCloseDelay || 0);
                 return;
             }
 
@@ -1979,6 +1990,7 @@ export class PomodoroTimer {
             const screen = remote.screen || electron.screen;
             if (!screen) {
                 console.error("[PomodoroTimer] Failed to get screen object");
+                this.openSiyuanDialog(title, message, icon, autoCloseDelay || 0);
                 return;
             }
 
@@ -2172,6 +2184,7 @@ export class PomodoroTimer {
 
         } catch (e) {
             console.error("[PomodoroTimer] Failed to open random notification window", e);
+            this.openSiyuanDialog(title, message, icon, autoCloseDelay || 0);
         }
     }
 

@@ -1626,7 +1626,7 @@ export default class ReminderPlugin extends Plugin {
         this.initCoordinator();
 
         const frontend = getFrontend();
-        const isBrowserDesktop = frontend === 'browser-desktop';
+        const isBrowser = frontend.startsWith('browser');
 
         // // 为了测试NotificationDialog和showReminderSystemNotification能否在手机上显示，onload就显示测试数据
         // setTimeout(() => {
@@ -1646,7 +1646,7 @@ export default class ReminderPlugin extends Plugin {
         //     this.showReminderSystemNotification('测试系统通知标题', '测试系统通知内容，用于手机端测试', testReminder);
         // }, 3000);
 
-        if (!this.isInMobileApp && !isBrowserDesktop) {
+        if (!this.isInMobileApp && !isBrowser) {
             // 尝试恢复已存在的番茄钟独立窗口
             // 先询问其他窗口是否已有活跃番茄钟，避免多窗口同时恢复导致重复计时
             import("./components/PomodoroTimer").then(async ({ PomodoroTimer }) => {
