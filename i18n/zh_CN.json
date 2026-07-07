@@ -1150,7 +1150,7 @@
     "subGroupTaskOverdue": "过期判断",
     "subGroupTaskCardStyle": "任务卡片样式",
     "subGroupTaskReminderRules": "提醒规则",
-    "subGroupHabitSync": "同步设置",
+    "subGroupHabitSync": "同步块设置",
     "subGroupDailySummary": "每日待办总结",
     "subGroupNotificationSound": "通知提醒声音",
     "subGroupNotificationMethod": "通知渠道",
