@@ -169,7 +169,7 @@ export class EisenhowerMatrixView {
 
     private setupUI() {
         this.container.innerHTML = '';
-        this.container.className = 'eisenhower-matrix-view';
+        this.container.className = 'TN-eisenhower-matrix-view';
 
         // 添加标题和切换按钮
         const headerEl = document.createElement('div');
@@ -2106,7 +2106,7 @@ export class EisenhowerMatrixView {
         const style = document.createElement('style');
         style.id = 'eisenhower-matrix-styles';
         style.textContent = `
-            .eisenhower-matrix-view {
+            .TN-eisenhower-matrix-view {
                 display: flex;
                 flex-direction: column;
                 background: var(--b3-theme-background);
@@ -2279,7 +2279,7 @@ export class EisenhowerMatrixView {
                 margin-bottom: 16px;
             }
 
-            .eisenhower-matrix-view .project-header {
+            .TN-eisenhower-matrix-view .project-header {
                 font-weight: 600;
                 font-size: 14px;
                 color: var(--b3-theme-primary);
@@ -2594,7 +2594,7 @@ export class EisenhowerMatrixView {
             }
 
             /* 项目标题栏样式 */
-            .eisenhower-matrix-view .project-header {
+            .TN-eisenhower-matrix-view .project-header {
                 display: flex;
                 align-items: center;
                 font-weight: 600;
@@ -2607,7 +2607,7 @@ export class EisenhowerMatrixView {
                 transition: all 0.2s ease;
             }
 
-            .eisenhower-matrix-view .project-header:hover {
+            .TN-eisenhower-matrix-view .project-header:hover {
                 background: var(--b3-theme-surface) !important;
                 border-color: var(--b3-theme-primary) !important;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);

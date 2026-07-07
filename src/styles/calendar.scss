@@ -1,5 +1,5 @@
 // Calendar view styles
-.reminder-calendar-view {
+.TN-reminder-calendar-view {
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -29,7 +29,7 @@
         margin-bottom: 8px;
     }
 
-    .reminder-calendar-view-group {
+    .TN-reminder-calendar-view-group {
         display: flex;
         gap: 4px;
         flex-wrap: wrap;
@@ -764,7 +764,7 @@
     }
 }
 
-.reminder-calendar-view--tab {
+.TN-reminder-calendar-view--tab {
     .reminder-calendar-event-checkbox {
         @container (max-width: 500px) {
             display: none !important;
@@ -773,9 +773,9 @@
 }
 
 // Ensure calendar dock fills height
-.dock__item[data-type="calendar_dock"] .fn__flex-1,
-.dock__item[data-type="calendar_dock"]>.fn__flex-column,
-.dock__item[data-type="calendar_dock"]>div {
+.dock__item[data-type="TN_calendar_dock"] .fn__flex-1,
+.dock__item[data-type="TN_calendar_dock"]>.fn__flex-column,
+.dock__item[data-type="TN_calendar_dock"]>div {
     height: 100%;
     min-height: 100%;
 }

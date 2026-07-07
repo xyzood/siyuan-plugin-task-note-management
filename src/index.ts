@@ -92,10 +92,10 @@ export { exportIcsFile };
 
 
 
-const TAB_TYPE = "reminder_calendar_tab";
-const EISENHOWER_TAB_TYPE = "reminder_eisenhower_tab";
-export const PROJECT_KANBAN_TAB_TYPE = "project_kanban_tab";
-const POMODORO_TAB_TYPE = "pomodoro_timer_tab";
+const TAB_TYPE = "TN_reminder_calendar_tab";
+const EISENHOWER_TAB_TYPE = "TN_reminder_eisenhower_tab";
+export const PROJECT_KANBAN_TAB_TYPE = "TN_project_kanban_tab";
+const POMODORO_TAB_TYPE = "TN_pomodoro_timer_tab";
 export const STORAGE_NAME = "siyuan-plugin-task-note-management";
 
 export const WEBHOOK_JSON_TYPES = ['feishu', 'wecom', 'custom'] as const;
@@ -1480,10 +1480,10 @@ export default class ReminderPlugin extends Plugin {
                 if (!isMobile || settings.enableReminderDock !== false) this.ensureReminderDockRegistered();
                 if (!isMobile || settings.enableHabitDock !== false) this.ensureHabitDockRegistered();
                 if (!isMobile || settings.enableCalendarDock !== false) this.ensureCalendarDockRegistered();
-                this.toggleDockVisibility('project_dock', settings.enableProjectDock !== false);
-                this.toggleDockVisibility('reminder_dock', settings.enableReminderDock !== false);
-                this.toggleDockVisibility('habit_dock', settings.enableHabitDock !== false);
-                this.toggleDockVisibility('calendar_dock', settings.enableCalendarDock !== false);
+                this.toggleDockVisibility('TN_project_dock', settings.enableProjectDock !== false);
+                this.toggleDockVisibility('TN_reminder_dock', settings.enableReminderDock !== false);
+                this.toggleDockVisibility('TN_habit_dock', settings.enableHabitDock !== false);
+                this.toggleDockVisibility('TN_calendar_dock', settings.enableCalendarDock !== false);
 
                 // 根据设置动态显示/隐藏日历视图顶栏按钮（桌面端）
                 if (!isMobile) {
@@ -2319,9 +2319,9 @@ export default class ReminderPlugin extends Plugin {
     }
 
     private ensureProjectDockRegistered() {
-        if (this.registeredDockKeys.has("project_dock")) return;
+        if (this.registeredDockKeys.has("TN_project_dock")) return;
         this.registerDockPanel({
-            type: "project_dock",
+            type: "TN_project_dock",
             icon: "iconTNProject",
             title: i18n("projectDockTitle"),
             text: "This is my custom dock",
@@ -2333,9 +2333,9 @@ export default class ReminderPlugin extends Plugin {
     }
 
     private ensureReminderDockRegistered() {
-        if (this.registeredDockKeys.has("reminder_dock")) return;
+        if (this.registeredDockKeys.has("TN_reminder_dock")) return;
         this.registerDockPanel({
-            type: "reminder_dock",
+            type: "TN_reminder_dock",
             icon: "iconClock",
             title: i18n("dockPanelTitle"),
             text: "This is my custom dock",
@@ -2346,9 +2346,9 @@ export default class ReminderPlugin extends Plugin {
     }
 
     private ensureHabitDockRegistered() {
-        if (this.registeredDockKeys.has("habit_dock")) return;
+        if (this.registeredDockKeys.has("TN_habit_dock")) return;
         this.registerDockPanel({
-            type: "habit_dock",
+            type: "TN_habit_dock",
             icon: "iconTNHabit",
             title: "习惯打卡侧栏",
             text: "Habit tracking dock",
@@ -2359,9 +2359,9 @@ export default class ReminderPlugin extends Plugin {
     }
 
     private ensureCalendarDockRegistered() {
-        if (this.registeredDockKeys.has("calendar_dock")) return;
+        if (this.registeredDockKeys.has("TN_calendar_dock")) return;
         this.registerDockPanel({
-            type: "calendar_dock",
+            type: "TN_calendar_dock",
             icon: "iconCalendar",
             title: i18n("calendarDockTitle"),
             text: "Calendar view dock",
@@ -2477,10 +2477,10 @@ export default class ReminderPlugin extends Plugin {
 
         // 根据设置隐藏或显示停靠栏图标
         try {
-            this.toggleDockVisibility('project_dock', settings.enableProjectDock !== false);
-            this.toggleDockVisibility('reminder_dock', settings.enableReminderDock !== false);
-            this.toggleDockVisibility('habit_dock', settings.enableHabitDock !== false);
-            this.toggleDockVisibility('calendar_dock', settings.enableCalendarDock !== false);
+            this.toggleDockVisibility('TN_project_dock', settings.enableProjectDock !== false);
+            this.toggleDockVisibility('TN_reminder_dock', settings.enableReminderDock !== false);
+            this.toggleDockVisibility('TN_habit_dock', settings.enableHabitDock !== false);
+            this.toggleDockVisibility('TN_calendar_dock', settings.enableCalendarDock !== false);
         } catch (err) {
             console.warn('初始化停靠栏可见性失败:', err);
         }

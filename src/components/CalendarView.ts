@@ -522,19 +522,19 @@ export class CalendarView {
         const slotMinTimeVal = adjustedTimes.slotMinTime;
         const slotMaxTimeVal = adjustedTimes.slotMaxTime;
 
-        this.container.classList.add('reminder-calendar-view');
-        this.container.classList.toggle('reminder-calendar-view--dock', this.isDockMode);
-        this.container.classList.toggle('reminder-calendar-view--tab', !this.isDockMode);
+        this.container.classList.add('TN-reminder-calendar-view');
+        this.container.classList.toggle('TN-reminder-calendar-view--dock', this.isDockMode);
+        this.container.classList.toggle('TN-reminder-calendar-view--tab', !this.isDockMode);
 
         // 注入自定义样式，强制修正 FullCalendar 的顶部布局
         const style = document.createElement('style');
         style.textContent = `
-            .reminder-calendar-view .fc-daygrid-day-top {
+            .TN-reminder-calendar-view .fc-daygrid-day-top {
                 flex-direction: row !important;
                 justify-content: space-between !important;
                 padding-right: 4px !important;
             }
-            .reminder-calendar-view .fc-daygrid-day-number {
+            .TN-reminder-calendar-view .fc-daygrid-day-number {
                 width: auto !important;
                 text-decoration: none !important;
                 padding: 4px !important;
@@ -574,7 +574,7 @@ export class CalendarView {
         let viewGroup: HTMLDivElement | null = null;
         if (!this.isDockMode) {
             viewGroup = document.createElement('div');
-            viewGroup.className = 'reminder-calendar-view-group';
+            viewGroup.className = 'TN-reminder-calendar-view-group';
             toolbarViewParent.appendChild(viewGroup);
         }
         this.yearBtn = document.createElement('button');

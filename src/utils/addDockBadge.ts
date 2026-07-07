@@ -11,22 +11,22 @@ type DockBadgeConfig = {
 
 const DOCK_BADGE_CONFIGS: Record<DockBadgeType, DockBadgeConfig> = {
     reminder: {
-        dockKey: "reminder_dock",
-        badgeClass: "reminder-dock-badge",
+        dockKey: "TN_reminder_dock",
+        badgeClass: "TN-reminder-dock-badge",
         badgeColor: "var(--b3-theme-error)",
         settingKey: "enableReminderDockBadge",
         displayName: "提醒"
     },
     project: {
-        dockKey: "project_dock",
-        badgeClass: "project-dock-badge",
+        dockKey: "TN_project_dock",
+        badgeClass: "TN-project-dock-badge",
         badgeColor: "#2c6a2e",
         settingKey: "enableProjectDockBadge",
         displayName: "项目"
     },
     habit: {
-        dockKey: "habit_dock",
-        badgeClass: "habit-dock-badge",
+        dockKey: "TN_habit_dock",
+        badgeClass: "TN-habit-dock-badge",
         badgeColor: "var(--b3-theme-primary)",
         settingKey: "enableHabitDockBadge",
         displayName: "习惯"

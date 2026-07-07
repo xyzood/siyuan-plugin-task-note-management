@@ -1173,7 +1173,7 @@ export class ProjectKanbanView {
 
 
     private initUI() {
-        this.container.classList.add('project-kanban-view');
+        this.container.classList.add('TN-project-kanban-view');
         this.container.innerHTML = '';
 
         // 创建工具栏
@@ -11700,7 +11700,7 @@ export class ProjectKanbanView {
         const style = document.createElement('style');
         style.id = 'project-kanban-custom-styles';
         style.textContent = `
-            .project-kanban-view {
+            .TN-project-kanban-view {
                 height: 100%;
                 display: flex;
                 flex-direction: column;

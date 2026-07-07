@@ -3,7 +3,7 @@ import { i18n } from "../../pluginInstance";
 import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
 import { ProjectManager, type MilestoneDateDisplayInfo } from "../../utils/projectManager";
 
-const PROJECT_KANBAN_TAB_TYPE = "project_kanban_tab";
+const PROJECT_KANBAN_TAB_TYPE = "TN_project_kanban_tab";
 const BLOCK_POMODORO_COUNT_ATTR = "custom-task-pomodoro-count";
 const BLOCK_POMODORO_MINUTES_ATTR = "custom-task-pomodoro-minutes";
 const INSTANCE_EVENT_ID_SUFFIX_REGEX = /^(.*)_\d{4}-\d{2}-\d{2}$/;
