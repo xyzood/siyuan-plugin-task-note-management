@@ -1540,7 +1540,7 @@ export class CalendarView {
                     });
 
                     menu.addItem({
-                        icon: 'iconProject',
+                        icon: 'iconTNProject',
                         label: i18n('projectColor') || '项目颜色',
                         click: () => this.showProjectColorDialog()
                     });

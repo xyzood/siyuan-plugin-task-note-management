@@ -1947,7 +1947,7 @@ export class EisenhowerMatrixView {
         if (task.projectId) {
             menu.addItem({
                 label: i18n('openProjectKanban'),
-                icon: 'iconProject',
+                icon: 'iconTNProject',
                 click: () => {
                     this.openProjectKanban(task.projectId!);
                 }
@@ -1955,7 +1955,7 @@ export class EisenhowerMatrixView {
         } else {
             menu.addItem({
                 label: i18n('addToProject'),
-                icon: 'iconProject',
+                icon: 'iconTNProject',
                 click: () => {
                     this.assignTaskToProject(task);
                 }

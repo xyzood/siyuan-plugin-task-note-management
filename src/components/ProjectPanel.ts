@@ -407,7 +407,7 @@ export class ProjectPanel {
             // 添加四象限面板按钮（放在日历按钮旁边）
             const eisenhowerBtn = document.createElement('button');
             eisenhowerBtn.className = 'b3-button b3-button--outline';
-            eisenhowerBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconGrid"></use></svg>';
+            eisenhowerBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconTNGrid"></use></svg>';
             eisenhowerBtn.classList.add('ariaLabel'); eisenhowerBtn.setAttribute('aria-label', i18n("eisenhowerMatrix") || "四象限面板");
             eisenhowerBtn.addEventListener('click', () => {
                 this.openEisenhowerMatrix();
@@ -417,7 +417,7 @@ export class ProjectPanel {
             // 添加番茄钟看板按钮
             const pomodoroStatsBtn = document.createElement('button');
             pomodoroStatsBtn.className = 'b3-button b3-button--outline';
-            pomodoroStatsBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconStatistic"></use></svg>';
+            pomodoroStatsBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconTNStatistic"></use></svg>';
             pomodoroStatsBtn.classList.add('ariaLabel'); pomodoroStatsBtn.setAttribute('aria-label', i18n("statsView") || "统计视图");
             pomodoroStatsBtn.addEventListener('click', () => {
                 this.showPomodoroStatsView();
@@ -1968,7 +1968,7 @@ export class ProjectPanel {
 
         // 打开项目看板（统一放在第一个）
         menu.addItem({
-            icon: "iconProject",
+            icon: "iconTNProject",
             label: i18n("openProjectKanban") || "打开项目看板",
             click: () => this.openProjectKanban(project)
         });
@@ -3868,7 +3868,7 @@ export class ProjectPanel {
 
         if (node && node.totalProjectCount > 0) {
             menu.addItem({
-                icon: "iconProject",
+                icon: "iconTNProject",
                 label: i18n("openFolderKanban") || "打开看板",
                 click: () => this.openFolderKanban(node)
             });

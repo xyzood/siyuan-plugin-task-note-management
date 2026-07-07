@@ -595,7 +595,7 @@ export async function loadAndDisplayGroups(view: any, container: HTMLElement) {
 
             const convertBtn = document.createElement('button');
             convertBtn.className = 'b3-button b3-button--small b3-button--outline';
-            convertBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconProject"></use></svg>';
+            convertBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconTNProject"></use></svg>';
             convertBtn.classList.add('ariaLabel');
             convertBtn.setAttribute('aria-label', i18n('convertGroupToProject'));
             convertBtn.style.cssText = `

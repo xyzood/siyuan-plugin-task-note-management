@@ -487,7 +487,7 @@ export class TaskNoteDOMManager {
                 const projectBtn = document.createElement("button");
                 projectBtn.className = "project-breadcrumb-btn block__icon fn__flex-center ariaLabel";
                 projectBtn.setAttribute("aria-label", i18n("projectManagement"));
-                projectBtn.innerHTML = `<svg class="b3-list-item__graphic"><use xlink:href="#iconProject"></use></svg>`;
+                projectBtn.innerHTML = `<svg class="b3-list-item__graphic"><use xlink:href="#iconTNProject"></use></svg>`;
                 projectBtn.style.cssText = `
                     margin-right: 4px;
                     padding: 4px;
@@ -1572,7 +1572,7 @@ export class TaskNoteDOMManager {
             width: 22px;
             height: 22px;
         `;
-        btn.innerHTML = `<svg class="b3-list-item__graphic" style="width:14px;height:14px"><use xlink:href="#iconProject"></use></svg>`;
+        btn.innerHTML = `<svg class="b3-list-item__graphic" style="width:14px;height:14px"><use xlink:href="#iconTNProject"></use></svg>`;
         btn.dataset.projectId = projectId;
         btn.dataset.blockId = blockId;
         btn.setAttribute("data-plugin-added", "reminder-plugin");
