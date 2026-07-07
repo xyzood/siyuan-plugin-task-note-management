@@ -412,7 +412,11 @@ export class PomodoroTimer {
             isDocked: this.isDocked, // 新增：吸附模式状态
             isMiniMode: this.isMiniMode, // 新增：迷你模式状态
             normalWindowBounds: this.normalWindowBounds, // 新增：保存的正常窗口位置
-            randomRestNextTriggerTime: this.randomRestNextTriggerTime // 新增：记录下次随机休息时间
+            randomRestNextTriggerTime: this.randomRestNextTriggerTime, // 新增：记录下次随机休息时间
+            isBackgroundAudioMuted: this.isBackgroundAudioMuted,
+            workVolume: this.workVolume,
+            breakVolume: this.breakVolume,
+            longBreakVolume: this.longBreakVolume
         };
     }
 
@@ -2644,7 +2648,7 @@ export class PomodoroTimer {
                 border: 1px solid var(--b3-table-border-color);
                 border-radius: 12px;
                 box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-                z-index: 10000;
+                z-index: 11;
                 user-select: none;
                 backdrop-filter: blur(16px);
                 transition: transform 0.2s ease, opacity 0.2s ease;
@@ -3910,6 +3914,73 @@ export class PomodoroTimer {
             this.setAudioBufferVolume(this.longBreakAudio.src, this.isBackgroundAudioMuted ? 0 : this.longBreakVolume);
         }
     }
+
+    private setBackgroundVolume(volume: number) {
+        volume = Math.max(0, Math.min(1, volume));
+        // 拖动滑块时取消静音；拖到 0 则自动置为静音状态
+        if (volume === 0) {
+            this.isBackgroundAudioMuted = true;
+        } else if (this.isBackgroundAudioMuted) {
+            this.isBackgroundAudioMuted = false;
+        }
+        if (this.isWorkPhase) {
+            this.workVolume = volume;
+            this.settings.workVolume = volume;
+        } else if (this.isLongBreak) {
+            this.longBreakVolume = volume;
+            this.settings.longBreakVolume = volume;
+        } else {
+            this.breakVolume = volume;
+            this.settings.breakVolume = volume;
+        }
+        this.settings.backgroundAudioMuted = this.isBackgroundAudioMuted;
+        // 持久化到插件设置
+        try {
+            const pluginAny = this.plugin as any;
+            if (pluginAny?.saveSettings) {
+                pluginAny.saveSettings({ ...pluginAny.settings, ...this.getVolumeSettingsForSave() });
+            }
+        } catch (e) {
+            console.warn('[PomodoroTimer] 保存音量设置失败:', e);
+        }
+        this.updateAudioVolume();
+
+        // BrowserWindow 模式：实时同步到窗口内音频元素
+        const isBrowserWindow = !this.isTabMode && PomodoroTimer.browserWindowInstance;
+        if (isBrowserWindow) {
+            try {
+                const activeAudio = this.isWorkPhase ? this.workAudio : (this.isLongBreak ? this.longBreakAudio : this.breakAudio);
+                const activeSrc = activeAudio ? activeAudio.src : '';
+                this.setBrowserWindowAudioVolume(
+                    this.isBackgroundAudioMuted ? 0 : volume,
+                    !this.isBackgroundAudioMuted && this.isRunning && !this.isPaused,
+                    activeSrc
+                );
+            } catch (e) { }
+        }
+
+        // 同步 DOM 模式音量控制显示
+        if (this.volumeSlider) {
+            this.volumeSlider.value = volume.toString();
+        }
+        const volumePercent = this.volumeContainer?.querySelector('span:last-child');
+        if (volumePercent) {
+            volumePercent.textContent = Math.round(volume * 100) + '%';
+        }
+        if (this.soundControlBtn) {
+            this.soundControlBtn.innerHTML = (this.isBackgroundAudioMuted || volume === 0) ? '🔇' : '🔊';
+        }
+    }
+
+    private getVolumeSettingsForSave() {
+        return {
+            workVolume: this.workVolume,
+            breakVolume: this.breakVolume,
+            longBreakVolume: this.longBreakVolume,
+            backgroundAudioMuted: this.isBackgroundAudioMuted
+        };
+    }
+
     private createMinimizedView() {
         this.minimizedView = document.createElement('div');
         this.minimizedView.className = 'pomodoro-minimized-view';
@@ -8144,8 +8215,8 @@ export class PomodoroTimer {
             }
 
             // 监听渲染进程的操作请求（通过主进程 IPC）
-            const actionHandler = (_event: any, method: string) => {
-                this.callMethod(method);
+            const actionHandler = (_event: any, method: string, ...args: any[]) => {
+                this.callMethod(method, ...args);
             };
             const controlHandler = (_event: any, action: string, pinState?: boolean) => {
                 switch (action) {
@@ -8544,8 +8615,8 @@ document.body.classList.remove('docked-mode');
                 screen = remote?.screen;
             } catch (e) { }
 
-            const actionHandler = (_event: any, method: string) => {
-                this.callMethod(method);
+            const actionHandler = (_event: any, method: string, ...args: any[]) => {
+                this.callMethod(method, ...args);
             };
 
             const controlHandler = (_event: any, action: string, pinState?: boolean) => {
@@ -8851,6 +8922,72 @@ document.body.classList.remove('docked-mode');
             white-space: nowrap;
         }
         .menu-item:hover { background: ${hoverColor}; }
+        .volume-menu {
+            -webkit-app-region: no-drag;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: ${bgColor};
+            border: 1px solid ${borderColor};
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            z-index: 10000;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            padding: 14px 18px;
+            width: 180px;
+            pointer-events: auto;
+        }
+        .volume-menu.show { display: flex; }
+        .volume-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: ${textColor};
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .volume-percent {
+            color: ${textColor};
+            font-size: 13px;
+            min-width: 40px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .volume-slider {
+            -webkit-app-region: no-drag;
+            width: 100%;
+            height: 5px;
+            background: ${backgroundLightColor};
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer !important;
+            -webkit-appearance: none;
+            appearance: none;
+            pointer-events: auto;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer !important;
+            border: none;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+        }
+        .volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer !important;
+            border: none;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+        }
         .pomodoro-content {
             flex: 1;
             padding: 0 16px 6px;
@@ -9397,7 +9534,7 @@ document.body.classList.remove('docked-mode');
             </div>
         </div>
         <div class="titlebar-buttons">
-            <button class="titlebar-btn" id="soundBtn" onclick="callMethod('toggleBackgroundAudio')">
+            <button class="titlebar-btn" id="soundBtn" onclick="toggleVolumeMenu(event)" title="${i18n('backgroundVolume') || '背景音量'}">
                 ${isBackgroundAudioMuted ? '🔇' : '🔊'}
             </button>
             <button class="titlebar-btn pin-btn active" id="pinBtn" onclick="togglePin()" title="${i18n('cancelPin') || '取消置顶'}">📌</button>
@@ -9488,6 +9625,13 @@ document.body.classList.remove('docked-mode');
         <button class="menu-item" onclick="callMethod('startShortBreak')">🍵 ${shortBreakText}</button>
         <button class="menu-item" onclick="callMethod('startLongBreak')">🧘 ${longBreakText}</button>
     </div>
+    <div class="volume-menu" id="volumeMenu">
+        <div class="volume-menu-header">
+            <span id="volumeMenuTitle">${i18n('backgroundVolume') || '背景音量'}</span>
+            <span class="volume-percent" id="volumePercent">50%</span>
+        </div>
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" oninput="onVolumeSliderInput(this.value)" title="${i18n('backgroundVolume') || '背景音量'}">
+    </div>
     <script>
         const { ipcRenderer } = require('electron');
         let remote;
@@ -9529,9 +9673,66 @@ document.body.classList.remove('docked-mode');
             })};
         let syncTimerStatePending = false;
 
-        function callMethod(method) {
-            ipcRenderer.send('${actionChannel}', method);
+        function callMethod(method, ...args) {
+            ipcRenderer.send('${actionChannel}', method, ...args);
             closeSwitchMenu();
+            closeVolumeMenu();
+        }
+
+        function closeVolumeMenu() {
+            const v = document.getElementById('volumeMenu');
+            if (v) v.classList.remove('show');
+        }
+
+        function toggleVolumeMenu(e) {
+            e.stopPropagation();
+            const v = document.getElementById('volumeMenu');
+            if (!v) return;
+            const willShow = !v.classList.contains('show');
+            if (willShow) {
+                updateVolumeMenuUI();
+            }
+            v.classList.toggle('show');
+            closeSwitchMenu();
+        }
+
+        function updateVolumeMenuUI() {
+            if (!localState) return;
+            const slider = document.getElementById('volumeSlider');
+            const percent = document.getElementById('volumePercent');
+            const title = document.getElementById('volumeMenuTitle');
+            const soundBtn = document.getElementById('soundBtn');
+            const isMuted = localState.isBackgroundAudioMuted;
+            const isWork = localState.isWorkPhase;
+            const isLongBreak = localState.isLongBreak;
+            const vol = isMuted ? 0 : (isWork ? localState.workVolume : (isLongBreak ? localState.longBreakVolume : localState.breakVolume));
+            if (slider) slider.value = vol;
+            if (percent) percent.textContent = Math.round(vol * 100) + '%';
+            if (title) {
+                if (isWork) {
+                    title.textContent = '${i18n('workVolume') || '工作背景音音量'}';
+                } else if (isLongBreak) {
+                    title.textContent = '${i18n('longBreakVolume') || '长休息背景音音量'}';
+                } else {
+                    title.textContent = '${i18n('breakVolume') || '短休息背景音音量'}';
+                }
+            }
+            const isSilent = isMuted || vol === 0;
+            const icon = isSilent ? '🔇' : '🔊';
+            if (soundBtn) {
+                soundBtn.textContent = icon;
+                soundBtn.title = isSilent ? '${i18n('enableBackgroundAudio') || '开启背景音'}' : '${i18n('muteBackgroundAudio') || '静音背景音'}';
+            }
+        }
+
+        function onVolumeSliderInput(value) {
+            const vol = parseFloat(value);
+            const percent = document.getElementById('volumePercent');
+            const soundBtn = document.getElementById('soundBtn');
+            if (percent) percent.textContent = Math.round(vol * 100) + '%';
+            const icon = vol === 0 ? '🔇' : '🔊';
+            if (soundBtn) soundBtn.textContent = icon;
+            ipcRenderer.send('${actionChannel}', 'setBackgroundVolume', vol);
         }
 
         function requestTimerSync() {
@@ -9547,6 +9748,7 @@ document.body.classList.remove('docked-mode');
         
         document.addEventListener('click', e => {
             if (!e.target.closest('#statusBtn') && !e.target.closest('#switchMenu') && !e.target.closest('.mini-layout')) closeSwitchMenu();
+            if (!e.target.closest('#soundBtn') && !e.target.closest('#volumeMenu')) closeVolumeMenu();
         });
 
         function toggleSwitchMenu(e) {
@@ -9965,8 +10167,7 @@ document.body.classList.remove('docked-mode');
 
             const soundBtn = document.getElementById('soundBtn');
             if (soundBtn) {
-                soundBtn.textContent = localState.isBackgroundAudioMuted ? '🔇' : '🔊';
-                soundBtn.title = localState.isBackgroundAudioMuted ? '${i18n('enableBackgroundAudio') || '开启背景音'}' : '${i18n('muteBackgroundAudio') || '静音背景音'}';
+                updateVolumeMenuUI();
             }
             
             const dockBtn = document.getElementById('dockBtn');
@@ -10334,6 +10535,9 @@ document.body.classList.remove('docked-mode');
                     break;
                 case 'toggleBackgroundAudio':
                     this.toggleBackgroundAudio();
+                    break;
+                case 'setBackgroundVolume':
+                    this.setBackgroundVolume(args[0]);
                     break;
                 case 'syncTimerState':
                     this.reconcileTimerState();
