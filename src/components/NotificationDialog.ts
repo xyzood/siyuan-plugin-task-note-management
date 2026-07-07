@@ -196,7 +196,7 @@ export class NotificationDialog {
             <div class="notification-content all-day-batch">
                 <div class="notification-header">
                     <div class="notification-icon">
-                        <svg><use xlink:href="#iconCalendar"></use></svg>
+                        <svg><use xlink:href="#iconTNCalendar"></use></svg>
                     </div>
                     <div class="notification-title-container">
                         <div class="notification-title">今日事件 (${reminders.length})</div>

@@ -397,7 +397,7 @@ export class ProjectPanel {
         if (this.plugin) {
             const calendarBtn = document.createElement('button');
             calendarBtn.className = 'b3-button b3-button--outline';
-            calendarBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconCalendar"></use></svg>';
+            calendarBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconTNCalendar"></use></svg>';
             calendarBtn.classList.add('ariaLabel'); calendarBtn.setAttribute('aria-label', i18n("calendarView") || "日历视图");
             calendarBtn.addEventListener('click', () => {
                 this.plugin.openCalendarTab();

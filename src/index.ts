@@ -1490,7 +1490,7 @@ export default class ReminderPlugin extends Plugin {
                     if (settings.enableCalendarTopBar !== false) {
                         if (!this.calendarTopBarEl) {
                             this.calendarTopBarEl = this.addTopBar({
-                                icon: 'iconCalendar',
+                                icon: 'iconTNCalendar',
                                 title: i18n('calendarView'),
                                 callback: () => this.openCalendarTab(),
                                 position: 'left'
@@ -2362,7 +2362,7 @@ export default class ReminderPlugin extends Plugin {
         if (this.registeredDockKeys.has("TN_calendar_dock")) return;
         this.registerDockPanel({
             type: "TN_calendar_dock",
-            icon: "iconCalendar",
+            icon: "iconTNCalendar",
             title: i18n("calendarDockTitle"),
             text: "Calendar view dock",
             init: (element) => {
@@ -2599,7 +2599,7 @@ export default class ReminderPlugin extends Plugin {
         const topBarSettings = await this.loadSettings();
         if (topBarSettings.enableCalendarTopBar !== false && !this.calendarTopBarEl) {
             this.calendarTopBarEl = this.addTopBar({
-                icon: 'iconCalendar',
+                icon: 'iconTNCalendar',
                 title: i18n('calendarView'),
                 callback: () => this.openCalendarTab(),
                 position: 'left'
@@ -5107,7 +5107,7 @@ export default class ReminderPlugin extends Plugin {
                 custom:
                 {
                     title: calendarTitle,
-                    icon: 'iconCalendar',
+                    icon: 'iconTNCalendar',
                     id: this.name + TAB_TYPE,
                     data: data || {}
                 }

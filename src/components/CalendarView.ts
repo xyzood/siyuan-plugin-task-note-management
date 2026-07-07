@@ -1499,7 +1499,7 @@ export class CalendarView {
             const openTaskCalendarBtn = document.createElement('button');
             openTaskCalendarBtn.className = 'b3-button b3-button--outline';
             openTaskCalendarBtn.style.padding = '6px';
-            openTaskCalendarBtn.innerHTML = '<svg class="b3-button__icon" style="margin-right: 0;"><use xlink:href="#iconCalendar"></use></svg>';
+            openTaskCalendarBtn.innerHTML = '<svg class="b3-button__icon" style="margin-right: 0;"><use xlink:href="#iconTNCalendar"></use></svg>';
             openTaskCalendarBtn.classList.add('ariaLabel'); openTaskCalendarBtn.setAttribute('aria-label', i18n("calendarView") || "任务日历视图");
             openTaskCalendarBtn.addEventListener('click', () => {
                 this.plugin.openCalendarTab();
