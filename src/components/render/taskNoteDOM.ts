@@ -1615,7 +1615,7 @@ export class TaskNoteDOMManager {
             width: 22px;
             height: 22px;
         `;
-        btn.innerHTML = `<span style="font-size:14px;line-height:1">📋</span>`;
+        btn.innerHTML = `<svg class="b3-list-item__graphic" style="width:14px;height:14px"><use xlink:href="#iconTNTodoList"></use></svg>`;
         btn.dataset.blockId = blockId;
         btn.setAttribute("data-plugin-added", "reminder-plugin");
         btn.classList.add('ariaLabel'); btn.setAttribute('aria-label', "查看绑定任务");

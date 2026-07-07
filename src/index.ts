@@ -2336,7 +2336,7 @@ export default class ReminderPlugin extends Plugin {
         if (this.registeredDockKeys.has("TN_reminder_dock")) return;
         this.registerDockPanel({
             type: "TN_reminder_dock",
-            icon: "iconClock",
+            icon: "iconTNTodoList",
             title: i18n("dockPanelTitle"),
             text: "This is my custom dock",
             init: (element) => {
