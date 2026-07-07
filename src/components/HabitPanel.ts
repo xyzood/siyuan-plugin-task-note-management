@@ -190,7 +190,7 @@ export class HabitPanel {
         // 日历视图按钮（习惯分布）
         const calendarBtn = document.createElement('button');
         calendarBtn.className = 'b3-button b3-button--outline';
-        calendarBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconCalendar"></use></svg>';
+        calendarBtn.innerHTML = '<svg class="b3-button__icon"><use xlink:href="#iconTNCalendar"></use></svg>';
         calendarBtn.classList.add('ariaLabel'); calendarBtn.setAttribute('aria-label', i18n("habitCalendar"));
         calendarBtn.addEventListener('click', () => {
             this.openHabitCalendarView();
