@@ -321,7 +321,7 @@
     "moveToToday": "Move to Today",
     "moveToTomorrow": "Move to Tomorrow",
     "moveToDayAfterTomorrow": "Move to Day After Tomorrow",
-    "moveToNextWeek": "Move to Next Week",
+    "moveToSevenDaysLater": "Move to 7 Days Later",
     "categoryFilter": "Category Filter",
     "eventCategory": "Event Category",
     "categoryManagement": "Category Management",

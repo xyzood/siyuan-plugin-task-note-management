@@ -1219,7 +1219,7 @@ export class ReminderPanel {
             { iconHTML: calendarIcon, label: i18n("moveToToday") || "移至今天", click: () => applyDate(todayStr) },
             { iconHTML: calendarIcon, label: i18n("moveToTomorrow") || "移至明天", click: () => applyDate(tomorrowStr) },
             { iconHTML: calendarIcon, label: i18n("moveToDayAfterTomorrow") || "移至后天", click: () => applyDate(dayAfterStr) },
-            { iconHTML: calendarIcon, label: i18n("moveToNextWeek") || "移至下周", click: () => applyDate(nextWeekStr) }
+            { iconHTML: calendarIcon, label: i18n("moveToSevenDaysLater") || "移至7天后", click: () => applyDate(nextWeekStr) }
         ]);
 
         const editDate = () => {
@@ -1268,7 +1268,7 @@ export class ReminderPanel {
             items.push({ iconHTML: calendarIcon, label: i18n("moveToToday") || "移至今天", click: () => applyStartDate(todayStr) });
             items.push({ iconHTML: calendarIcon, label: i18n("moveToTomorrow") || "移至明天", click: () => applyStartDate(tomorrowStr) });
             items.push({ iconHTML: calendarIcon, label: i18n("moveToDayAfterTomorrow") || "移至后天", click: () => applyStartDate(dayAfterStr) });
-            items.push({ iconHTML: calendarIcon, label: i18n("moveToNextWeek") || "移至下周", click: () => applyStartDate(nextWeekStr) });
+            items.push({ iconHTML: calendarIcon, label: i18n("moveToSevenDaysLater") || "移至7天后", click: () => applyStartDate(nextWeekStr) });
             items.push({ iconHTML: removeIcon, label: i18n("clearDate") || "清除日期", click: () => applyStartDate(null) });
             items.push({ iconHTML: editIcon, label: i18n("editDate") || "编辑日期", click: editDate });
         }
@@ -7515,7 +7515,7 @@ export class ReminderPanel {
             items.push({ iconHTML: "📅", label: i18n("moveToToday") || "移至今天", click: () => apply(todayStr) });
             items.push({ iconHTML: "📅", label: i18n("moveToTomorrow") || "移至明天", click: () => apply(tomorrowStr) });
             items.push({ iconHTML: "📅", label: i18n("moveToDayAfterTomorrow") || "移至后天", click: () => apply(dayAfterStr) });
-            items.push({ iconHTML: "📅", label: i18n("moveToNextWeek") || "移至下周", click: () => apply(nextWeekStr) });
+            items.push({ iconHTML: "📅", label: i18n("moveToSevenDaysLater") || "移至7天后", click: () => apply(nextWeekStr) });
             items.push({ iconHTML: "❌", label: i18n("clearDate") || "清除日期", click: () => apply(null) });
             items.push({
                 iconHTML: "✏️", label: i18n("editDate") || "编辑日期", click: () => {
@@ -10805,7 +10805,7 @@ export class ReminderPanel {
                 { iconHTML: '📅', label: i18n('moveToToday') || '移至今天', click: () => this.panelBatchSetDate(todayStr) },
                 { iconHTML: '📅', label: i18n('moveToTomorrow') || '移至明天', click: () => this.panelBatchSetDate(tomorrowStr) },
                 { iconHTML: '📅', label: i18n('moveToDayAfterTomorrow') || '移至后天', click: () => this.panelBatchSetDate(dayAfterStr) },
-                { iconHTML: '📅', label: i18n('moveToNextWeek') || '移至下周', click: () => this.panelBatchSetDate(nextWeekStr) },
+                { iconHTML: '📅', label: i18n('moveToSevenDaysLater') || '移至7天后', click: () => this.panelBatchSetDate(nextWeekStr) },
                 { iconHTML: '❌', label: i18n('clearDate') || '清除日期', click: () => this.panelBatchSetDate(null) },
                 { iconHTML: '🗓', label: i18n('batchSetDate') || '批量设置日期…', click: () => this.panelBatchSetDateDialog() }
             ]

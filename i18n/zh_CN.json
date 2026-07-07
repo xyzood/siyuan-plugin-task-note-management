@@ -321,7 +321,7 @@
     "moveToToday": "移至今天",
     "moveToTomorrow": "移至明天",
     "moveToDayAfterTomorrow": "移至后天",
-    "moveToNextWeek": "移至下周",
+    "moveToSevenDaysLater": "移至7天后",
     "categoryFilter": "分类筛选",
     "eventCategory": "任务分类",
     "categoryManagement": "分类管理",
