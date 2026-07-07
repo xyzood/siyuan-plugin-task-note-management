@@ -1,6 +1,6 @@
 import { Dialog, showMessage, openEmoji } from "siyuan";
 import { ProjectFolderManager, ProjectFolder } from "../utils/projectFolderManager";
-import { getBlockByID } from "../api";
+import { getBlockByID, addBlockProjectId, removeBlockProjectId } from "../api";
 import { CategoryManager } from "../utils/categoryManager";
 import { StatusManager } from "../utils/statusManager";
 import { BlockBindingDialog } from "./BlockBindingDialog";
@@ -605,6 +605,26 @@ export class ProjectDialog {
                     }
                 });
                 project.sort = maxSort + 10;
+            }
+
+            // 绑定/解绑块属性 custom-task-projectId
+            const oldBlockId = existingProject?.blockId;
+            const newBlockId = inputBlockId;
+
+            if (oldBlockId && oldBlockId !== newBlockId) {
+                try {
+                    await removeBlockProjectId(oldBlockId, projectId);
+                } catch (err) {
+                    console.warn(`Failed to remove project ${projectId} from old block ${oldBlockId}:`, err);
+                }
+            }
+
+            if (newBlockId) {
+                try {
+                    await addBlockProjectId(newBlockId, projectId);
+                } catch (err) {
+                    console.warn(`Failed to add project ${projectId} to new block ${newBlockId}:`, err);
+                }
             }
 
             projectData[projectId] = project;

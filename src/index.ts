@@ -3232,13 +3232,25 @@ export default class ReminderPlugin extends Plugin {
             label: i18n("projectManagement"),
             click: async () => {
                 const projectData = await this.loadProjectData();
-                const isProject = projectData && projectData.hasOwnProperty(firstDocumentId);
-                if (isProject) {
+                let targetProjectId = "";
+                let targetProjectTitle = "";
+
+                if (projectData) {
+                    if (projectData.hasOwnProperty(firstDocumentId)) {
+                        targetProjectId = firstDocumentId;
+                        targetProjectTitle = projectData[firstDocumentId]?.title || firstDocumentId;
+                    } else {
+                        const foundProject = Object.values(projectData).find((p: any) => p && p.blockId === firstDocumentId);
+                        if (foundProject) {
+                            targetProjectId = (foundProject as any).id;
+                            targetProjectTitle = (foundProject as any).title || targetProjectId;
+                        }
+                    }
+                }
+
+                if (targetProjectId) {
                     // 打开项目看板
-                    this.openProjectKanbanTab(
-                        projectData[firstDocumentId].blockId,
-                        projectData[firstDocumentId].title
-                    );
+                    this.openProjectKanbanTab(targetProjectId, targetProjectTitle);
                 } else {
                     // 循环传递所有id
                     for (const docId of documentIds) {
@@ -3309,14 +3321,25 @@ export default class ReminderPlugin extends Plugin {
             click: async () => {
                 if (documentId) {
                     const projectData = await this.loadProjectData();
-                    const isProject = projectData && projectData.hasOwnProperty(documentId);
+                    let targetProjectId = "";
+                    let targetProjectTitle = "";
 
-                    if (isProject) {
+                    if (projectData) {
+                        if (projectData.hasOwnProperty(documentId)) {
+                            targetProjectId = documentId;
+                            targetProjectTitle = projectData[documentId]?.title || documentId;
+                        } else {
+                            const foundProject = Object.values(projectData).find((p: any) => p && p.blockId === documentId);
+                            if (foundProject) {
+                                targetProjectId = (foundProject as any).id;
+                                targetProjectTitle = (foundProject as any).title || targetProjectId;
+                            }
+                        }
+                    }
+
+                    if (targetProjectId) {
                         // 打开项目看板
-                        this.openProjectKanbanTab(
-                            projectData[documentId].blockId,
-                            projectData[documentId].title
-                        );
+                        this.openProjectKanbanTab(targetProjectId, targetProjectTitle);
                     } else {
                         const dialog = new ProjectDialog(documentId, this);
                         dialog.show();
@@ -5317,14 +5340,25 @@ export default class ReminderPlugin extends Plugin {
                 const documentId = protyle?.block?.rootID;
                 if (documentId) {
                     const projectData = await this.loadProjectData();
-                    const isProject = projectData && projectData.hasOwnProperty(documentId);
+                    let targetProjectId = "";
+                    let targetProjectTitle = "";
 
-                    if (isProject) {
+                    if (projectData) {
+                        if (projectData.hasOwnProperty(documentId)) {
+                            targetProjectId = documentId;
+                            targetProjectTitle = projectData[documentId]?.title || documentId;
+                        } else {
+                            const foundProject = Object.values(projectData).find((p: any) => p && p.blockId === documentId);
+                            if (foundProject) {
+                                targetProjectId = (foundProject as any).id;
+                                targetProjectTitle = (foundProject as any).title || targetProjectId;
+                            }
+                        }
+                    }
+
+                    if (targetProjectId) {
                         // 打开项目看板
-                        this.openProjectKanbanTab(
-                            projectData[documentId].blockId,
-                            projectData[documentId].title
-                        );
+                        this.openProjectKanbanTab(targetProjectId, targetProjectTitle);
                     } else {
                         const dialog = new ProjectDialog(documentId, this);
                         dialog.show();

@@ -479,7 +479,23 @@ export class TaskNoteDOMManager {
         if (!documentId) return;
 
         const projectData = await this.plugin.loadProjectData();
-        const isProject = projectData && projectData.hasOwnProperty(documentId);
+        let targetProjectId = "";
+        let targetProjectTitle = "";
+
+        if (projectData) {
+            if (projectData.hasOwnProperty(documentId)) {
+                targetProjectId = documentId;
+                targetProjectTitle = projectData[documentId]?.title || documentId;
+            } else {
+                const foundProject = Object.values(projectData).find((p: any) => p && p.blockId === documentId);
+                if (foundProject) {
+                    targetProjectId = (foundProject as any).id;
+                    targetProjectTitle = (foundProject as any).title || targetProjectId;
+                }
+            }
+        }
+
+        const isProject = !!targetProjectId;
 
         const existingProjectButton = breadcrumb.querySelector(".project-breadcrumb-btn");
         if (isProject) {
@@ -508,7 +524,7 @@ export class TaskNoteDOMManager {
                 projectBtn.addEventListener("click", (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    this.plugin.openProjectKanbanTab(projectData[documentId].blockId, projectData[documentId].title);
+                    this.plugin.openProjectKanbanTab(targetProjectId, targetProjectTitle);
                 });
                 breadcrumb.insertBefore(projectBtn, docButton);
             }
