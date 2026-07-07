@@ -295,17 +295,17 @@
         }
 
         &.minimized-style-horizontal {
-            width: 180px !important;
+            width: 150px !important;
             height: 42px !important;
-            border-radius: 14px !important;
+            border-radius: 10px !important;
             backdrop-filter: blur(8px) !important;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 
             .pomodoro-minimized-card {
-                border-radius: 14px;
+                border-radius: 10px;
                 border: 1px solid var(--b3-theme-border);
-                padding: 4px 10px;
-                gap: 8px;
+                padding: 3px 8px;
+                gap: 6px;
             }
 
             .pomodoro-minimized-bg,
@@ -317,30 +317,44 @@
             .pomodoro-minimized-bar-layout {
                 display: flex !important;
                 align-items: center;
-                gap: 8px;
+                gap: 6px;
             }
 
             .pomodoro-minimized-mode-btn {
                 display: inline-flex !important;
-                width: 20px;
-                height: 20px;
-                border-radius: 6px;
+                width: 18px;
+                height: 18px;
+                border-radius: 5px;
                 align-items: center;
                 justify-content: center;
-                background: rgba(255, 255, 255, 0.48);
+                background: rgba(255, 255, 255, 0.15);
                 border: none;
                 color: var(--b3-theme-on-surface);
-                font-size: 13px;
+                font-size: 12px;
                 padding: 0;
                 flex-shrink: 0;
             }
 
             .pomodoro-minimized-info {
-                gap: 4px;
+                gap: 2px;
+                min-width: 0;
+            }
+
+            .pomodoro-minimized-title {
+                display: block !important;
+                font-size: 9px;
+                font-weight: 500;
+                color: var(--b3-theme-on-surface);
+                opacity: 0.65;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                line-height: 1.1;
+                width: 100%;
             }
 
             .pomodoro-minimized-time {
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 700;
                 line-height: 1;
                 letter-spacing: 0.2px;
@@ -350,32 +364,37 @@
             }
 
             .pomodoro-minimized-top-row {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                width: 100%;
                 gap: 6px;
             }
 
             .pomodoro-minimized-progress-track {
-                height: 4px;
+                height: 3px;
+                border-radius: 2px;
             }
 
             .pomodoro-minimized-actions {
-                gap: 4px;
+                gap: 3px;
                 flex-shrink: 0;
             }
 
             .pomodoro-minimized-action-btn {
-                width: 18px;
-                height: 18px;
-                border-radius: 5px;
-                font-size: 10px;
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+                font-size: 9px;
                 padding: 0;
             }
 
             .pomodoro-restore-btn {
-                top: 4px;
-                right: 4px;
-                width: 16px;
-                height: 16px;
-                font-size: 9px;
+                top: 2px;
+                right: 2px;
+                width: 14px;
+                height: 14px;
+                font-size: 8px;
             }
         }
 

@@ -45,6 +45,7 @@ export class PomodoroTimer {
     private minimizedProgressFill: HTMLElement;
     private minimizedPlayPauseBtn: HTMLElement;
     private minimizedStopBtn: HTMLElement;
+    private minimizedTitle: HTMLElement;
     private fullscreenBtn: HTMLElement; // 新增：全屏模式按钮
     private exitFullscreenBtn: HTMLElement; // 新增：退出全屏按钮
     private plugin: any; // 插件实例引用，用于调用插件方法
@@ -131,6 +132,7 @@ export class PomodoroTimer {
     private currentCircumference: number = 2 * Math.PI * 36; // 当前圆周长度，用于进度计算
     private isMiniMode: boolean = false; // BrowserWindow 迷你模式状态
     private isDocked: boolean = false; // BrowserWindow 吸附模式状态
+    private isAlwaysOnTopPinned: boolean = true; // BrowserWindow 是否置顶
     private normalWindowBounds: { x: number; y: number; width: number; height: number } | null = null; // 保存正常窗口位置和大小
     private inheritedWindowBounds: { x: number; y: number; width: number; height: number } | null = null; // 继承的窗口位置信息
     private scheduledNotificationIds: number[] = []; // 已调度的移动端通知ID列表
@@ -411,6 +413,7 @@ export class PomodoroTimer {
             windowBounds: windowBounds, // 窗口位置信息
             isDocked: this.isDocked, // 新增：吸附模式状态
             isMiniMode: this.isMiniMode, // 新增：迷你模式状态
+            isPinned: this.isAlwaysOnTopPinned, // 是否置顶
             normalWindowBounds: this.normalWindowBounds, // 新增：保存的正常窗口位置
             randomRestNextTriggerTime: this.randomRestNextTriggerTime, // 新增：记录下次随机休息时间
             isBackgroundAudioMuted: this.isBackgroundAudioMuted,
@@ -4104,6 +4107,22 @@ export class PomodoroTimer {
             flex: 1;
         `;
 
+        this.minimizedTitle = document.createElement('div');
+        this.minimizedTitle.className = 'pomodoro-minimized-title';
+        this.minimizedTitle.style.cssText = `
+            display: none;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--b3-theme-on-surface);
+            opacity: 0.6;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-bottom: 2px;
+            pointer-events: none;
+            width: 100%;
+        `;
+
         const minimizedTopRow = document.createElement('div');
         minimizedTopRow.className = 'pomodoro-minimized-top-row';
         minimizedTopRow.style.cssText = `
@@ -4184,6 +4203,7 @@ export class PomodoroTimer {
         minimizedActions.appendChild(this.minimizedStopBtn);
         minimizedTopRow.appendChild(this.minimizedTimeDisplay);
         minimizedTopRow.appendChild(minimizedActions);
+        minimizedInfo.appendChild(this.minimizedTitle);
         minimizedInfo.appendChild(minimizedTopRow);
         minimizedInfo.appendChild(minimizedProgressTrack);
         minimizedBarLayout.appendChild(this.minimizedModeBtn);
@@ -4327,6 +4347,10 @@ export class PomodoroTimer {
         }
         if (this.minimizedTimeDisplay) {
             this.minimizedTimeDisplay.textContent = timeText;
+        }
+        if (this.minimizedTitle) {
+            this.minimizedTitle.textContent = this.reminder.title || (i18n('unnamedNote') || '未命名笔记');
+            this.minimizedTitle.title = this.reminder.title || (i18n('unnamedNote') || '未命名笔记');
         }
         if (this.minimizedPlayPauseBtn) {
             this.minimizedPlayPauseBtn.innerHTML = this.isRunning && !this.isPaused ? '⏸' : '▶️';
@@ -8173,6 +8197,13 @@ export class PomodoroTimer {
                 backgroundColor: backgroundColor
             });
 
+            // Set alwaysOnTop level to screen-saver to prevent being covered by fullscreen apps
+            try {
+                pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+            } catch (e) {
+                console.warn('[PomodoroTimer] Failed to set alwaysOnTop to screen-saver on creation:', e);
+            }
+
             // 确保新窗口启用 @electron/remote，否则子窗口内无法获取 remote 导致按钮失效
             try {
                 const remoteMain = (window as any).require?.('@electron/remote/main');
@@ -8234,7 +8265,12 @@ export class PomodoroTimer {
             const controlHandler = (_event: any, action: string, pinState?: boolean) => {
                 switch (action) {
                     case 'pin':
-                        pomodoroWindow.setAlwaysOnTop(!!pinState);
+                        this.isAlwaysOnTopPinned = !!pinState;
+                        if (this.isAlwaysOnTopPinned) {
+                            pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                        } else {
+                            pomodoroWindow.setAlwaysOnTop(false);
+                        }
                         break;
                     case 'minimize':
                         pomodoroWindow.minimize();
@@ -8256,6 +8292,33 @@ export class PomodoroTimer {
                         break;
                 }
             };
+
+            // Register focus and always-on-top-changed listeners to ensure it stays topmost if pinned
+            try {
+                pomodoroWindow.removeAllListeners('focus');
+                pomodoroWindow.on('focus', () => {
+                    const activeTimer = PomodoroTimer.browserWindowTimer;
+                    if (activeTimer && activeTimer.isAlwaysOnTopPinned) {
+                        try {
+                            pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                        } catch (e) {
+                            console.warn('[PomodoroTimer] Failed to restore alwaysOnTop on focus:', e);
+                        }
+                    }
+                });
+
+                pomodoroWindow.removeAllListeners('always-on-top-changed');
+                pomodoroWindow.on('always-on-top-changed', (event: any, alwaysOnTopState: boolean) => {
+                    const activeTimer = PomodoroTimer.browserWindowTimer;
+                    if (activeTimer && activeTimer.isAlwaysOnTopPinned && !alwaysOnTopState) {
+                        try {
+                            pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                        } catch (e) { }
+                    }
+                });
+            } catch (err) {
+                console.warn('[PomodoroTimer] Failed to register window focus/always-on-top listeners:', err);
+            }
 
             ipcMain?.on(actionChannel, actionHandler);
             ipcMain?.on(controlChannel, controlHandler);
@@ -8471,6 +8534,17 @@ document.body.classList.remove('docked-mode');
                     console.warn('[PomodoroTimer] Failed to detect window mode during recovery', err);
                 }
 
+                // Try to recover pin state from window.isPinned
+                try {
+                    const pinned: boolean = await win.webContents.executeJavaScript('window.isPinned !== false');
+                    (timer as any).isAlwaysOnTopPinned = pinned;
+                    if (pinned) {
+                        win.setAlwaysOnTop(true, "screen-saver");
+                    }
+                } catch (err) {
+                    console.warn('[PomodoroTimer] Failed to detect window pin state during recovery', err);
+                }
+
                 // FIX: 如果恢复为吸附模式，需要设置鼠标穿透
                 if (timer.isDocked) {
                     console.log('[PomodoroTimer] 恢复吸附模式，设置鼠标穿透');
@@ -8559,6 +8633,17 @@ document.body.classList.remove('docked-mode');
                         this.randomRestEnabled = recoveredState.randomRestEnabled || false;
                         this.randomRestCount = recoveredState.randomRestCount || 0;
 
+                        // Restore alwaysOnTop pin state
+                        try {
+                            const pinned = await win.webContents.executeJavaScript('window.isPinned !== false');
+                            this.isAlwaysOnTopPinned = pinned;
+                            if (pinned) {
+                                win.setAlwaysOnTop(true, "screen-saver");
+                            }
+                        } catch (e) {
+                            this.isAlwaysOnTopPinned = true;
+                        }
+
                         if (recoveredState.reminderTitle) {
                             this.reminder.title = recoveredState.reminderTitle;
                         }
@@ -8635,7 +8720,12 @@ document.body.classList.remove('docked-mode');
             const controlHandler = (_event: any, action: string, pinState?: boolean) => {
                 switch (action) {
                     case 'pin':
-                        pomodoroWindow.setAlwaysOnTop(!!pinState);
+                        this.isAlwaysOnTopPinned = !!pinState;
+                        if (this.isAlwaysOnTopPinned) {
+                            pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                        } else {
+                            pomodoroWindow.setAlwaysOnTop(false);
+                        }
                         break;
                     case 'minimize':
                         pomodoroWindow.minimize();
@@ -8656,6 +8746,33 @@ document.body.classList.remove('docked-mode');
                         break;
                 }
             };
+
+            // Register focus and always-on-top-changed listeners to ensure it stays topmost if pinned
+            try {
+                pomodoroWindow.removeAllListeners('focus');
+                pomodoroWindow.on('focus', () => {
+                    const activeTimer = PomodoroTimer.browserWindowTimer;
+                    if (activeTimer && activeTimer.isAlwaysOnTopPinned) {
+                        try {
+                            pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                        } catch (e) {
+                            console.warn('[PomodoroTimer] Failed to restore alwaysOnTop on focus:', e);
+                        }
+                    }
+                });
+
+                pomodoroWindow.removeAllListeners('always-on-top-changed');
+                pomodoroWindow.on('always-on-top-changed', (event: any, alwaysOnTopState: boolean) => {
+                    const activeTimer = PomodoroTimer.browserWindowTimer;
+                    if (activeTimer && activeTimer.isAlwaysOnTopPinned && !alwaysOnTopState) {
+                        try {
+                            pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                        } catch (e) { }
+                    }
+                });
+            } catch (err) {
+                console.warn('[PomodoroTimer] Failed to register window focus/always-on-top listeners in registerIPCListeners:', err);
+            }
 
             ipcMain.on(actionChannel, actionHandler);
             ipcMain.on(controlChannel, controlHandler);
@@ -9550,7 +9667,7 @@ document.body.classList.remove('docked-mode');
             <button class="titlebar-btn" id="soundBtn" onclick="toggleVolumeMenu(event)" title="${i18n('backgroundVolume') || '背景音量'}">
                 ${isBackgroundAudioMuted ? '🔇' : '🔊'}
             </button>
-            <button class="titlebar-btn pin-btn active" id="pinBtn" onclick="togglePin()" title="${i18n('cancelPin') || '取消置顶'}">📌</button>
+            <button class="titlebar-btn pin-btn ${currentState.isPinned !== false ? 'active' : ''}" id="pinBtn" onclick="togglePin()" title="${currentState.isPinned !== false ? (i18n('cancelPin') || '取消置顶') : (i18n('pinWindow') || '置顶窗口')}">📌</button>
             <button class="titlebar-btn" onclick="minimizeWindow()">─</button>
             <button class="titlebar-btn close-btn" onclick="closeWindow()">×</button>
         </div>
@@ -9668,7 +9785,8 @@ document.body.classList.remove('docked-mode');
             }
         }
 
-        let isPinned = true;
+        let isPinned = ${currentState.isPinned !== false};
+        window.isPinned = isPinned;
         
         // Initialize local state from arguments
         let localState = ${JSON.stringify({ ...currentState, workspaceDir: this.plugin?.getWorkspaceDir?.() || '' })};
@@ -9928,6 +10046,7 @@ document.body.classList.remove('docked-mode');
         
         function togglePin() {
             isPinned = !isPinned;
+            window.isPinned = isPinned;
             ipcRenderer.send('${controlChannel}', 'pin', isPinned);
             const btn = document.getElementById('pinBtn');
             if (btn) {
@@ -10425,7 +10544,12 @@ document.body.classList.remove('docked-mode');
                 const controlHandler = (_event: any, action: string, pinState?: boolean) => {
                     switch (action) {
                         case 'pin':
-                            pomodoroWindow.setAlwaysOnTop(!!pinState);
+                            this.isAlwaysOnTopPinned = !!pinState;
+                            if (this.isAlwaysOnTopPinned) {
+                                pomodoroWindow.setAlwaysOnTop(true, "screen-saver");
+                            } else {
+                                pomodoroWindow.setAlwaysOnTop(false);
+                            }
                             break;
                         case 'minimize':
                             pomodoroWindow.minimize();
