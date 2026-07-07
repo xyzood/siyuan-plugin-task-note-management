@@ -96,6 +96,10 @@ export class PomodoroTimer {
     private audioInitFailTimestamp: number | null = null; // 上次初始化失败时间（ms）
     private readonly AUDIO_INIT_RETRY_BACKOFF: number = 10000; // 失败重试退避（ms）
 
+    private audioCtx: AudioContext | null = null;
+    private audioBuffers: Map<string, AudioBuffer> = new Map();
+    private activeSources: Map<string, { source: AudioBufferSourceNode, gainNode: GainNode }> = new Map();
+
     private isWindowClosed: boolean = false; // 新增：窗口关闭状态标记
     private isRecreatingWindow: boolean = false; // 窗口重建中标记（吸附模式切换时防止 closed 事件杀死计时器和音频）
     private bwAudioDataUrlCache: Map<string, string> = new Map(); // BW 音频 data URL 缓存
@@ -191,10 +195,7 @@ export class PomodoroTimer {
         // 在用户首次交互时解锁音频播放
         this.attachAudioUnlockListeners();
 
-        // 在 BrowserWindow 模式下，设置定期音频权限检查
-        if (!this.isTabMode) {
-            this.setupBrowserWindowAudioMaintenance();
-        }
+
 
         // 如果有继承状态，应用继承的状态
         if (inheritState) {
@@ -724,6 +725,7 @@ export class PomodoroTimer {
     }
 
     private async initAudio() {
+
         // 初始化工作背景音
         if (this.settings.workSound) {
             try {
@@ -796,6 +798,19 @@ export class PomodoroTimer {
         if (this.randomRestEnabled && this.settings.randomRestEndSound) {
             await this.initRandomRestEndSound();
         }
+
+        // 额外预加载 AudioContext 音频 Buffer (同时支持桌面端与移动端)
+        if (this.workAudio) void this.preloadAudioBuffer(this.workAudio.src);
+        if (this.breakAudio) void this.preloadAudioBuffer(this.breakAudio.src);
+        if (this.longBreakAudio) void this.preloadAudioBuffer(this.longBreakAudio.src);
+        if (this.workEndAudio) void this.preloadAudioBuffer(this.workEndAudio.src);
+        if (this.breakEndAudio) void this.preloadAudioBuffer(this.breakEndAudio.src);
+        if (this.randomRestSounds && this.randomRestSounds.length > 0) {
+            this.randomRestSounds.forEach(audio => {
+                if (audio) void this.preloadAudioBuffer(audio.src);
+            });
+        }
+        if (this.randomRestEndSound) void this.preloadAudioBuffer(this.randomRestEndSound.src);
     }
 
     private attachAudioUnlockListeners() {
@@ -904,7 +919,7 @@ export class PomodoroTimer {
                 }
 
                 // 确保音量设置正确（不受背景音静音影响）
-                selectedAudio.volume = 1;
+                selectedAudio.volume = this.getAudioVolume(selectedAudio);
             } else {
                 // 未配置提示音时，仍然要打开弹窗提示并显示系统通知（见要求2）
                 console.debug('[PomodoroTimer] 未配置随机微休息提示音，跳过音频播放，但会显示弹窗与系统通知');
@@ -2127,17 +2142,8 @@ export class PomodoroTimer {
             return;
         }
 
-        if (this.audioInitPromise && !force) {
-            try {
-                await this.audioInitPromise;
-            } catch {
-                // 已有的初始化失败被忽略，等待后续用户手势重试
-            }
-            return;
-        }
-
         // 在 BrowserWindow 模式下，音频会在 BrowserWindow 内播放（有 autoplayPolicy: 'no-user-gesture-required'）
-        // 因此跳过主窗口的音频初始化，避免 NotAllowedError
+        // 因此直接标记已初始化并注销监听
         const isBrowserWindow = !this.isTabMode && PomodoroTimer.browserWindowInstance;
         if (isBrowserWindow) {
             this.audioInitialized = true;
@@ -2145,140 +2151,13 @@ export class PomodoroTimer {
             return;
         }
 
-        // 如果最近一次初始化失败且在退避时间内，避免重复尝试主动解锁，改为等待用户手势
-        if (!force && this.audioInitFailTimestamp && (Date.now() - this.audioInitFailTimestamp) < this.AUDIO_INIT_RETRY_BACKOFF) {
-            this.attachAudioUnlockListeners();
-            return;
-        }
-
-        // 如果窗口不可见或未获得焦点，跳过自动静默播放尝试，等待用户手势
-        try {
-            if (!force && typeof document !== 'undefined') {
-                const vis = (document as any).visibilityState;
-                const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
-                if (vis !== 'visible' || !hasFocus) {
-                    this.attachAudioUnlockListeners();
-                    return;
-                }
-            }
-        } catch (e) {
-            // 忽略可见性检查错误，继续尝试初始化
-        }
-
-        this.audioInitPromise = (async () => {
-            try {
-                // 创建一个静默音频来获取播放权限
-                const silentAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-                silentAudio.volume = 0;
-                try {
-                    await silentAudio.play();
-                    silentAudio.pause();
-                } catch (e: any) {
-                    // 如果被拒绝（非用户手势），记录失败时间并注册解锁监听，优雅退出
-                    console.warn('静默音频播放受限:', e);
-                    if (e && e.name === 'NotAllowedError') {
-                        this.audioInitFailTimestamp = Date.now();
-                        this.audioInitialized = false;
-                        this.attachAudioUnlockListeners();
-                        return;
-                    }
-                    // 其他错误继续向外抛
-                    throw e;
-                }
-
-                const audioLoadPromises: Array<Promise<void>> = [];
-
-                if (this.workAudio) {
-                    audioLoadPromises.push(this.waitForAudioLoad(this.workAudio));
-                }
-                if (this.breakAudio) {
-                    audioLoadPromises.push(this.waitForAudioLoad(this.breakAudio));
-                }
-                if (this.longBreakAudio) {
-                    audioLoadPromises.push(this.waitForAudioLoad(this.longBreakAudio));
-                }
-                if (this.workEndAudio) {
-                    audioLoadPromises.push(this.waitForAudioLoad(this.workEndAudio));
-                }
-                if (this.breakEndAudio) {
-                    audioLoadPromises.push(this.waitForAudioLoad(this.breakEndAudio));
-                }
-
-                if (this.randomRestSounds.length > 0) {
-                    this.randomRestSounds.forEach((audio) => {
-                        audioLoadPromises.push(this.waitForAudioLoad(audio));
-                    });
-                }
-
-                if (this.randomRestEndSound) {
-                    audioLoadPromises.push(this.waitForAudioLoad(this.randomRestEndSound));
-                }
-
-                await Promise.allSettled(audioLoadPromises);
-
-                // 尝试对各个音频元素执行一次静音播放以在用户手势期间解锁它们
-                try {
-                    const unlockAttempts: Array<Promise<void>> = [];
-
-                    const tryUnlockAudio = async (audio?: HTMLAudioElement) => {
-                        if (!audio) return;
-                        try {
-                            const originalVolume = audio.volume;
-                            try {
-                                audio.volume = 0; // 静音播放以避免打扰
-                            } catch { }
-                            try {
-                                await audio.play();
-                                audio.pause();
-                                try { audio.currentTime = 0; } catch { }
-                            } catch (e) {
-                                // 单个音频解锁失败不应阻止整体初始化
-                                console.warn('尝试对音频执行静音播放以解锁失败:', e);
-                            } finally {
-                                try {
-                                    audio.volume = originalVolume;
-                                } catch { }
-                            }
-                        } catch (e) {
-                            console.warn('解锁音频时出错:', e);
-                        }
-                    };
-
-                    // 对随机微休息数组尝试解锁
-                    if (this.randomRestSounds && this.randomRestSounds.length > 0) {
-                        this.randomRestSounds.forEach((a) => unlockAttempts.push(tryUnlockAudio(a)));
-                    }
-
-                    // 对随机微休息结束声音尝试解锁
-                    if (this.randomRestEndSound) {
-                        unlockAttempts.push(tryUnlockAudio(this.randomRestEndSound));
-                    }
-
-                    // 对工作/休息结束提示音也尝试解锁（以防用户选择这些作为随机微休息）
-                    if (this.workEndAudio) unlockAttempts.push(tryUnlockAudio(this.workEndAudio));
-                    if (this.breakEndAudio) unlockAttempts.push(tryUnlockAudio(this.breakEndAudio));
-
-                    await Promise.allSettled(unlockAttempts);
-                } catch (unlockError) {
-                    console.warn('执行音频解锁尝试时出现错误:', unlockError);
-                }
-
-                this.audioInitialized = true;
-                this.detachAudioUnlockListeners();
-            } catch (error) {
-                this.audioInitialized = false;
-                console.warn('无法获取音频播放权限:', error);
-                this.attachAudioUnlockListeners();
-                throw error;
-            } finally {
-                this.audioInitPromise = null;
-            }
-        })();
-
-        try {
-            await this.audioInitPromise;
-        } catch {
-            // 忽略异常，等待下一次用户交互重新尝试
+        // 无论移动端还是桌面端非 BW 模式，统一通过 resumeAudioContext 初始化 AudioContext
+        await this.resumeAudioContext();
+        if (this.audioCtx) {
+            this.audioInitialized = true;
+            this.detachAudioUnlockListeners();
+        } else {
+            this.audioInitialized = false;
         }
     }
 
@@ -2595,81 +2474,72 @@ export class PomodoroTimer {
     // 静态锁定集合，用于防止多个实例在短时间内同时在 BW 中触发同一个音频
     private static bwPlayingLock: Set<string> = new Set();
 
+    private getAudioVolume(audio: HTMLAudioElement): number {
+        if (!audio) return 0;
+        if (audio === this.workAudio) return this.workVolume;
+        if (audio === this.breakAudio) return this.breakVolume;
+        if (audio === this.longBreakAudio) return this.longBreakVolume;
+        if (audio === this.workEndAudio) return this.workEndVolume;
+        if (audio === this.breakEndAudio) return this.breakEndVolume;
+        if (audio === this.randomRestEndSound) return this.randomRestEndVolume;
+        if (this.randomRestSounds && this.randomRestSounds.includes(audio)) return this.randomRestVolume;
+        return typeof audio.volume === 'number' ? audio.volume : 1.0;
+    }
+
     private async safePlayAudio(audio: HTMLAudioElement): Promise<boolean> {
         if (!audio) return false;
 
-        try {
-            // 判定是否为背景音（需要循环），仅限 work/break 背景音
-            const isBackgroundAudio = audio === this.workAudio || audio === this.breakAudio || audio === this.longBreakAudio;
+        const isBackgroundAudio = audio === this.workAudio || audio === this.breakAudio || audio === this.longBreakAudio;
+        let loop = audio.loop;
+        if (!isBackgroundAudio) {
+            loop = false;
+        }
 
-            // 强制规则：非背景音不得循环
-            if (!isBackgroundAudio) {
-                audio.loop = false;
-            }
-
-            // 如果在 BrowserWindow 模式，或者当前已开启了 float window，优先在 BW 内播放音频
-            // 这样所有实例（Tab或Float）都统一由 BW 发声，避免双重播放，且利用 BW 的 autoplayPolicy 绕过限制。
-            const bwInstance = PomodoroTimer.browserWindowInstance;
-            if (bwInstance && !bwInstance.isDestroyed()) {
-                try {
-                    const src = audio.src || '';
-                    const loop = !!audio.loop;
-                    const volume = typeof audio.volume === 'number' ? audio.volume : 1;
-
-                    // 避免重复触发锁定：如果该音频在 BW 中已经在 500ms 内触发过，则跳过，防止多实例并发导致的回声
-                    const lockKey = `${src}_${loop}`;
-                    if (PomodoroTimer.bwPlayingLock.has(lockKey)) {
-                        return true;
-                    }
-                    PomodoroTimer.bwPlayingLock.add(lockKey);
-                    setTimeout(() => PomodoroTimer.bwPlayingLock.delete(lockKey), 500);
-
-                    const played = await this.playSoundInBrowserWindow(src, { loop, volume });
-                    if (played) {
-                        return true;
-                    }
-                    // BW 播放失败时直接返回 false，不回退到主窗口播放
-                    console.warn('[PomodoroTimer] BrowserWindow 音频播放失败');
-                    return false;
-                } catch (e) {
-                    console.warn('在 BrowserWindow 中播放音频失败:', e);
-                    return false;
-                }
-            }
-
-            // 确保音频已初始化（仅在非 BrowserWindow 模式下）
-            if (!this.audioInitialized) {
-                await this.initializeAudioPlayback();
-                if (!this.audioInitialized) return false;
-            }
-
-            // 检查音频是否准备就绪
-            if (audio.readyState < 3) {
-                await this.waitForAudioLoad(audio);
-            }
-
-            // 重置音频到开始位置
+        // 如果在 BrowserWindow 模式，或者当前已开启了 float window，优先在 BW 内播放音频
+        // 这样所有实例（Tab或Float）都统一由 BW 发声，避免双重播放，且利用 BW 的 autoplayPolicy 绕过限制。
+        const bwInstance = PomodoroTimer.browserWindowInstance;
+        if (bwInstance && !bwInstance.isDestroyed()) {
             try {
-                audio.currentTime = 0;
-            } catch (e) { }
+                const src = audio.src || '';
+                const volume = isBackgroundAudio && this.isBackgroundAudioMuted ? 0 : this.getAudioVolume(audio);
 
-            // 播放音频
-            await audio.play();
-            return true;
-        } catch (error: any) {
-            console.warn('音频播放失败:', error);
-            if (error && error.name === 'NotAllowedError') {
-                this.audioInitialized = false;
-                try {
-                    await this.initializeAudioPlayback(true);
-                    if (audio.readyState >= 3) {
-                        try { audio.currentTime = 0; } catch { }
-                        await audio.play();
-                        return true;
-                    }
-                } catch { }
+                // 避免重复触发锁定：如果该音频在 BW 中已经在 500ms 内触发过，则跳过，防止多实例并发导致的回声
+                const lockKey = `${src}_${loop}`;
+                if (PomodoroTimer.bwPlayingLock.has(lockKey)) {
+                    return true;
+                }
+                PomodoroTimer.bwPlayingLock.add(lockKey);
+                setTimeout(() => PomodoroTimer.bwPlayingLock.delete(lockKey), 500);
+
+                const played = await this.playSoundInBrowserWindow(src, { loop, volume });
+                if (played) {
+                    return true;
+                }
+                // BW 播放失败时直接返回 false，不回退到主窗口播放
+                console.warn('[PomodoroTimer] BrowserWindow 音频播放失败');
+                return false;
+            } catch (e) {
+                console.warn('在 BrowserWindow 中播放音频失败:', e);
                 return false;
             }
+        }
+
+        // 无论移动端还是桌面端非 BW 模式下，全部统一使用 AudioContext 播放以达到完美的无缝循环与高稳定性
+        if (!this.audioInitialized) {
+            await this.initializeAudioPlayback();
+            if (!this.audioInitialized) return false;
+        }
+
+        const volume = this.getAudioVolume(audio);
+        const actualVolume = (isBackgroundAudio && this.isBackgroundAudioMuted) ? 0 : volume;
+
+        try {
+            const src = audio.src || '';
+            if (!src) return false;
+            const played = await this.playAudioBuffer(src, loop, actualVolume);
+            return played;
+        } catch (e) {
+            console.warn('[PomodoroTimer] AudioContext play failed:', e);
             return false;
         }
     }
@@ -3986,12 +3856,15 @@ export class PomodoroTimer {
     private updateAudioVolume() {
         if (this.workAudio) {
             this.workAudio.volume = this.isBackgroundAudioMuted ? 0 : this.workVolume;
+            this.setAudioBufferVolume(this.workAudio.src, this.isBackgroundAudioMuted ? 0 : this.workVolume);
         }
         if (this.breakAudio) {
             this.breakAudio.volume = this.isBackgroundAudioMuted ? 0 : this.breakVolume;
+            this.setAudioBufferVolume(this.breakAudio.src, this.isBackgroundAudioMuted ? 0 : this.breakVolume);
         }
         if (this.longBreakAudio) {
             this.longBreakAudio.volume = this.isBackgroundAudioMuted ? 0 : this.longBreakVolume;
+            this.setAudioBufferVolume(this.longBreakAudio.src, this.isBackgroundAudioMuted ? 0 : this.longBreakVolume);
         }
     }
     private createMinimizedView() {
@@ -6594,6 +6467,8 @@ export class PomodoroTimer {
     }
 
     private stopAllAudio() {
+        this.stopAllAudioBuffers();
+
         // BrowserWindow 模式下，同时停止 BW 内音频和主窗口音频元素
         try {
             const bwInstance = PomodoroTimer.browserWindowInstance;
@@ -7204,6 +7079,18 @@ export class PomodoroTimer {
         this.stopAllAudio();
         this.stopRandomRestTimer(); // 停止随机微休息
         this.detachAudioUnlockListeners();
+
+        // 清理 AudioContext 资源，避免内存和音频资源泄露
+        if (this.audioCtx) {
+            try {
+                this.audioCtx.close();
+            } catch (e) {
+                console.warn('[PomodoroTimer] Failed to close AudioContext:', e);
+            }
+            this.audioCtx = null;
+        }
+        this.audioBuffers.clear();
+        this.activeSources.clear();
 
         if (this.isFullscreen) {
             this.exitFullscreen();
@@ -10782,29 +10669,137 @@ document.body.classList.remove('mini-mode');
         }
     }
 
-    private setupBrowserWindowAudioMaintenance() {
-        // 每5分钟检查一次音频权限（在 BrowserWindow 模式下会被跳过）
-        setInterval(async () => {
-            if (this.isRunning && !this.isPaused && !this.isWindowClosed) {
-                try {
-                    await this.initializeAudioPlayback(true);
-                } catch (error) {
-                    console.warn('[PomodoroTimer] 定期音频权限检查失败:', error);
-                }
-            }
-        }, 5 * 60 * 1000); // 5分钟
+    private getCacheKey(resolvedUrl: string): string {
+        if (!resolvedUrl) return '';
+        try {
+            return new URL(resolvedUrl, window.location.href).href;
+        } catch (e) {
+            return resolvedUrl;
+        }
+    }
 
-        // 监听窗口焦点事件（在 BrowserWindow 模式下会被跳过）
-        if (typeof window !== 'undefined' && window.addEventListener) {
-            window.addEventListener('focus', async () => {
-                if (!this.isWindowClosed) {
-                    try {
-                        await this.initializeAudioPlayback(true);
-                    } catch (error) {
-                        console.warn('[PomodoroTimer] 窗口焦点事件音频权限检查失败:', error);
-                    }
-                }
+    private async initAudioContext() {
+        if (this.audioCtx) return;
+        try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+                this.audioCtx = new AudioContextClass();
+            }
+        } catch (e) {
+            console.warn('[PomodoroTimer] Failed to initialize AudioContext:', e);
+        }
+    }
+
+    private async resumeAudioContext() {
+        await this.initAudioContext();
+        if (this.audioCtx && this.audioCtx.state === 'suspended') {
+            try {
+                await this.audioCtx.resume();
+            } catch (e) {
+                console.warn('[PomodoroTimer] Failed to resume AudioContext:', e);
+            }
+        }
+    }
+
+    private async preloadAudioBuffer(resolvedUrl: string): Promise<AudioBuffer | null> {
+        if (!resolvedUrl) return null;
+        const cacheKey = this.getCacheKey(resolvedUrl);
+        if (this.audioBuffers.has(cacheKey)) {
+            return this.audioBuffers.get(cacheKey)!;
+        }
+
+        try {
+            await this.initAudioContext();
+            if (!this.audioCtx) return null;
+
+            const response = await fetch(cacheKey);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+                this.audioCtx!.decodeAudioData(arrayBuffer, resolve, reject);
             });
+
+            this.audioBuffers.set(cacheKey, audioBuffer);
+            return audioBuffer;
+        } catch (e) {
+            console.warn('[PomodoroTimer] Failed to preload audio buffer:', resolvedUrl, e);
+            return null;
+        }
+    }
+
+    private async playAudioBuffer(resolvedUrl: string, loop: boolean = false, volume: number = 1): Promise<boolean> {
+        try {
+            await this.resumeAudioContext();
+            if (!this.audioCtx) return false;
+
+            const buffer = await this.preloadAudioBuffer(resolvedUrl);
+            if (!buffer) return false;
+
+            this.stopAudioBuffer(resolvedUrl);
+
+            const source = this.audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = loop;
+
+            const gainNode = this.audioCtx.createGain();
+            gainNode.gain.value = volume;
+
+            source.connect(gainNode);
+            gainNode.connect(this.audioCtx.destination);
+
+            source.start(0);
+
+            const cacheKey = this.getCacheKey(resolvedUrl);
+            this.activeSources.set(cacheKey, { source, gainNode });
+
+            if (!loop) {
+                source.onended = () => {
+                    if (this.activeSources.get(cacheKey)?.source === source) {
+                        this.activeSources.delete(cacheKey);
+                    }
+                };
+            }
+
+            return true;
+        } catch (e) {
+            console.warn('[PomodoroTimer] Failed to play audio buffer:', resolvedUrl, e);
+            return false;
+        }
+    }
+
+    private stopAudioBuffer(resolvedUrl: string) {
+        const cacheKey = this.getCacheKey(resolvedUrl);
+        const active = this.activeSources.get(cacheKey);
+        if (active) {
+            try {
+                active.source.stop();
+            } catch (e) {
+                // ignore
+            }
+            this.activeSources.delete(cacheKey);
+        }
+    }
+
+    private stopAllAudioBuffers() {
+        this.activeSources.forEach(active => {
+            try {
+                active.source.stop();
+            } catch (e) { }
+        });
+        this.activeSources.clear();
+    }
+
+    private setAudioBufferVolume(resolvedUrl: string, volume: number) {
+        if (!this.audioCtx) return;
+        const cacheKey = this.getCacheKey(resolvedUrl);
+        const active = this.activeSources.get(cacheKey);
+        if (active) {
+            try {
+                active.gainNode.gain.setValueAtTime(volume, this.audioCtx.currentTime);
+            } catch (e) {
+                console.warn('[PomodoroTimer] Failed to set audio buffer volume:', resolvedUrl, e);
+            }
         }
     }
 }
