@@ -1875,47 +1875,8 @@
     }
 }
 
-/* 停靠栏徽章样式 */
-.reminder-dock-badge {
-    position: absolute !important;
-    top: 2px !important;
-    right: 2px !important;
-    background: var(--b3-theme-error) !important;
-    color: white !important;
-    border-radius: 50% !important;
-    min-width: 14px !important;
-    height: 14px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-size: 10px !important;
-    font-weight: bold !important;
-    line-height: 1 !important;
-    z-index: 1 !important;
-    pointer-events: none !important;
-}
 
-/* 确保停靠栏图标有相对定位 */
-.dock__item[data-type="reminder_dock"] {
-    position: relative !important;
-}
 
-// 提醒徽章样式
-.reminder-badge,
-.reminder-dock-badge {
-    background: var(--b3-theme-error);
-    color: white;
-    border-radius: 50%;
-    min-width: 16px;
-    height: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: bold;
-    line-height: 1;
-    z-index: 1;
-}
 
 
 // 提醒面板样式

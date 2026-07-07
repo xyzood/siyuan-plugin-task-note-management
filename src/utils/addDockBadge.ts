@@ -55,7 +55,7 @@ function applyDockBadge(dockIcon: Element, config: DockBadgeConfig, count: numbe
     badge.style.cssText = `
         position: absolute;
         top: 1px;
-        right: 1px;
+        right: -5px;
         background: ${config.badgeColor};
         color: white;
         border-radius: 999px;
