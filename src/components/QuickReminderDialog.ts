@@ -1,4 +1,4 @@
-import { showMessage, Dialog, platformUtils, confirm } from "siyuan";
+import { showMessage, Dialog, platformUtils, confirm, Menu } from "siyuan";
 import { getBlockByID, getBlockDOM, refreshSql, renameDocByID, updateBindBlockAtrrs, updateBlock } from "../api";
 import { compareDateStrings, getLogicalDateString, autoDetectDateTimeFromTitle, type SingleDateRole } from "../utils/dateUtils";
 import { CategoryManager } from "../utils/categoryManager";
@@ -15,7 +15,7 @@ import { SubtasksDialog } from "./SubtasksDialog";
 import { PomodoroRecordManager } from "../utils/pomodoroRecord";
 import { PomodoroSessionsDialog } from "./PomodoroSessionsDialog";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, prosePluginsCtx, parserCtx } from "@milkdown/kit/core";
-import { Plugin } from "@milkdown/prose/state";
+import { Plugin, NodeSelection } from "@milkdown/prose/state";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { history } from "@milkdown/kit/plugin/history";
@@ -209,6 +209,270 @@ export class QuickReminderDialog {
             console.error("Paste image error", e);
         }
     }
+
+    private showImageModal(src: string, title?: string) {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            user-select: none;
+            overflow: hidden;
+        `;
+
+        const img = document.createElement("img");
+        img.src = src;
+        img.style.cssText = `
+            max-width: 90vw;
+            max-height: 90vh;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+            transform: translate(0px, 0px) scale(0.95);
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: grab;
+            user-select: none;
+            -webkit-user-drag: none;
+        `;
+
+        let scale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+
+        const updateTransform = (smooth = false) => {
+            img.style.transition = smooth ? "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)" : "none";
+            img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+        };
+
+        // Wheel Zoom
+        overlay.addEventListener("wheel", (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            if (e.deltaY < 0) {
+                scale = Math.min(scale + zoomSpeed * scale, 10); // zoom in, max scale 10
+            } else {
+                scale = Math.max(scale - zoomSpeed * scale, 0.5); // zoom out, min scale 0.5
+            }
+            updateTransform(true);
+        }, { passive: false });
+
+        // Drag Pan
+        img.addEventListener("mousedown", (e) => {
+            if (e.button !== 0) return; // Only left click
+            e.preventDefault();
+            isDragging = true;
+            startX = e.clientX - translateX;
+            startY = e.clientY - translateY;
+            img.style.cursor = "grabbing";
+        });
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging) return;
+            translateX = e.clientX - startX;
+            translateY = e.clientY - startY;
+            updateTransform(false);
+        };
+
+        const handleMouseUp = () => {
+            if (isDragging) {
+                isDragging = false;
+                img.style.cursor = "grab";
+            }
+        };
+
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", handleMouseUp);
+
+        // Double click to reset
+        img.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            updateTransform(true);
+        });
+
+        // Prevent click on image from closing modal
+        img.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+
+        img.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showImageContextMenu(e, src);
+        });
+
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
+
+        // Animation in
+        requestAnimationFrame(() => {
+            overlay.style.opacity = "1";
+            img.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)";
+            img.style.transform = "translate(0px, 0px) scale(1)";
+        });
+
+        // Close on click or press escape
+        const close = (e?: MouseEvent) => {
+            if (e && e.button !== 0) return; // Only close on left-click
+            overlay.style.opacity = "0";
+            img.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)";
+            img.style.transform = "translate(0px, 0px) scale(0.95)";
+            setTimeout(() => {
+                overlay.remove();
+            }, 200);
+            document.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                close();
+            }
+        };
+
+        overlay.addEventListener("click", (e) => close(e));
+        document.addEventListener("keydown", handleKeyDown);
+    }
+
+    private async showImageContextMenu(e: MouseEvent, src: string) {
+        const menu = new Menu("imageContextMenu");
+        menu.addItem({
+            iconHTML: "📋",
+            label: i18n("copy") || "复制图片",
+            click: async () => {
+                try {
+                    let blob: Blob;
+                    if (src.startsWith("blob:")) {
+                        const response = await fetch(src);
+                        blob = await response.blob();
+                    } else if (src.startsWith("/data/storage/")) {
+                        const { getFileBlob } = await import('../api');
+                        blob = await getFileBlob(src);
+                    } else {
+                        const response = await fetch(src);
+                        blob = await response.blob();
+                    }
+
+                    if (!blob) {
+                        throw new Error("Unable to retrieve image file.");
+                    }
+
+                    let pngBlob = blob;
+                    if (blob.type !== "image/png") {
+                        pngBlob = await this.convertToPngBlob(blob);
+                    }
+
+                    await navigator.clipboard.write([
+                        new ClipboardItem({
+                            [pngBlob.type]: pngBlob
+                        })
+                    ]);
+                    showMessage(i18n("copySuccess") || "已复制到剪贴板");
+                } catch (err) {
+                    console.error("Failed to copy image:", err);
+                    showMessage((i18n("copyFailed") || "复制失败") + ": " + err.message);
+                }
+            }
+        });
+        menu.open({
+            x: e.clientX,
+            y: e.clientY
+        });
+    }
+
+    private convertToPngBlob(blob: Blob): Promise<Blob> {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) {
+                    reject(new Error("Failed to get canvas context"));
+                    return;
+                }
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob((pngBlob) => {
+                    if (pngBlob) {
+                        resolve(pngBlob);
+                    } else {
+                        reject(new Error("Failed to convert canvas to blob"));
+                    }
+                }, "image/png");
+            };
+            img.onerror = () => reject(new Error("Failed to load image for conversion"));
+            img.src = URL.createObjectURL(blob);
+        });
+    }
+
+    private getWidthFromSrc(src: string): string | null {
+        if (!src) return null;
+        const match = src.match(/[?#](?:width|w)=(\d+)(px|%)?/);
+        return match ? match[1] + (match[2] || "px") : null;
+    }
+
+    private convertHtmlImgToMarkdown(note: string): string {
+        if (!note) return note;
+        return note.replace(/<img\s+([^>]+)>/gi, (match, attrsStr) => {
+            const srcMatch = attrsStr.match(/src="([^"]+)"/i);
+            const widthMatch = attrsStr.match(/width="([^"]+)"/i);
+            const altMatch = attrsStr.match(/alt="([^"]+)"/i);
+            const titleMatch = attrsStr.match(/title="([^"]+)"/i);
+
+            const src = srcMatch ? srcMatch[1] : '';
+            const width = widthMatch ? widthMatch[1] : '';
+            const alt = altMatch ? altMatch[1] : '';
+            const title = titleMatch ? ` "${titleMatch[1]}"` : '';
+
+            if (!src) return match;
+
+            if (width) {
+                const baseSrc = src.split('#')[0];
+                return `![${alt}](${baseSrc}#width=${width}${title})`;
+            } else {
+                return `![${alt}](${src}${title})`;
+            }
+        });
+    }
+
+    private convertMarkdownImgToHtml(note: string): string {
+        if (!note) return note;
+        return note.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, urlPart) => {
+            const parts = urlPart.trim().match(/^([^\s]+)(?:\s+["'](.*)["'])?$/);
+            if (!parts) return match;
+
+            const fullUrl = parts[1];
+            const title = parts[2] || '';
+
+            const hashMatch = fullUrl.match(/#width=([^&]+)/);
+            if (hashMatch) {
+                const baseSrc = fullUrl.split('#')[0];
+                const width = hashMatch[1];
+                const titleAttr = title ? ` title="${title}"` : '';
+                const altAttr = alt ? ` alt="${alt}"` : '';
+                return `<img src="${baseSrc}" width="${width}"${altAttr}${titleAttr} />`;
+            }
+            return match;
+        });
+    }
+
     private blockContent: string = '';
     private reminderUpdatedHandler: () => void;
     private sortConfigUpdatedHandler: (event: CustomEvent) => void;
@@ -2881,6 +3145,7 @@ export class QuickReminderDialog {
             } else if (this.defaultNote) {
                 initialNote = this.defaultNote;
             }
+            initialNote = this.convertHtmlImgToMarkdown(initialNote);
 
             const noteContainer = this.dialog.element.querySelector('#quickReminderNote') as HTMLElement;
             if (!noteContainer) return;
@@ -3010,53 +3275,189 @@ export class QuickReminderDialog {
                 .use(cursor)
                 .use(listener)
                 .use($view(imageSchema.node, () => (node, view, getPos) => {
-                    const dom = document.createElement("img");
-                    if (node.attrs.alt) dom.alt = node.attrs.alt;
-                    if (node.attrs.title) {
-                        dom.classList.add('ariaLabel');
-                        dom.setAttribute('aria-label', node.attrs.title);
+                    const container = document.createElement("div");
+                    container.className = "image-wrapper";
+                    container.style.cssText = `
+                        position: relative;
+                        display: inline-block;
+                        max-width: 100%;
+                    `;
+
+                    const initialWidth = this.getWidthFromSrc(node.attrs.src);
+                    if (initialWidth) {
+                        container.style.width = initialWidth;
+                    } else {
+                        container.style.width = "auto";
                     }
-                    dom.style.maxWidth = "100%";
+
+                    const img = document.createElement("img");
+                    if (node.attrs.alt) img.alt = node.attrs.alt;
+                    if (node.attrs.title) {
+                        img.classList.add('ariaLabel');
+                        img.setAttribute('aria-label', node.attrs.title);
+                    }
+                    img.style.cssText = `
+                        display: block;
+                        width: 100%;
+                        height: auto;
+                        max-width: 100%;
+                        cursor: pointer;
+                    `;
+
+                    img.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (typeof getPos === "function") {
+                            const { tr } = view.state;
+                            const selection = NodeSelection.create(view.state.doc, getPos());
+                            view.dispatch(tr.setSelection(selection));
+                            view.focus();
+                        }
+                    });
+                    img.addEventListener("dblclick", (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        this.showImageModal(img.src, node.attrs.title || node.attrs.alt || "图片预览");
+                    });
+                    img.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.showImageContextMenu(e, img.src);
+                    });
+
+                    const handle = document.createElement("div");
+                    handle.style.cssText = `
+                        position: absolute;
+                        right: 0;
+                        top: 0;
+                        bottom: 0;
+                        width: 8px;
+                        cursor: col-resize;
+                        background: transparent;
+                        z-index: 10;
+                        transition: background 0.2s ease, border 0.2s ease;
+                    `;
+
+                    handle.addEventListener("mouseenter", () => {
+                        handle.style.borderRight = "2px solid var(--b3-theme-primary)";
+                    });
+                    handle.addEventListener("mouseleave", () => {
+                        if (!isResizing) {
+                            handle.style.borderRight = "none";
+                        }
+                    });
+
+                    let isResizing = false;
+                    let startClientX = 0;
+                    let startWidth = 0;
+
+                    handle.addEventListener("mousedown", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        isResizing = true;
+                        startClientX = e.clientX;
+                        startWidth = container.offsetWidth;
+                        handle.style.borderRight = "2px solid var(--b3-theme-primary)";
+                        document.body.style.cursor = "col-resize";
+
+                        const onMouseMove = (moveEvent: MouseEvent) => {
+                            if (!isResizing) return;
+                            const deltaX = moveEvent.clientX - startClientX;
+                            const newWidth = Math.max(50, startWidth + deltaX);
+                            container.style.width = newWidth + "px";
+                        };
+
+                        const onMouseUp = () => {
+                            isResizing = false;
+                            document.body.style.cursor = "";
+                            handle.style.borderRight = "none";
+                            window.removeEventListener("mousemove", onMouseMove);
+                            window.removeEventListener("mouseup", onMouseUp);
+
+                            // Dispatch transaction to ProseMirror
+                            if (typeof getPos === "function") {
+                                const pos = getPos();
+                                const currentSrc = node.attrs.src || "";
+                                const baseAndQuery = currentSrc.split('#')[0];
+                                const finalWidth = container.offsetWidth;
+                                const newSrc = `${baseAndQuery}#width=${finalWidth}`;
+
+                                const { tr } = view.state;
+                                tr.setNodeMarkup(pos, undefined, {
+                                    ...node.attrs,
+                                    src: newSrc
+                                });
+                                view.dispatch(tr);
+                            }
+                        };
+
+                        window.addEventListener("mousemove", onMouseMove);
+                        window.addEventListener("mouseup", onMouseUp);
+                    });
+
+                    container.appendChild(img);
+                    container.appendChild(handle);
 
                     const src = node.attrs.src;
-                    if (src && src.startsWith("/data/storage/petal/siyuan-plugin-task-note-management/assets/")) {
+                    const cleanSrc = src ? src.split(/[?#]/)[0] : "";
+                    if (cleanSrc && cleanSrc.startsWith("/data/storage/petal/siyuan-plugin-task-note-management/assets/")) {
                         import('../api').then(({ getFileBlob }) => {
-                            getFileBlob(src).then(blob => {
+                            getFileBlob(cleanSrc).then(blob => {
                                 if (blob) {
-                                    dom.src = URL.createObjectURL(blob);
+                                    img.src = URL.createObjectURL(blob);
                                 } else {
-                                    dom.src = src;
+                                    img.src = cleanSrc;
                                 }
                             });
                         });
                     } else {
-                        dom.src = src;
+                        img.src = cleanSrc;
                     }
 
                     return {
-                        dom,
+                        dom: container,
                         update: (updatedNode) => {
                             if (updatedNode.type.name !== 'image') return false;
                             const newSrc = updatedNode.attrs.src;
-                            if (newSrc && newSrc.startsWith("/data/storage/petal/siyuan-plugin-task-note-management/assets/")) {
-                                if (updatedNode.attrs.src !== node.attrs.src) {
+                            const newCleanSrc = newSrc ? newSrc.split(/[?#]/)[0] : "";
+                            const oldCleanSrc = node.attrs.src ? node.attrs.src.split(/[?#]/)[0] : "";
+                            
+                            if (newCleanSrc && newCleanSrc.startsWith("/data/storage/petal/siyuan-plugin-task-note-management/assets/")) {
+                                if (newCleanSrc !== oldCleanSrc) {
                                     import('../api').then(({ getFileBlob }) => {
-                                        getFileBlob(newSrc).then(blob => {
+                                        getFileBlob(newCleanSrc).then(blob => {
                                             if (blob) {
-                                                dom.src = URL.createObjectURL(blob);
+                                                img.src = URL.createObjectURL(blob);
                                             }
                                         });
                                     });
                                 }
                             } else {
-                                dom.src = newSrc;
+                                img.src = newCleanSrc;
                             }
-                            if (updatedNode.attrs.alt) dom.alt = updatedNode.attrs.alt;
+                            if (updatedNode.attrs.alt) img.alt = updatedNode.attrs.alt;
                             if (updatedNode.attrs.title) {
-                                dom.classList.add('ariaLabel');
-                                dom.setAttribute('aria-label', updatedNode.attrs.title);
-                            } else dom.removeAttribute('title');
+                                img.classList.add('ariaLabel');
+                                img.setAttribute('aria-label', updatedNode.attrs.title);
+                            } else {
+                                img.removeAttribute('title');
+                                img.removeAttribute('aria-label');
+                            }
+
+                            // Update width style
+                            const newWidth = this.getWidthFromSrc(newSrc);
+                            if (newWidth) {
+                                container.style.width = newWidth;
+                            } else {
+                                container.style.width = "auto";
+                            }
                             return true;
+                        },
+                        ignoreMutation: (mutation) => {
+                            if (mutation.type === "attributes" && mutation.attributeName === "style") {
+                                return true;
+                            }
+                            return false;
                         }
                     };
                 }))
@@ -6155,7 +6556,8 @@ export class QuickReminderDialog {
         }
         if (!this.reminder) return;
 
-        const note = this.editor ? this.currentNote : this.reminder.note;
+        let note = this.editor ? this.currentNote : this.reminder.note;
+        note = this.convertMarkdownImgToHtml(note);
 
         // 乐观更新
         const optimisticReminder = { ...this.reminder };
@@ -6224,7 +6626,10 @@ export class QuickReminderDialog {
         const inputId = rawBlockVal ? (this.extractBlockId(rawBlockVal) || rawBlockVal) : undefined;
         const url = urlInput?.value?.trim() || undefined;
         // const note = noteInput.value.trim() || undefined;
-        const note = this.editor ? this.currentNote : undefined;
+        let note = this.editor ? this.currentNote : undefined;
+        if (note !== undefined) {
+            note = this.convertMarkdownImgToHtml(note);
+        }
         const priority = selectedPriority?.getAttribute('data-priority') || 'none';
 
         // 获取多分类ID
