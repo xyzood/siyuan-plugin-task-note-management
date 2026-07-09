@@ -263,6 +263,7 @@ export class QuickReminderDialog {
     private projectSelectorPopup?: ProjectSelectorPopup;
     private subtasksDialog?: SubtasksDialog;
     private activeDialogTab: 'task' | 'subtasks' = 'task';
+    private activeDetailTab: 'settings' | 'notes' = 'settings';
     private editFutureInstancesOnly: boolean = false;
     private futureEditOriginalReminder?: any;
     private readOnly: boolean = false; // 是否为只读模式
@@ -1588,6 +1589,8 @@ export class QuickReminderDialog {
         // 隐藏 Tab 导航
         const tabs = dialog.querySelector('#quickReminderTabs') as HTMLElement;
         if (tabs) tabs.style.display = 'none';
+        const detailTabs = dialog.querySelector('#quickTaskDetailTabs') as HTMLElement;
+        if (detailTabs) detailTabs.style.display = 'none';
 
         // 隐藏预计番茄时长组
         hideGroupOf('#quickEstimatedPomodoroHours');
@@ -1805,14 +1808,31 @@ export class QuickReminderDialog {
         const taskPanel = this.dialog.element.querySelector('#quickTaskTabPanel') as HTMLElement;
         const subtasksPanel = this.dialog.element.querySelector('#quickSubtasksTabPanel') as HTMLElement;
         const subtasksTab = this.dialog.element.querySelector('#quickSubtasksTab') as HTMLElement;
+        const contentEl = this.dialog.element.querySelector('.b3-dialog__content') as HTMLElement;
 
         const nextTab = tab === 'subtasks' && subtasksTab?.style.display !== 'none'
             ? 'subtasks'
             : 'task';
 
         this.activeDialogTab = nextTab;
-        if (taskPanel) taskPanel.style.display = nextTab === 'task' ? '' : 'none';
+        if (taskPanel) {
+            taskPanel.style.display = nextTab === 'task'
+                ? (this.activeDetailTab === 'notes' ? 'flex' : '')
+                : 'none';
+        }
         if (subtasksPanel) subtasksPanel.style.display = nextTab === 'subtasks' ? '' : 'none';
+
+        if (contentEl) {
+            if (nextTab === 'task' && this.activeDetailTab === 'notes') {
+                contentEl.style.overflow = 'hidden';
+                contentEl.style.display = 'flex';
+                contentEl.style.flexDirection = 'column';
+            } else {
+                contentEl.style.overflow = '';
+                contentEl.style.display = '';
+                contentEl.style.flexDirection = '';
+            }
+        }
 
         this.updateQuickDialogTabStyles();
 
@@ -1821,6 +1841,109 @@ export class QuickReminderDialog {
         } else {
             this.applyReadOnlyMode();
         }
+    }
+
+    private switchQuickTaskDetailTab(tab: 'settings' | 'notes') {
+        this.activeDetailTab = tab;
+        const settingsPanel = this.dialog.element.querySelector('#quickTaskSettingsPanel') as HTMLElement;
+        const notesPanel = this.dialog.element.querySelector('#quickTaskNotesPanel') as HTMLElement;
+        const contentEl = this.dialog.element.querySelector('.b3-dialog__content') as HTMLElement;
+        const taskTabPanel = this.dialog.element.querySelector('#quickTaskTabPanel') as HTMLElement;
+        const noteContainer = this.dialog.element.querySelector('#quickReminderNote') as HTMLElement;
+
+        if (settingsPanel) settingsPanel.style.display = tab === 'settings' ? '' : 'none';
+        if (notesPanel) notesPanel.style.display = tab === 'notes' ? 'flex' : 'none';
+
+        if (tab === 'notes') {
+            if (contentEl) {
+                contentEl.style.overflow = 'hidden';
+                contentEl.style.display = 'flex';
+                contentEl.style.flexDirection = 'column';
+            }
+            if (taskTabPanel) {
+                taskTabPanel.style.display = 'flex';
+                taskTabPanel.style.flexDirection = 'column';
+                taskTabPanel.style.flex = '1';
+                taskTabPanel.style.minHeight = '0';
+            }
+            if (notesPanel) {
+                notesPanel.style.display = 'flex';
+                notesPanel.style.flexDirection = 'column';
+                notesPanel.style.flex = '1';
+                notesPanel.style.minHeight = '0';
+            }
+            if (noteContainer) {
+                noteContainer.style.display = 'flex';
+                noteContainer.style.flexDirection = 'column';
+                noteContainer.style.flex = '1';
+                noteContainer.style.minHeight = '0';
+            }
+            // Dynamically adjust milkdown elements if they are initialized
+            const editorEl = this.dialog.element.querySelector('.milkdown') as HTMLElement;
+            if (editorEl) {
+                editorEl.style.display = 'flex';
+                editorEl.style.flexDirection = 'column';
+                editorEl.style.flex = '1';
+                editorEl.style.minHeight = '0';
+                editorEl.style.height = '100%';
+            }
+            const prosemirror = this.dialog.element.querySelector('.ProseMirror') as HTMLElement;
+            if (prosemirror) {
+                prosemirror.style.flex = '1';
+                prosemirror.style.overflowY = 'auto';
+            }
+        } else {
+            if (contentEl) {
+                contentEl.style.overflow = '';
+                contentEl.style.display = '';
+                contentEl.style.flexDirection = '';
+            }
+            if (taskTabPanel) {
+                taskTabPanel.style.display = '';
+                taskTabPanel.style.flexDirection = '';
+                taskTabPanel.style.flex = '';
+                taskTabPanel.style.minHeight = '';
+            }
+            if (notesPanel) {
+                notesPanel.style.display = 'none';
+                notesPanel.style.flexDirection = '';
+                notesPanel.style.flex = '';
+                notesPanel.style.minHeight = '';
+            }
+            if (noteContainer) {
+                noteContainer.style.display = '';
+                noteContainer.style.flexDirection = '';
+                noteContainer.style.flex = '';
+                noteContainer.style.minHeight = '';
+            }
+        }
+
+        this.updateQuickTaskDetailTabStyles(tab);
+
+        if (tab === 'notes' && this.editor) {
+            this.editor.action((ctx) => {
+                const view = ctx.get(editorViewCtx);
+                if (view) {
+                    view.focus();
+                }
+            });
+        }
+    }
+
+    private updateQuickTaskDetailTabStyles(tab: 'settings' | 'notes') {
+        const settingsTab = this.dialog.element.querySelector('#quickTaskSettingsTab') as HTMLButtonElement;
+        const notesTab = this.dialog.element.querySelector('#quickTaskNotesTab') as HTMLButtonElement;
+
+        const applyTabStyle = (button: HTMLButtonElement | null, isActive: boolean) => {
+            if (!button) return;
+            button.style.borderBottom = isActive ? '2px solid var(--b3-theme-primary)' : '2px solid transparent';
+            button.style.color = isActive ? 'var(--b3-theme-primary)' : 'var(--b3-theme-on-surface)';
+            button.style.background = isActive ? 'var(--b3-theme-background)' : 'transparent';
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        };
+
+        applyTabStyle(settingsTab, tab === 'settings');
+        applyTabStyle(notesTab, tab === 'notes');
     }
 
     /**
@@ -2368,6 +2491,18 @@ export class QuickReminderDialog {
                                 </button>
                             </div>
                         </div>
+
+                        <!-- Inner Tabs below task title -->
+                        <div id="quickTaskDetailTabs" role="tablist" style="display: flex; gap: 12px; align-items: center; margin: 8px 0 12px 0; border-bottom: 1px solid var(--b3-border-color);">
+                            <button type="button" id="quickTaskSettingsTab" role="tab" aria-selected="true" class="b3-button b3-button--text" style="border-radius: 0; border-bottom: 2px solid var(--b3-theme-primary); color: var(--b3-theme-primary); background: var(--b3-theme-background); padding: 6px 8px; font-weight: 500;">
+                                ${i18n("taskSettings") || "任务设置"}
+                            </button>
+                            <button type="button" id="quickTaskNotesTab" role="tab" aria-selected="false" class="b3-button b3-button--text" style="border-radius: 0; border-bottom: 2px solid transparent; color: var(--b3-theme-on-surface); background: transparent; padding: 6px 8px; font-weight: 500;">
+                                ${i18n("taskNotes") || "任务备注"}
+                            </button>
+                        </div>
+
+                        <div id="quickTaskSettingsPanel" role="tabpanel">
                         <div class="b3-form__group">
                             <label class="b3-form__label">${i18n("reminderDate")}</label>
                             <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -2643,11 +2778,7 @@ export class QuickReminderDialog {
                                 </button>
                             </div>
                         </div>
-                        <!-- 备注 (Vditor) -->
-                        <div class="b3-form__group">
-                            <label class="b3-form__label">${i18n("reminderNoteOptional")}</label>
-                            <div id="quickReminderNote" style="width: 100%; min-height: 50px; border: 1px solid var(--b3-theme-surface-lighter); border-radius: 4px; position: relative;"></div>
-                        </div>
+                        <!-- Removed Notes from sequential settings layout -->
                         <div class="b3-form__group" id="quickEditAllInstancesGroup" style="display: none;">
                             <label class="b3-form__label">${i18n("recurringTask")}</label>
                             <div style="display: flex; gap: 8px; align-items: center;">
@@ -2720,8 +2851,16 @@ export class QuickReminderDialog {
                             </div>
                         </div>
 
-                        
+                        </div> <!-- End of quickTaskSettingsPanel -->
+
+                        <!-- PANEL 2: Task Notes Panel -->
+                        <div id="quickTaskNotesPanel" role="tabpanel" style="display: none;">
+                            <div class="b3-form__group" style="margin-top: 0; margin-bottom: 0;">
+                                <div id="quickReminderNote" style="width: 100%; min-height: 350px; border: 1px solid var(--b3-theme-surface-lighter); border-radius: 4px; position: relative;"></div>
+                            </div>
                         </div>
+                        
+                        </div> <!-- End of quickTaskTabPanel -->
                         <div id="quickSubtasksTabPanel" role="tabpanel" style="display: none; min-height: 220px;"></div>
                     </div>
                     <div class="b3-dialog__action" style="display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
@@ -4252,6 +4391,18 @@ export class QuickReminderDialog {
             void this.switchQuickDialogTab('subtasks');
         });
         this.updateQuickDialogTabStyles();
+
+        const taskSettingsTab = this.dialog.element.querySelector('#quickTaskSettingsTab') as HTMLButtonElement;
+        const taskNotesTab = this.dialog.element.querySelector('#quickTaskNotesTab') as HTMLButtonElement;
+
+        taskSettingsTab?.addEventListener('click', () => {
+            this.switchQuickTaskDetailTab('settings');
+        });
+
+        taskNotesTab?.addEventListener('click', () => {
+            this.switchQuickTaskDetailTab('notes');
+        });
+        this.updateQuickTaskDetailTabStyles('settings');
 
         // 更新标题为绑定块内容
         syncBlockTitleBtn?.addEventListener('click', () => {
@@ -5982,7 +6133,7 @@ export class QuickReminderDialog {
             '#quickProjectSearchInput',
             '#quickHabitSearchInput',
             '.quick-reminder-dialog__add-time',
-            '.b3-button:not(#quickCancelBtn):not(#quickCurrentTaskTab):not(#quickSubtasksTab):not(#quickViewParentBtn)'
+            '.b3-button:not(#quickCancelBtn):not(#quickCurrentTaskTab):not(#quickSubtasksTab):not(#quickViewParentBtn):not(#quickTaskSettingsTab):not(#quickTaskNotesTab)'
         ].join(', ')).forEach((el: any) => {
             el.style.pointerEvents = 'none';
             el.style.opacity = '0.6';

@@ -1186,6 +1186,7 @@
     "subGroupImportIcs": "Import ICS",
     "subGroupDonateInfo": "Buy Me a Coffee",
     "taskSettings": "📋Task Settings",
+    "taskNotes": "📝Task Notes",
     "enableReminderDock": "Show Task Sidebar",
     "enableReminderDockDesc": "Show or hide the Task (Reminder) panel in the sidebar",
     "enableProjectDock": "Show Project Sidebar",

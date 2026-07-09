@@ -1186,6 +1186,7 @@
     "subGroupImportIcs": "ICS 导入",
     "subGroupDonateInfo": "请作者喝杯咖啡",
     "taskSettings": "📋任务设置",
+    "taskNotes": "📝任务备注",
     "enableReminderDock": "显示任务管理侧栏",
     "enableReminderDockDesc": "在侧边栏显示/隐藏任务管理面板（提醒面板）",
     "enableProjectDock": "显示项目管理侧栏",
