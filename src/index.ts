@@ -3296,10 +3296,13 @@ export default class ReminderPlugin extends Plugin {
             }
         });
 
+        const pomodoroDirectStart = this.settings?.pomodoroDirectStart;
         detail.menu.addItem({
             iconHTML: "🍅",
             label: i18n("startPomodoro") || "开始番茄钟",
-            submenu: this.createBlockPomodoroStartSubmenu(documentId)
+            ...(pomodoroDirectStart
+                ? { click: () => this.startPomodoroForBlock(documentId) }
+                : { submenu: this.createBlockPomodoroStartSubmenu(documentId) })
         });
 
         // 添加文档提醒查看功能
@@ -3425,10 +3428,13 @@ export default class ReminderPlugin extends Plugin {
             const blockId = blockElement.getAttribute("data-node-id");
 
             if (blockId) {
+                const pomodoroDirectStart = this.settings?.pomodoroDirectStart;
                 detail.menu.addItem({
                     iconHTML: "🍅",
                     label: i18n("startPomodoro") || "开始番茄钟",
-                    submenu: this.createBlockPomodoroStartSubmenu(blockId)
+                    ...(pomodoroDirectStart
+                        ? { click: () => this.startPomodoroForBlock(blockId) }
+                        : { submenu: this.createBlockPomodoroStartSubmenu(blockId) })
                 });
             }
 

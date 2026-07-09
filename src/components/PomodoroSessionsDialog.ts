@@ -468,6 +468,12 @@ export class PomodoroSessionsDialog {
      * 弹出开始番茄钟子菜单（带默认时长 + 预设列表）
      */
     private showPomodoroStartMenu(event: MouseEvent) {
+        const pomodoroDirectStart = this.plugin?.settings?.pomodoroDirectStart;
+        if (pomodoroDirectStart) {
+            this._startPomodoro();
+            return;
+        }
+
         try {
             const menu = new Menu("");
             const source = { id: this.reminderId };
