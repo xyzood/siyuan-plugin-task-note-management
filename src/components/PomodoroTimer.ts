@@ -3,6 +3,8 @@ import { PomodoroRecordManager, type PomodoroSession } from "../utils/pomodoroRe
 import { getBlockByID, getBlockAttrs, setBlockAttrs, openBlock, sendNotification, cancelNotification } from "../api";
 import { i18n } from "../pluginInstance";
 import { resolveAudioPath } from "../utils/audioUtils";
+import { showStatsDialog } from "./stats/ShowStatsDialog";
+
 
 const BLOCK_POMODORO_COUNT_ATTR = "custom-task-pomodoro-count";
 const BLOCK_POMODORO_MINUTES_ATTR = "custom-task-pomodoro-minutes";
@@ -3433,7 +3435,18 @@ export class PomodoroTimer {
             flex: 1;
             text-align: center;
             padding: 0 8px;
+            cursor: pointer;
+            transition: opacity 0.15s ease;
         `;
+        todayStats.addEventListener('click', () => {
+            this.showStatsPanel();
+        });
+        todayStats.addEventListener('mouseenter', () => {
+            todayStats.style.opacity = '0.75';
+        });
+        todayStats.addEventListener('mouseleave', () => {
+            todayStats.style.opacity = '1';
+        });
 
         const todayLabel = document.createElement('div');
         todayLabel.style.cssText = `
@@ -3459,7 +3472,18 @@ export class PomodoroTimer {
             text-align: center;
             padding: 0 8px;
             border-left: 1px solid var(--b3-theme-border);
+            cursor: pointer;
+            transition: opacity 0.15s ease;
         `;
+        weekStats.addEventListener('click', () => {
+            this.showStatsPanel();
+        });
+        weekStats.addEventListener('mouseenter', () => {
+            weekStats.style.opacity = '0.75';
+        });
+        weekStats.addEventListener('mouseleave', () => {
+            weekStats.style.opacity = '1';
+        });
 
         const weekLabel = document.createElement('div');
         weekLabel.style.cssText = `
@@ -3481,6 +3505,7 @@ export class PomodoroTimer {
 
         this.statsContainer.appendChild(todayStats);
         this.statsContainer.appendChild(weekStats);
+
 
         content.appendChild(eventTitle);
         content.appendChild(mainContainer);
@@ -7608,6 +7633,30 @@ export class PomodoroTimer {
         }
     }
 
+    public showStatsPanel() {
+        // 尝试激活/恢复思源主窗口
+        window.focus();
+        try {
+            const electron = (window as any).require?.('electron');
+            const remote = (window as any).require?.('@electron/remote') || electron?.remote;
+            if (remote) {
+                const mainWin = remote.getCurrentWindow();
+                if (mainWin) {
+                    if (mainWin.isMinimized()) {
+                        mainWin.restore();
+                    }
+                    mainWin.show();
+                    mainWin.focus();
+                }
+            }
+        } catch (e) {
+            console.warn('[PomodoroTimer] Failed to restore/focus main window via electron:', e);
+        }
+
+        // 打开统计对话框
+        showStatsDialog(this.plugin, 'pomodoro');
+    }
+
     private toggleFullscreen() {
         if (this.isFullscreen) {
             this.exitFullscreen();
@@ -9246,7 +9295,8 @@ document.body.classList.remove('docked-mode');
             border-radius: 8px;
             flex-shrink: 0;
         }
-        .stat-item { flex: 1; text-align: center; padding: 0 8px; }
+        .stat-item { flex: 1; text-align: center; padding: 0 8px; cursor: pointer; transition: opacity 0.2s; }
+        .stat-item:hover { opacity: 0.85; }
         .stat-item:first-child { border-right: 1px solid ${borderColor}; }
         .stat-label { font-size: var(--normal-stat-label-size); opacity: 0.7; margin-bottom: 4px; }
         .stat-value { font-size: var(--normal-stat-value-size); font-weight: 600; color: #FF6B6B; }
@@ -9706,11 +9756,11 @@ document.body.classList.remove('docked-mode');
             </div>
         </div>
         <div class="pomodoro-stats">
-            <div class="stat-item">
+            <div class="stat-item" onclick="callMethod('showStats')">
                 <div class="stat-label">${i18n('todayFocus') || '今日专注'}</div>
                 <div class="stat-value" id="todayFocusTime">${todayTimeStr}</div>
             </div>
-            <div class="stat-item">
+            <div class="stat-item" onclick="callMethod('showStats')">
                 <div class="stat-label">${i18n('weekFocus') || '本周专注'}</div>
                 <div class="stat-value" id="weekFocusTime">${weekTimeStr}</div>
             </div>
@@ -10666,6 +10716,9 @@ document.body.classList.remove('docked-mode');
                     break;
                 case 'openRelatedNote':
                     this.openRelatedNote();
+                    break;
+                case 'showStats':
+                    this.showStatsPanel();
                     break;
                 case 'editTime':
                     this.editTime();

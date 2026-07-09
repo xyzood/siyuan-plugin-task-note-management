@@ -2,13 +2,41 @@ import { Dialog, showMessage } from "siyuan";
 
 type StatsTab = "pomodoro" | "task" | "habit" | "summary";
 
+let activeDialog: Dialog | null = null;
+let activeComponent: any = null;
+
 export async function showStatsDialog(plugin: any, initialTab: StatsTab = "pomodoro", calendar?: any) {
+    if (activeDialog) {
+        if (activeComponent && typeof activeComponent.setActiveTab === "function") {
+            activeComponent.setActiveTab(initialTab);
+        }
+        return;
+    }
+
     const dialog = new Dialog({
         title: "📊 统计视图",
         content: '<div id="showStatsViewContainer" style="height:100%;padding: 8px 16px 16px;box-sizing:border-box;"></div>',
         width: "min(1000px,95%)",
         height: "80vh"
     });
+
+    activeDialog = dialog;
+
+    const originalDestroy = dialog.destroy.bind(dialog);
+    let component: any = null;
+
+    dialog.destroy = () => {
+        if (component) {
+            try {
+                component.$destroy();
+            } catch (error) {
+                console.warn("销毁统计视图组件失败:", error);
+            }
+        }
+        activeDialog = null;
+        activeComponent = null;
+        originalDestroy();
+    };
 
     try {
         const module = await import("../ShowStatsView.svelte");
@@ -20,7 +48,7 @@ export async function showStatsDialog(plugin: any, initialTab: StatsTab = "pomod
             return;
         }
 
-        const component = new ShowStatsView({
+        component = new ShowStatsView({
             target,
             props: {
                 plugin,
@@ -28,16 +56,7 @@ export async function showStatsDialog(plugin: any, initialTab: StatsTab = "pomod
                 calendar
             }
         });
-
-        const originalDestroy = dialog.destroy.bind(dialog);
-        dialog.destroy = () => {
-            try {
-                component.$destroy();
-            } catch (error) {
-                console.warn("销毁统计视图组件失败:", error);
-            }
-            originalDestroy();
-        };
+        activeComponent = component;
     } catch (error) {
         console.error("加载统计视图失败:", error);
         showMessage("加载统计视图失败", 3000, "error");

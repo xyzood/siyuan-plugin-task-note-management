@@ -15,6 +15,10 @@
         activeTab = tab;
         setLastStatsMode(tab);
     };
+
+    export const setActiveTab = (tab: "pomodoro" | "task" | "habit" | "summary") => {
+        switchTab(tab);
+    };
 </script>
 
 <div class="stats-root">
