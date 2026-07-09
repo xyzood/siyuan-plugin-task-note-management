@@ -8,8 +8,6 @@
 
 ## ✨Star History
 
-## Star History
-
 <a href="https://www.star-history.com/?repos=Achuan-2%2Fsiyuan-plugin-task-note-management&type=date&legend=top-left">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Achuan-2/siyuan-plugin-task-note-management&type=date&theme=dark&legend=top-left&sealed_token=Ubr0XXFSJikpjTyiulHnRHxofPgScGff0o5c_wsZ2zU6aW7RYb41VRPlUOZpQZsAJ4goevB7A3EVBoTEMrNTTx3_rJKPPZxtfq9vvDiADzXuFZsTlgUoRAHs3UJbWiLbRP7Oml6HC2TBOPheLJMQMhNGBXLtiuDx2DE5Xs_z2qGoYkf1TTiunJqSG9aJ" />
