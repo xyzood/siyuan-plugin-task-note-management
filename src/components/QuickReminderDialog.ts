@@ -245,6 +245,38 @@ export class QuickReminderDialog {
             -webkit-user-drag: none;
         `;
 
+        const closeBtn = document.createElement("button");
+        closeBtn.innerHTML = "&times;";
+        closeBtn.style.cssText = `
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.5);
+            color: #ffffff;
+            font-size: 28px;
+            line-height: 40px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 100000;
+            transition: background 0.2s ease, transform 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+
+        closeBtn.addEventListener("mouseenter", () => {
+            closeBtn.style.background = "rgba(255, 255, 255, 0.2)";
+            closeBtn.style.transform = "scale(1.05)";
+        });
+        closeBtn.addEventListener("mouseleave", () => {
+            closeBtn.style.background = "rgba(0, 0, 0, 0.5)";
+            closeBtn.style.transform = "scale(1)";
+        });
+
         let scale = 1;
         let translateX = 0;
         let translateY = 0;
@@ -317,6 +349,7 @@ export class QuickReminderDialog {
         });
 
         overlay.appendChild(img);
+        overlay.appendChild(closeBtn);
         document.body.appendChild(overlay);
 
         // Animation in
@@ -335,19 +368,26 @@ export class QuickReminderDialog {
             setTimeout(() => {
                 overlay.remove();
             }, 200);
-            document.removeEventListener("keydown", handleKeyDown);
+            document.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("mousemove", handleMouseMove);
             window.removeEventListener("mouseup", handleMouseUp);
         };
 
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
                 close();
             }
         };
 
+        closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            close();
+        });
+
         overlay.addEventListener("click", (e) => close(e));
-        document.addEventListener("keydown", handleKeyDown);
+        document.addEventListener("keydown", handleKeyDown, true);
     }
 
     private async showImageContextMenu(e: MouseEvent, src: string) {
