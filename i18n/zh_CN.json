@@ -1668,6 +1668,8 @@
     "pleaseStopTimerFirst": "请先停止当前计时器再切换模式",
     "pomodoroWorkEnd": "工作结束",
     "pomodoroWorkEndDesc": "工作时间结束，起来走走喝喝水吧！",
+    "pomodoroBreakEnd": "休息结束",
+    "pomodoroBreakEndDesc": "休息时间结束，准备开始下一个工作阶段吧！",
     "invalidTimeFormat": "时间格式无效，请使用 MM:SS 格式（如 25:00）",
     "timeRangeLimit": "时间必须在 00:01 到 999:59 之间",
     "openingNote": "正在打开笔记...",

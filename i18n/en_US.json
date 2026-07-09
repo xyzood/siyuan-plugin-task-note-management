@@ -1668,6 +1668,8 @@
     "pleaseStopTimerFirst": "Please stop the current timer before switching mode",
     "pomodoroWorkEnd": "Work Ended",
     "pomodoroWorkEndDesc": "Work session ended. Time to get up, walk around and drink some water!",
+    "pomodoroBreakEnd": "Break Ended",
+    "pomodoroBreakEndDesc": "Break session ended. Get ready to start the next work session!",
     "invalidTimeFormat": "Invalid time format, please use MM:SS format (e.g. 25:00)",
     "timeRangeLimit": "Time must be between 00:01 and 999:59",
     "openingNote": "Opening note...",
