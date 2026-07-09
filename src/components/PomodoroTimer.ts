@@ -3048,7 +3048,14 @@ export class PomodoroTimer {
         eventTitle.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.openRelatedNote();
+            this.handleTaskTitleClick();
+        });
+
+        // 添加右击事件（打开任务编辑弹窗）
+        eventTitle.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.openTaskEditDialog();
         });
 
         // 主要布局容器
@@ -7657,6 +7664,167 @@ export class PomodoroTimer {
         showStatsDialog(this.plugin, 'pomodoro');
     }
 
+    private async hasBoundBlock(): Promise<boolean> {
+        let blockId = this.reminder.blockId;
+        if (this.reminder.isRepeatInstance && this.reminder.originalId) {
+            try {
+                const reminderData = await this.plugin.loadReminderData();
+                const originalReminder = reminderData[this.reminder.originalId];
+                if (originalReminder) {
+                    blockId = originalReminder.blockId;
+                }
+            } catch (err) {
+                console.warn('[PomodoroTimer] Failed to load reminder data for original repeating task:', err);
+            }
+        }
+        return !!blockId;
+    }
+
+    public async openTaskEditDialog() {
+        // 尝试激活/恢复思源主窗口
+        window.focus();
+        try {
+            const electron = (window as any).require?.('electron');
+            const remote = (window as any).require?.('@electron/remote') || electron?.remote;
+            if (remote) {
+                const mainWin = remote.getCurrentWindow();
+                if (mainWin) {
+                    if (mainWin.isMinimized()) {
+                        mainWin.restore();
+                    }
+                    mainWin.show();
+                    mainWin.focus();
+                }
+            }
+        } catch (e) {
+            console.warn('[PomodoroTimer] Failed to restore/focus main window via electron:', e);
+        }
+
+        const isHabit = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
+
+        if (isHabit) {
+            const { HabitEditDialog } = await import("./HabitEditDialog");
+            const editDialog = new HabitEditDialog(
+                this.reminder,
+                async (updatedHabit) => {
+                    if (updatedHabit) {
+                        try {
+                            const habitData = await this.plugin.loadHabitData();
+                            const oldHabit = habitData[updatedHabit.id];
+                            habitData[updatedHabit.id] = updatedHabit;
+                            await this.plugin.saveHabitData(habitData);
+
+                            // 同步移动端通知
+                            if (this.plugin && typeof this.plugin.updateMobileNotification === 'function') {
+                                await this.plugin.updateMobileNotification(updatedHabit, oldHabit, 7);
+                            }
+
+                            this.reminder = updatedHabit;
+
+                            // 更新 UI
+                            const titleEls = document.querySelectorAll('.pomodoro-event-title');
+                            titleEls.forEach((el: HTMLElement) => {
+                                el.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
+                                el.title = (i18n("openNote") || '打开笔记') + ': ' + (this.reminder.title || i18n('unnamedNote') || '未命名笔记');
+                            });
+
+                            const miniTitleEl = document.getElementById('miniTaskTitle');
+                            if (miniTitleEl) {
+                                miniTitleEl.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
+                                miniTitleEl.setAttribute('title', this.reminder.title || i18n('unnamedNote') || '未命名笔记');
+                            }
+
+                            // 同时更新 BrowserWindow 上的显示
+                            if (this.container && typeof (this.container as any).webContents !== 'undefined') {
+                                this.updateBrowserWindowDisplay(this.container);
+                            }
+                        } catch (err) {
+                            console.error('更新番茄钟习惯标题失败:', err);
+                        }
+                    }
+                    window.dispatchEvent(new CustomEvent('habitUpdated'));
+                    window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'habitPanel' } }));
+                },
+                this.plugin
+            );
+            await editDialog.show();
+            return;
+        }
+
+        // 动态引入 QuickReminderDialog，以防循环依赖
+        const { QuickReminderDialog } = await import("./QuickReminderDialog");
+        
+        const editDialog = new QuickReminderDialog(
+            undefined,
+            undefined,
+            async (updatedReminder?: any) => {
+                // 回调：加载最新提醒数据
+                try {
+                    const reminderData = await this.plugin.loadReminderData();
+                    let updated = updatedReminder;
+
+                    // 如果传入的不是完整的 reminder，而是 reminderData 或者是 undefined，我们就从数据库中查出
+                    if (!updated || !updated.id || !updated.title) {
+                        updated = reminderData[this.reminder.id];
+                        if (!updated && this.reminder.originalId) {
+                            updated = reminderData[this.reminder.originalId];
+                        }
+                    }
+
+                    if (updated) {
+                        if (this.reminder.isRepeatInstance) {
+                            // 保留当前重复实例的 id，合并修改后的原始字段
+                            this.reminder = Object.assign({}, this.reminder, updated, {
+                                id: this.reminder.id,
+                                originalId: this.reminder.originalId
+                            });
+                        } else {
+                            this.reminder = updated;
+                        }
+
+                        // 更新 UI
+                        const titleEls = document.querySelectorAll('.pomodoro-event-title');
+                        titleEls.forEach((el: HTMLElement) => {
+                            el.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
+                            el.title = (i18n("openNote") || '打开笔记') + ': ' + (this.reminder.title || i18n('unnamedNote') || '未命名笔记');
+                        });
+
+                        // 同时更新 mini 模式标题显示
+                        const miniTitleEl = document.getElementById('miniTaskTitle');
+                        if (miniTitleEl) {
+                            miniTitleEl.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
+                            miniTitleEl.setAttribute('title', this.reminder.title || i18n('unnamedNote') || '未命名笔记');
+                        }
+
+                        // 同时更新 BrowserWindow 上的显示
+                        if (this.container && typeof (this.container as any).webContents !== 'undefined') {
+                            this.updateBrowserWindowDisplay(this.container);
+                        }
+                    }
+                } catch (err) {
+                    console.error('更新番茄钟任务标题失败:', err);
+                }
+                window.dispatchEvent(new CustomEvent('reminderUpdated'));
+            },
+            undefined,
+            {
+                mode: 'edit',
+                reminder: this.reminder,
+                plugin: this.plugin
+            }
+        );
+        editDialog.show();
+    }
+
+    public async handleTaskTitleClick() {
+        const hasBlock = await this.hasBoundBlock();
+        if (hasBlock) {
+            this.openRelatedNote();
+        } else {
+            this.openTaskEditDialog();
+        }
+    }
+
     private toggleFullscreen() {
         if (this.isFullscreen) {
             this.exitFullscreen();
@@ -9556,7 +9724,13 @@ document.body.classList.remove('docked-mode');
             line-height: 1.1;
             color: ${textColor};
             opacity: 0.68;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        body.mini-mode.mini-style-bar .mini-task-title:hover {
+            opacity: 0.95;
+        }
         }
         body.mini-mode.mini-style-bar .mini-time-label {
             flex: 0 0 auto;
@@ -9726,7 +9900,7 @@ document.body.classList.remove('docked-mode');
         <div class="progress-bar-container" onclick="restoreFromDocked()">
             <div class="progress-bar-fill" id="dockedProgressBar"></div>
         </div>
-        <div class="pomodoro-event-title" onclick="callMethod('openRelatedNote')">
+        <div class="pomodoro-event-title" onclick="callMethod('handleTaskTitleClick')" oncontextmenu="event.preventDefault(); callMethod('openTaskEditDialog')">
             ${safeReminderTitle}
         </div>
         <div class="pomodoro-main-container">
@@ -9768,7 +9942,7 @@ document.body.classList.remove('docked-mode');
         <div class="mini-layout">
             <div class="mini-card">
                 <button class="mini-restore-btn" onclick="toggleMiniMode()" title="${i18n('restoreWindow') || '恢复窗口'}">↗</button>
-                <div class="mini-task-title" id="miniTaskTitle" title="${safeReminderTitle}">${safeReminderTitle}</div>
+                <div class="mini-task-title" id="miniTaskTitle" title="${safeReminderTitle}" onclick="callMethod('handleTaskTitleClick')" oncontextmenu="event.preventDefault(); callMethod('openTaskEditDialog')">${safeReminderTitle}</div>
                 <button class="mini-emoji-btn" id="miniStatusTrigger" onclick="toggleMiniSwitchMenu(event)">${initialStatusIcon}</button>
                 <div class="mini-bar-center">
                     <div class="mini-bar-header">
@@ -10716,6 +10890,12 @@ document.body.classList.remove('docked-mode');
                     break;
                 case 'openRelatedNote':
                     this.openRelatedNote();
+                    break;
+                case 'handleTaskTitleClick':
+                    this.handleTaskTitleClick();
+                    break;
+                case 'openTaskEditDialog':
+                    this.openTaskEditDialog();
                     break;
                 case 'showStats':
                     this.showStatsPanel();
