@@ -9,6 +9,11 @@ import { CategoryManager } from "../utils/categoryManager";
 import { ProjectManager } from "../utils/projectManager";
 import LoadingDialog from './LoadingDialog.svelte';
 
+export interface ListItemNode {
+    id: string;        // 列表项 block ID
+    children: ListItemNode[];  // 嵌套子列表项
+}
+
 export interface BlockDetail {
     blockId: string;
     content: string;
@@ -51,7 +56,7 @@ export class BatchReminderDialog {
         defaultProjectId?: string;
         defaultCustomGroupId?: string;
         defaultMilestoneId?: string;
-    }) {
+    }, hierarchyMap?: Map<string, string[]>) {
         if (blockIds.length === 1) {
             const dialog = new QuickReminderDialog(undefined, undefined, undefined, undefined, {
                 blockId: blockIds[0],
@@ -62,13 +67,13 @@ export class BatchReminderDialog {
             dialog.show();
         } else {
             // 直接显示智能批量设置
-            this.showSmartBatchDialog(blockIds, defaultSettings);
+            this.showSmartBatchDialog(blockIds, defaultSettings, hierarchyMap);
         }
     }
 
-    private async showSmartBatchDialog(blockIds: string[], defaultSettings?: any) {
+    private async showSmartBatchDialog(blockIds: string[], defaultSettings?: any, hierarchyMap?: Map<string, string[]>) {
         const autoDetectedData = await this.autoDetectBatchDateTime(blockIds);
-        const smartBatchDialog = new SmartBatchDialog(this.plugin, blockIds, autoDetectedData, defaultSettings);
+        const smartBatchDialog = new SmartBatchDialog(this.plugin, blockIds, autoDetectedData, defaultSettings, hierarchyMap);
         smartBatchDialog.show();
     }
 
@@ -212,12 +217,15 @@ class SmartBatchDialog {
     private categoryManager: CategoryManager;
     private projectManager: ProjectManager;
     private defaultSettings?: any;
+    private hierarchyMap?: Map<string, string[]>;
+    private collapsedParentIds: Set<string> = new Set();
 
-    constructor(plugin: any, blockIds: string[], autoDetectedData: AutoDetectResult[], defaultSettings?: any) {
+    constructor(plugin: any, blockIds: string[], autoDetectedData: AutoDetectResult[], defaultSettings?: any, hierarchyMap?: Map<string, string[]>) {
         this.plugin = plugin;
         this.blockIds = blockIds;
         this.autoDetectedData = autoDetectedData;
         this.defaultSettings = defaultSettings;
+        this.hierarchyMap = hierarchyMap;
         this.categoryManager = CategoryManager.getInstance(this.plugin);
         this.projectManager = ProjectManager.getInstance(this.plugin);
 
@@ -430,6 +438,54 @@ class SmartBatchDialog {
         `;
     }
 
+    private getBlockDepth(blockId: string): number {
+        if (!this.hierarchyMap) return 0;
+
+        let depth = 0;
+        let currentId = blockId;
+
+        while (true) {
+            let parentId: string | undefined;
+            for (const [parent, children] of this.hierarchyMap) {
+                if (children.includes(currentId)) {
+                    parentId = parent;
+                    break;
+                }
+            }
+            if (parentId) {
+                depth++;
+                currentId = parentId;
+            } else {
+                break;
+            }
+        }
+        return depth;
+    }
+
+    private isAncestorCollapsed(blockId: string): boolean {
+        if (!this.hierarchyMap || this.collapsedParentIds.size === 0) return false;
+
+        let currentId = blockId;
+        while (true) {
+            let parentId: string | undefined;
+            for (const [parent, children] of this.hierarchyMap) {
+                if (children.includes(currentId)) {
+                    parentId = parent;
+                    break;
+                }
+            }
+            if (parentId) {
+                if (this.collapsedParentIds.has(parentId)) {
+                    return true;
+                }
+                currentId = parentId;
+            } else {
+                break;
+            }
+        }
+        return false;
+    }
+
     private async renderBlockList(dialog: Dialog) {
         const container = dialog.element.querySelector('#blockListContainer') as HTMLElement;
         if (!container) return;
@@ -462,8 +518,25 @@ class SmartBatchDialog {
                 }
             }
 
+            // 获取块在层级树中的深度和折叠状态
+            const depth = this.getBlockDepth(data.blockId);
+            const isParentCollapsed = this.isAncestorCollapsed(data.blockId);
+
+            const hasChildren = this.hierarchyMap?.has(data.blockId) && (this.hierarchyMap.get(data.blockId)?.length || 0) > 0;
+            const isCollapsed = this.collapsedParentIds.has(data.blockId);
+
+            const indentStyle = depth > 0 ? `margin-left: ${depth * 20}px; width: calc(100% - ${depth * 20}px); box-sizing: border-box;` : '';
+            const displayStyle = isParentCollapsed ? 'display: none;' : '';
+
+            const caretHtml = hasChildren
+                ? `<button type="button" class="b3-button b3-button--text block-toggle-children-btn" data-block-id="${data.blockId}" style="padding: 0; min-width: auto; height: 24px; width: 24px; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px; border-radius: 4px; flex-shrink: 0;">
+                     <svg style="transform: ${isCollapsed ? 'rotate(-90deg)' : 'none'}; transition: transform 0.15s; width: 12px; height: 12px; margin: 0;" class="b3-button__icon"><use xlink:href="#iconDown"></use></svg>
+                   </button>`
+                : `<div style="width: 32px; flex-shrink: 0;"></div>`;
+
             return `
-                <div class="block-item" data-block-id="${data.blockId}">
+                <div class="block-item" data-block-id="${data.blockId}" style="${indentStyle}${displayStyle}">
+                    ${caretHtml}
                     <div class="block-checkbox">
                         <label class="b3-checkbox">
                             <input type="checkbox" class="block-select-checkbox" data-block-id="${data.blockId}" checked>
@@ -1013,9 +1086,27 @@ class SmartBatchDialog {
         if (container.dataset.batchEventsBound === '1') return;
         container.dataset.batchEventsBound = '1';
 
-        // 设置按钮事件（点击编辑按钮打开编辑对话框）
+        // 设置按钮事件（点击编辑按钮打开编辑对话框，或者点击折叠/展开按钮）
         container.addEventListener('click', (e) => {
             const target = e.target as HTMLElement;
+
+            // 折叠/展开子任务
+            const toggleBtn = target.closest('.block-toggle-children-btn') as HTMLElement;
+            if (toggleBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const blockId = toggleBtn.getAttribute('data-block-id');
+                if (blockId) {
+                    if (this.collapsedParentIds.has(blockId)) {
+                        this.collapsedParentIds.delete(blockId);
+                    } else {
+                        this.collapsedParentIds.add(blockId);
+                    }
+                    this.updateBlockListDisplay(dialog);
+                }
+                return;
+            }
+
             const editBtn = target.closest('.block-edit-btn') as HTMLElement;
             if (editBtn) {
                 const blockId = editBtn.getAttribute('data-block-id');
@@ -1028,6 +1119,36 @@ class SmartBatchDialog {
     private showBlockEditDialog(parentDialog: Dialog, blockId: string) {
         const setting = this.blockSettings.get(blockId);
         if (!setting) return;
+
+        // 获取该父任务关联的子任务，并构建 tempSubtasks 列表
+        const tempSubtasks: any[] = [];
+        const childIds = this.hierarchyMap?.get(blockId) || [];
+        for (const childId of childIds) {
+            const childSetting = this.blockSettings.get(childId);
+            if (childSetting) {
+                tempSubtasks.push({
+                    id: childId, // 使用块 ID 作为任务 ID，以便能够映射更新回来
+                    blockId: childId,
+                    parentId: '__TEMP_PARENT__',
+                    title: childSetting.cleanTitle,
+                    date: childSetting.date,
+                    time: childSetting.hasTime ? childSetting.time : undefined,
+                    priority: childSetting.priority,
+                    categoryId: childSetting.categoryId || undefined,
+                    projectId: childSetting.projectId || undefined,
+                    customGroupId: childSetting.customGroupId || undefined,
+                    milestoneId: childSetting.milestoneId || undefined,
+                    kanbanStatus: childSetting.kanbanStatus || undefined,
+                    note: childSetting.note,
+                    repeat: childSetting.repeatConfig?.enabled ? childSetting.repeatConfig : undefined,
+                    completed: false,
+                    pomodoroCount: 0,
+                    createdAt: new Date().toISOString(),
+                    endDate: childSetting.endDate,
+                    endTime: childSetting.hasEndTime ? childSetting.endTime : undefined,
+                });
+            }
+        }
 
         // 创建临时的 reminder 对象用于 QuickReminderDialog
         const tempReminder = {
@@ -1075,6 +1196,9 @@ class SmartBatchDialog {
                         interval: 1,
                         endType: 'never'
                     };
+                    if (modifiedReminder.tempSubtasks) {
+                        this.updateChildSettingsFromTempSubtasks(blockId, modifiedReminder.tempSubtasks, parentDialog);
+                    }
                 }
                 this.updateBlockDisplay(parentDialog, blockId);
             },
@@ -1083,6 +1207,7 @@ class SmartBatchDialog {
                 mode: 'batch_edit',
                 reminder: tempReminder,
                 defaultNote: setting.note,
+                tempSubtasks: tempSubtasks,
                 onSaved: (modifiedReminder) => {
                     // 将修改后的 reminder 映射回 BlockSetting
                     if (modifiedReminder) {
@@ -1104,6 +1229,9 @@ class SmartBatchDialog {
                         setting.endDate = modifiedReminder.endDate || setting.endDate;
                         setting.endTime = modifiedReminder.endTime || setting.endTime;
                         setting.hasEndTime = !!modifiedReminder.endTime;
+                        if (modifiedReminder.tempSubtasks) {
+                            this.updateChildSettingsFromTempSubtasks(blockId, modifiedReminder.tempSubtasks, parentDialog);
+                        }
                     }
                     this.updateBlockDisplay(parentDialog, blockId);
                 },
@@ -1112,6 +1240,99 @@ class SmartBatchDialog {
         );
 
         quickReminderDialog.show();
+    }
+
+    private async updateChildSettingsFromTempSubtasks(parentBlockId: string, updatedSubtasks: any[], parentDialog: Dialog) {
+        // 1. 获取当前子任务 ID
+        const currentChildIds = this.hierarchyMap?.get(parentBlockId) || [];
+
+        // 2. 追踪更新后的子任务 ID
+        const newChildIds: string[] = [];
+
+        const parentSetting = this.blockSettings.get(parentBlockId);
+
+        // 3. 处理每个子任务
+        for (const subtask of updatedSubtasks) {
+            let childBlockId = subtask.id;
+
+            // 如果是新增的子任务，没有在 blockSettings 中，生成新 ID
+            if (!this.blockSettings.has(childBlockId)) {
+                // 生成临时的子任务 ID，使其可以在列表和保存中一致
+                childBlockId = `subtask_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                subtask.id = childBlockId;
+                subtask.blockId = childBlockId;
+            }
+
+            newChildIds.push(childBlockId);
+
+            // 更新或创建其 BlockSetting
+            this.blockSettings.set(childBlockId, {
+                blockId: childBlockId,
+                content: subtask.title,
+                cleanTitle: subtask.title,
+                date: subtask.date || getLogicalDateString(),
+                time: subtask.time || '',
+                hasTime: !!subtask.time,
+                endDate: subtask.endDate || '',
+                endTime: subtask.endTime || '',
+                hasEndTime: !!subtask.endTime,
+                priority: subtask.priority || 'none',
+                categoryId: subtask.categoryId || '',
+                projectId: subtask.projectId || parentSetting?.projectId || '',
+                customGroupId: subtask.customGroupId || parentSetting?.customGroupId || '',
+                milestoneId: subtask.milestoneId || parentSetting?.milestoneId || '',
+                kanbanStatus: subtask.kanbanStatus || parentSetting?.kanbanStatus || '',
+                note: subtask.note || '',
+                repeatConfig: subtask.repeat || {
+                    enabled: false,
+                    type: 'daily',
+                    interval: 1,
+                    endType: 'never'
+                }
+            });
+        }
+
+        // 4. 更新 hierarchyMap
+        if (!this.hierarchyMap) {
+            this.hierarchyMap = new Map();
+        }
+        this.hierarchyMap.set(parentBlockId, newChildIds);
+
+        // 5. 移除已删除的子任务
+        for (const oldId of currentChildIds) {
+            if (!newChildIds.includes(oldId)) {
+                this.blockSettings.delete(oldId);
+                this.blockIds = this.blockIds.filter(id => id !== oldId);
+                this.autoDetectedData = this.autoDetectedData.filter(d => d.blockId !== oldId);
+            }
+        }
+
+        // 6. 添加新增的子任务到列表控制数组
+        for (const newId of newChildIds) {
+            if (!this.blockIds.includes(newId)) {
+                // 确保子任务插在父任务之后渲染，如果有多个，按顺序添加
+                const parentIndex = this.blockIds.indexOf(parentBlockId);
+                const offset = newChildIds.indexOf(newId);
+                if (parentIndex !== -1) {
+                    this.blockIds.splice(parentIndex + 1 + offset, 0, newId);
+                    this.autoDetectedData.splice(parentIndex + 1 + offset, 0, {
+                        blockId: newId,
+                        content: this.blockSettings.get(newId)!.content,
+                        cleanTitle: this.blockSettings.get(newId)!.cleanTitle
+                    });
+                } else {
+                    this.blockIds.push(newId);
+                    this.autoDetectedData.push({
+                        blockId: newId,
+                        content: this.blockSettings.get(newId)!.content,
+                        cleanTitle: this.blockSettings.get(newId)!.cleanTitle
+                    });
+                }
+            }
+        }
+
+        // 7. 重新渲染列表以更新数量和层级缩进
+        await this.updateBlockListDisplay(parentDialog);
     }
 
     private async renderBatchCategorySelector(dialog: Dialog) {
@@ -1379,13 +1600,18 @@ class SmartBatchDialog {
     private async saveBatchReminders(dialog: Dialog) {
         try {
             // 显示加载对话框
-            this.showLoadingDialog("正在批量创建任务...");
+            const loadingMessage = this.hierarchyMap
+                ? (i18n("hierarchicalBatchCreating") || "正在创建层级任务...")
+                : "正在批量创建任务...";
+            this.showLoadingDialog(loadingMessage);
 
             const reminderData = await this.plugin.loadReminderData();
 
             let successCount = 0;
             let failureCount = 0;
             const successfulBlockIds: string[] = [];
+            // blockId → reminderId 映射，用于建立父子关系
+            const blockIdToReminderId: Map<string, string> = new Map();
 
             // 批量获取所有相关块信息，减少多次单独查询
             const allBlockIds = Array.from(this.blockSettings.keys());
@@ -1400,106 +1626,161 @@ class SmartBatchDialog {
             const blockMap: Record<string, any> = {};
             (blockRows || []).forEach(b => blockMap[b.id] = b);
 
-            for (const [blockId, setting] of this.blockSettings) {
+            // 排序设置，保证父任务在子任务之前被创建
+            const sortedEntries = Array.from(this.blockSettings.entries()).sort((a, b) => {
+                const depthA = this.getBlockDepth(a[0]);
+                const depthB = this.getBlockDepth(b[0]);
+                return depthA - depthB;
+            });
+
+            // 创建单个任务的通用逻辑
+            const createReminder = async (blockId: string, setting: BlockSetting, parentReminderId?: string) => {
+                if (!setting.date) {
+                    failureCount++;
+                    return;
+                }
+
+                const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const block = blockMap[blockId];
+
+                const reminder: any = {
+                    id: reminderId,
+                    blockId: blockId,
+                    docId: block ? block.root_id : undefined,
+                    completed: false,
+                    pomodoroCount: 0,
+                    createdAt: new Date().toISOString()
+                };
+
+                // 更新字段
+                reminder.title = setting.cleanTitle;
+                reminder.date = setting.date;
+                reminder.priority = setting.priority;
+                reminder.categoryId = setting.categoryId || undefined;
+                reminder.projectId = setting.projectId || undefined;
+                if (setting.customGroupId) reminder.customGroupId = setting.customGroupId;
+                if (setting.milestoneId) reminder.milestoneId = setting.milestoneId;
+                if (setting.kanbanStatus) reminder.kanbanStatus = setting.kanbanStatus;
+                reminder.repeat = setting.repeatConfig?.enabled ? setting.repeatConfig : undefined;
+
+                // 设置父任务关联
+                if (parentReminderId) {
+                    reminder.parentId = parentReminderId;
+                }
+
+                // 如果新建时没有 docId 或者是新建 of reminder 对象，重新设置
+                if (!reminder.docId && block) {
+                    reminder.docId = block.root_id;
+                }
+
+                if (setting.hasTime && setting.time) {
+                    reminder.time = setting.time;
+                }
+
+                if (setting.endDate) {
+                    reminder.endDate = setting.endDate;
+                }
+
+                if (setting.hasEndTime && setting.endTime) {
+                    reminder.endTime = setting.endTime;
+                }
+
+                if (setting.note) {
+                    reminder.note = setting.note;
+                }
+
+                // 如果是周期任务，自动完成所有过去的实例
+                if (setting.repeatConfig?.enabled && setting.date) {
+                    const { generateRepeatInstances } = await import("../utils/repeatUtils");
+
+                    const today = getLogicalDateString();
+
+                    // 计算从开始日期到今天的天数，用于设置 maxInstances
+                    const startDateObj = new Date(setting.date);
+                    const todayObj = new Date(today);
+                    const daysDiff = Math.ceil((todayObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
+
+                    // 根据重复类型估算可能的最大实例数
+                    let maxInstances = 1000; // 默认值
+                    if (setting.repeatConfig.type === 'daily') {
+                        maxInstances = Math.max(daysDiff + 10, 1000); // 每日重复，最多是天数
+                    } else if (setting.repeatConfig.type === 'weekly') {
+                        maxInstances = Math.max(Math.ceil(daysDiff / 7) + 10, 500);
+                    } else if (setting.repeatConfig.type === 'monthly' || setting.repeatConfig.type === 'lunar-monthly') {
+                        maxInstances = Math.max(Math.ceil(daysDiff / 30) + 10, 200);
+                    } else if (setting.repeatConfig.type === 'yearly' || setting.repeatConfig.type === 'lunar-yearly') {
+                        maxInstances = Math.max(Math.ceil(daysDiff / 365) + 10, 50);
+                    }
+
+                    // 生成从任务开始日期到今天的所有实例
+                    const instances = generateRepeatInstances(reminder, setting.date, today, maxInstances);
+
+                    // 将所有早于今天的实例标记为已完成
+                    const pastInstances: string[] = [];
+                    instances.forEach(instance => {
+                        if (instance.date < today) {
+                            pastInstances.push(instance.date);
+                        }
+                    });
+
+                    // 如果有过去的实例，添加到completedInstances
+                    if (pastInstances.length > 0) {
+                        if (!reminder.repeat.completedInstances) {
+                            reminder.repeat.completedInstances = [];
+                        }
+                        reminder.repeat.completedInstances.push(...pastInstances);
+                    }
+                }
+
+                reminderData[reminderId] = reminder;
+                blockIdToReminderId.set(blockId, reminderId);
+                successCount++;
+                successfulBlockIds.push(blockId);
+            };
+
+            let childSuccessCount = 0;
+            for (const [blockId, setting] of sortedEntries) {
                 try {
-                    if (!setting.date) {
-                        failureCount++;
-                        continue;
-                    }
-
-                    const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                    const block = blockMap[blockId];
-
-                    const reminder: any = {
-                        id: reminderId,
-                        blockId: blockId,
-                        docId: block ? block.root_id : undefined,
-                        completed: false,
-                        pomodoroCount: 0,
-                        createdAt: new Date().toISOString()
-                    };
-
-                    // 更新字段
-                    reminder.title = setting.cleanTitle;
-                    reminder.date = setting.date;
-                    reminder.priority = setting.priority;
-                    reminder.categoryId = setting.categoryId || undefined;
-                    reminder.projectId = setting.projectId || undefined;
-                    if (setting.customGroupId) reminder.customGroupId = setting.customGroupId;
-                    if (setting.milestoneId) reminder.milestoneId = setting.milestoneId;
-                    if (setting.kanbanStatus) reminder.kanbanStatus = setting.kanbanStatus;
-                    reminder.repeat = setting.repeatConfig?.enabled ? setting.repeatConfig : undefined;
-
-                    // 如果新建时没有 docId 或者是新建的 reminder 对象，重新设置
-                    if (!reminder.docId && block) {
-                        reminder.docId = block.root_id;
-                    }
-
-                    if (setting.hasTime && setting.time) {
-                        reminder.time = setting.time;
-                    }
-
-                    if (setting.endDate) {
-                        reminder.endDate = setting.endDate;
-                    }
-
-                    if (setting.hasEndTime && setting.endTime) {
-                        reminder.endTime = setting.endTime;
-                    }
-
-                    if (setting.note) {
-                        reminder.note = setting.note;
-                    }
-
-                    // 如果是周期任务，自动完成所有过去的实例
-                    if (setting.repeatConfig?.enabled && setting.date) {
-                        const { generateRepeatInstances } = await import("../utils/repeatUtils");
-
-                        const today = getLogicalDateString();
-
-                        // 计算从开始日期到今天的天数，用于设置 maxInstances
-                        const startDateObj = new Date(setting.date);
-                        const todayObj = new Date(today);
-                        const daysDiff = Math.ceil((todayObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
-
-                        // 根据重复类型估算可能的最大实例数
-                        let maxInstances = 1000; // 默认值
-                        if (setting.repeatConfig.type === 'daily') {
-                            maxInstances = Math.max(daysDiff + 10, 1000); // 每日重复，最多是天数
-                        } else if (setting.repeatConfig.type === 'weekly') {
-                            maxInstances = Math.max(Math.ceil(daysDiff / 7) + 10, 500);
-                        } else if (setting.repeatConfig.type === 'monthly' || setting.repeatConfig.type === 'lunar-monthly') {
-                            maxInstances = Math.max(Math.ceil(daysDiff / 30) + 10, 200);
-                        } else if (setting.repeatConfig.type === 'yearly' || setting.repeatConfig.type === 'lunar-yearly') {
-                            maxInstances = Math.max(Math.ceil(daysDiff / 365) + 10, 50);
-                        }
-
-                        // 生成从任务开始日期到今天的所有实例
-                        const instances = generateRepeatInstances(reminder, setting.date, today, maxInstances);
-
-                        // 将所有早于今天的实例标记为已完成
-                        const pastInstances: string[] = [];
-                        instances.forEach(instance => {
-                            if (instance.date < today) {
-                                pastInstances.push(instance.date);
+                    // 查找该子任务对应的父任务 blockId
+                    let parentReminderId: string | undefined;
+                    if (this.hierarchyMap) {
+                        for (const [parentBlockId, children] of this.hierarchyMap) {
+                            if (children.includes(blockId)) {
+                                parentReminderId = blockIdToReminderId.get(parentBlockId);
+                                break;
                             }
-                        });
-
-                        // 如果有过去的实例，添加到completedInstances
-                        if (pastInstances.length > 0) {
-                            if (!reminder.repeat.completedInstances) {
-                                reminder.repeat.completedInstances = [];
-                            }
-                            reminder.repeat.completedInstances.push(...pastInstances);
                         }
                     }
-
-                    reminderData[reminderId] = reminder;
-                    successCount++;
-                    successfulBlockIds.push(blockId);
+                    await createReminder(blockId, setting, parentReminderId);
+                    if (parentReminderId) {
+                        childSuccessCount++;
+                    }
                 } catch (error) {
                     console.error(`设置块 ${blockId} 提醒失败:`, error);
                     failureCount++;
+                }
+            }
+
+            // 第三阶段：更新父任务的 subtaskIds
+            if (this.hierarchyMap) {
+                for (const [parentBlockId, childBlockIdList] of this.hierarchyMap) {
+                    const parentReminderId = blockIdToReminderId.get(parentBlockId);
+                    if (!parentReminderId || !reminderData[parentReminderId]) continue;
+
+                    const subtaskIds: string[] = [];
+                    for (const childBlockId of childBlockIdList) {
+                        const childReminderId = blockIdToReminderId.get(childBlockId);
+                        if (childReminderId) {
+                            subtaskIds.push(childReminderId);
+                        }
+                    }
+
+                    if (subtaskIds.length > 0) {
+                        if (!reminderData[parentReminderId].subtaskIds) {
+                            reminderData[parentReminderId].subtaskIds = [];
+                        }
+                        reminderData[parentReminderId].subtaskIds.push(...subtaskIds);
+                    }
                 }
             }
 
@@ -1515,10 +1796,18 @@ class SmartBatchDialog {
             }));
 
             if (successCount > 0) {
-                showMessage(i18n("batchCompleted", {
-                    success: successCount.toString(),
-                    failure: failureCount > 0 ? i18n("failureCount", { count: failureCount.toString() }) : ''
-                }));
+                if (this.hierarchyMap && childSuccessCount > 0) {
+                    const parentCount = successCount - childSuccessCount;
+                    showMessage(i18n("hierarchicalBatchCompleted", {
+                        parentCount: parentCount.toString(),
+                        childCount: childSuccessCount.toString()
+                    }) || `层级任务创建完成：${parentCount}个父任务，${childSuccessCount}个子任务`);
+                } else {
+                    showMessage(i18n("batchCompleted", {
+                        success: successCount.toString(),
+                        failure: failureCount > 0 ? i18n("failureCount", { count: failureCount.toString() }) : ''
+                    }));
+                }
             } else {
                 showMessage(i18n("batchSetFailed"));
             }

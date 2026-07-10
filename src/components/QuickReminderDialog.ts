@@ -610,6 +610,7 @@ export class QuickReminderDialog {
             editFutureInstancesOnly?: boolean; // 从重复实例进入系列编辑，以当前实例作为新的系列起点
             futureEditOriginalReminder?: any; // 后续实例编辑前的原始系列快照
             readOnly?: boolean; // 是否为只读模式
+            tempSubtasks?: any[]; // 传入的临时子任务列表
         }
     ) {
         this.initialDate = date;
@@ -660,6 +661,7 @@ export class QuickReminderDialog {
             this.editFutureInstancesOnly = options.editFutureInstancesOnly || false;
             this.futureEditOriginalReminder = options.futureEditOriginalReminder;
             this.readOnly = !!options.readOnly;
+            this.tempSubtasks = options.tempSubtasks || [];
         }
 
         // 如果是编辑模式，确保有reminder
@@ -6815,7 +6817,8 @@ export class QuickReminderDialog {
                 customProgress: customProgress,
                 isAvailableToday: isAvailableToday,
                 availableStartDate: availableStartDate,
-                hideInCalendar: hideInCalendar
+                hideInCalendar: hideInCalendar,
+                tempSubtasks: this.tempSubtasks
             };
             this.applyStartDateOnlyOverdueOverride(reminderData, date, endDate);
             this.applyReminderSkipDateOverrides(reminderData);

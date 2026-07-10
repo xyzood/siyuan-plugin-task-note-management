@@ -16,7 +16,7 @@ import { ReminderPanel } from "./components/ReminderPanel";
 import { MobileTaskShortcut } from "./components/render/MobileTaskShortcut";
 import { registerCustomIcons } from "./components/render/registerIcons";
 import { HabitPanel } from "./components/HabitPanel";
-import { BatchReminderDialog } from "./components/BatchReminderDialog";
+import { BatchReminderDialog, ListItemNode } from "./components/BatchReminderDialog";
 import { CalendarView } from "./components/CalendarView";
 import { EisenhowerMatrixView } from "./components/EisenhowerMatrixView";
 import { CategoryManager } from "./utils/categoryManager";
@@ -3357,58 +3357,59 @@ export default class ReminderPlugin extends Plugin {
     private handleBlockMenu({ detail }) {
         const blockElements = Array.isArray(detail.blockElements) ? detail.blockElements : [];
 
-        // 检查选中的块是否为列表块
-        const isListBlock = blockElements.length === 1 &&
-            blockElements[0].getAttribute("data-type") === "NodeList";
+        // 检查选中的块是否包含列表块或列表项块
+        const hasListOrListItem = blockElements.some(el => {
+            const type = el?.getAttribute("data-type");
+            return type === "NodeList" || type === "NodeListItem";
+        });
 
-        // 列表块同时显示"设置任务"和"批量设置任务"
-        if (isListBlock) {
-            const listBlockElement = blockElements[0];
-            const listBlockId = listBlockElement.getAttribute("data-node-id");
-            // 从DOM中获取列表项数量（列表项的data-type为"NodeListItem"）
-            // 思源列表结构：列表块 > 子元素（直接是列表项div[data-type="NodeListItem"]）
-            const listItems = listBlockElement.querySelectorAll(':scope > [data-type="NodeListItem"]');
-            const listItemCount = listItems.length;
-
-            // 1. 设置任务（给列表块本身设置任务）
+        // 1. 单选任何块时，都显示原有的“设置任务”选项（对该块本身设置提醒）
+        if (blockElements.length === 1) {
+            const blockElement = blockElements[0];
             detail.menu.addItem({
                 iconHTML: "⏰",
                 label: i18n("setTimeReminder"),
                 click: () => {
-                    const blockId = listBlockElement.getAttribute("data-node-id");
+                    const blockId = blockElement.getAttribute("data-node-id");
                     if (blockId) {
                         this.handleMultipleBlocks([blockId]);
                     }
                 }
             });
+        }
 
-            // 2. 批量设置任务（给所有列表项子块设置任务）
+        // 2. 如果包含列表或列表项，显示识别/不识别两个批量选项
+        if (hasListOrListItem) {
+            const hierarchicalCount = this.getHierarchicalCount(blockElements);
+            const flatCount = this.getFlatCount(blockElements);
+
             detail.menu.addItem({
                 iconHTML: "⏰",
-                label: i18n("batchSetReminderBlocks", { count: listItemCount.toString() }),
+                label: `批量设置任务（识别子任务）(${hierarchicalCount}个块)`,
                 click: async () => {
-                    if (listBlockId) {
-                        const blockIds = await this.getListItemBlockIds(listBlockId);
-                        if (blockIds.length > 0) {
-                            this.handleMultipleBlocks(blockIds);
-                        }
-                    }
+                    await this.handleHierarchicalBatchCreateFromSelection(blockElements);
                 }
             });
-        } else {
-            // 非列表块，按原有逻辑显示
+
             detail.menu.addItem({
                 iconHTML: "⏰",
-                label: blockElements.length > 1 ? i18n("batchSetReminderBlocks", { count: blockElements.length.toString() }) : i18n("setTimeReminder"),
+                label: `批量设置任务（不识别子任务）(${flatCount}个块)`,
+                click: async () => {
+                    await this.handleFlatBatchCreateFromSelection(blockElements);
+                }
+            });
+        } else if (blockElements.length > 1) {
+            // 3. 不包含列表相关的普通多选，显示默认的批量设置
+            detail.menu.addItem({
+                iconHTML: "⏰",
+                label: i18n("batchSetReminderBlocks", { count: blockElements.length.toString() }),
                 click: () => {
-                    if (blockElements.length > 0) {
-                        const blockIds = blockElements
-                            .map(el => el.getAttribute("data-node-id"))
-                            .filter(id => id);
+                    const blockIds = blockElements
+                        .map(el => el.getAttribute("data-node-id"))
+                        .filter(id => id);
 
-                        if (blockIds.length > 0) {
-                            this.handleMultipleBlocks(blockIds);
-                        }
+                    if (blockIds.length > 0) {
+                        this.handleMultipleBlocks(blockIds);
                     }
                 }
             });
@@ -3641,8 +3642,244 @@ export default class ReminderPlugin extends Plugin {
         }
         return [];
     }
+    /**
+     * 递归获取列表块的层级结构（支持任意深度层级）
+     */
+    private async getListHierarchy(listBlockId: string): Promise<ListItemNode[]> {
+        try {
+            const { getChildBlocks } = await import("./api");
+            const children = await getChildBlocks(listBlockId);
+            const listItems = children.filter(b => b.type === 'i');
 
-    private async handleMultipleBlocks(blockIds: string[]) {
+            const nodes: ListItemNode[] = [];
+            for (const item of listItems) {
+                const node = await this.getListItemHierarchy(item.id);
+                if (node) {
+                    nodes.push(node);
+                }
+            }
+            return nodes;
+        } catch (error) {
+            console.warn('获取列表层级失败:', error);
+            return [];
+        }
+    }
+
+    /**
+     * 检查列表块 DOM 元素是否包含嵌套子列表
+     */
+    private hasNestedList(listBlockElement: HTMLElement): boolean {
+        return !!listBlockElement.querySelector(
+            ':scope > [data-type="NodeListItem"] > [data-type="NodeList"]'
+        );
+    }
+
+    /**
+     * 处理层级列表的批量任务创建
+     * 为顶层列表项创建父任务，为嵌套列表项创建子任务
+     */
+    private async handleHierarchicalBatchCreate(listBlockId: string) {
+        try {
+            // 1. 获取层级结构
+            const hierarchy = await this.getListHierarchy(listBlockId);
+
+            // 2. 收集所有 block ID（按层级顺序：父在前，子在后）
+            const allBlockIds: string[] = [];
+            // 构建 hierarchyMap: parentBlockId → childBlockIds[]
+            const hierarchyMap = new Map<string, string[]>();
+
+            const collectNode = (node: ListItemNode) => {
+                allBlockIds.push(node.id);
+                if (node.children.length > 0) {
+                    const childIds = node.children.map(c => c.id);
+                    hierarchyMap.set(node.id, childIds);
+                    node.children.forEach(collectNode);
+                }
+            };
+
+            for (const node of hierarchy) {
+                collectNode(node);
+            }
+
+            if (allBlockIds.length === 0) return;
+
+            // 3. 确保 batchReminderDialog 已初始化
+            if (!this.batchReminderDialog) {
+                this.batchReminderDialog = new BatchReminderDialog(this);
+            }
+
+            // 4. 尝试获取继承信息
+            let defaultSettings = {};
+            try {
+                const { projectId, groupId, milestoneId, categoryId } = await this.getInheritedProjectAndGroup(allBlockIds[0]);
+                defaultSettings = {
+                    defaultProjectId: projectId,
+                    defaultCustomGroupId: groupId,
+                    defaultMilestoneId: milestoneId,
+                    defaultCategoryId: categoryId
+                };
+            } catch (err) {
+                console.warn('获取继承设置失败:', err);
+            }
+
+            // 5. 使用 BatchReminderDialog 显示，传入层级信息
+            await this.batchReminderDialog.show(allBlockIds, defaultSettings, hierarchyMap);
+        } catch (error) {
+            console.error('层级批量创建任务失败:', error);
+            showMessage(i18n("batchCreateFailed") || "批量创建任务失败", 3000, "error");
+        }
+    }
+
+    /**
+     * 递归获取单个列表项的子列表层级关系（支持任意深度层级）
+     */
+    private async getListItemHierarchy(listItemBlockId: string): Promise<ListItemNode | null> {
+        try {
+            const { getChildBlocks } = await import("./api");
+            const node: ListItemNode = { id: listItemBlockId, children: [] };
+
+            // 查找当前列表项下面的子列表
+            const itemChildren = await getChildBlocks(listItemBlockId);
+            if (itemChildren && Array.isArray(itemChildren)) {
+                const subLists = itemChildren.filter(b => b.type === 'l');
+                for (const subList of subLists) {
+                    const subChildren = await getChildBlocks(subList.id);
+                    if (subChildren && Array.isArray(subChildren)) {
+                        const subItems = subChildren.filter(b => b.type === 'i');
+                        for (const subItem of subItems) {
+                            const subNode = await this.getListItemHierarchy(subItem.id);
+                            if (subNode) {
+                                node.children.push(subNode);
+                            }
+                        }
+                    }
+                }
+            }
+            return node;
+        } catch (error) {
+            console.warn('获取列表项子列表层级失败:', error);
+            return null;
+        }
+    }
+
+    private getHierarchicalCount(blockElements: HTMLElement[]): number {
+        let count = 0;
+        for (const el of blockElements) {
+            const dataType = el.getAttribute("data-type");
+            if (dataType === "NodeList") {
+                count += el.querySelectorAll('[data-type="NodeListItem"]').length;
+            } else if (dataType === "NodeListItem") {
+                count += 1 + el.querySelectorAll('[data-type="NodeListItem"]').length;
+            } else {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private getFlatCount(blockElements: HTMLElement[]): number {
+        let count = 0;
+        for (const el of blockElements) {
+            const dataType = el.getAttribute("data-type");
+            if (dataType === "NodeList") {
+                count += el.querySelectorAll(':scope > [data-type="NodeListItem"]').length;
+            } else {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private async handleHierarchicalBatchCreateFromSelection(blockElements: HTMLElement[]) {
+        try {
+            const allBlockIds: string[] = [];
+            const hierarchyMap = new Map<string, string[]>();
+
+            const collectNode = (node: ListItemNode) => {
+                allBlockIds.push(node.id);
+                if (node.children.length > 0) {
+                    const childIds = node.children.map(c => c.id);
+                    hierarchyMap.set(node.id, childIds);
+                    node.children.forEach(collectNode);
+                }
+            };
+
+            for (const el of blockElements) {
+                const id = el.getAttribute("data-node-id");
+                if (!id) continue;
+
+                const dataType = el.getAttribute("data-type");
+                if (dataType === "NodeList") {
+                    const hierarchy = await this.getListHierarchy(id);
+                    for (const node of hierarchy) {
+                        collectNode(node);
+                    }
+                } else if (dataType === "NodeListItem") {
+                    const node = await this.getListItemHierarchy(id);
+                    if (node) {
+                        collectNode(node);
+                    }
+                } else {
+                    allBlockIds.push(id);
+                }
+            }
+
+            // 过滤重复的 block ID
+            const uniqueBlockIds = Array.from(new Set(allBlockIds));
+
+            if (uniqueBlockIds.length === 0) return;
+
+            if (!this.batchReminderDialog) {
+                this.batchReminderDialog = new BatchReminderDialog(this);
+            }
+
+            let defaultSettings = {};
+            try {
+                const { projectId, groupId, milestoneId, categoryId } = await this.getInheritedProjectAndGroup(uniqueBlockIds[0]);
+                defaultSettings = {
+                    defaultProjectId: projectId,
+                    defaultCustomGroupId: groupId,
+                    defaultMilestoneId: milestoneId,
+                    defaultCategoryId: categoryId
+                };
+            } catch (err) {
+                console.warn('获取继承设置失败:', err);
+            }
+
+            await this.batchReminderDialog.show(uniqueBlockIds, defaultSettings, hierarchyMap.size > 0 ? hierarchyMap : undefined);
+        } catch (error) {
+            console.error('层级批量创建任务失败:', error);
+            showMessage(i18n("batchCreateFailed") || "批量创建任务失败", 3000, "error");
+        }
+    }
+
+    private async handleFlatBatchCreateFromSelection(blockElements: HTMLElement[]) {
+        try {
+            const blockIds: string[] = [];
+            for (const el of blockElements) {
+                const id = el.getAttribute("data-node-id");
+                if (!id) continue;
+
+                const dataType = el.getAttribute("data-type");
+                if (dataType === "NodeList") {
+                    const listItems = await this.getListItemBlockIds(id);
+                    blockIds.push(...listItems);
+                } else {
+                    blockIds.push(id);
+                }
+            }
+
+            const uniqueBlockIds = Array.from(new Set(blockIds));
+            if (uniqueBlockIds.length > 0) {
+                await this.handleMultipleBlocks(uniqueBlockIds);
+            }
+        } catch (error) {
+            console.error('批量创建任务失败:', error);
+            showMessage(i18n("batchCreateFailed") || "批量创建任务失败", 3000, "error");
+        }
+    }
+
+    private async handleMultipleBlocks(blockIds: string[], hierarchyMap?: Map<string, string[]>) {
         if (blockIds.length === 1) {
             // 单个块时使用普通对话框，应用自动检测设置
             const autoDetect = await this.getAutoDetectDateTimeEnabled();
