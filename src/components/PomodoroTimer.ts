@@ -9144,6 +9144,12 @@ document.body.classList.remove('docked-mode');
             initialStatusIcon = currentState.isCountUp ? '⏱' : '🍅';
         }
         const miniStyle = this.getMiniWindowStyle();
+        const styleMap = {
+            ring: 'mini-style-ring',
+            horizontal: 'mini-style-bar',
+            minimal: 'mini-style-minimal'
+        };
+        const initialStyleClass = styleMap[miniStyle] || 'mini-style-ring';
         const switchToCountdownText = i18n('switchToCountdown') || '切换到倒计时';
         const switchToCountUpText = i18n('switchToCountUp') || '切换到正计时';
         const workText = i18n('pomodoroWork') || '工作时间';
@@ -9731,7 +9737,6 @@ document.body.classList.remove('docked-mode');
         body.mini-mode.mini-style-bar .mini-task-title:hover {
             opacity: 0.95;
         }
-        }
         body.mini-mode.mini-style-bar .mini-time-label {
             flex: 0 0 auto;
             font-size: clamp(10px, calc(var(--mini-h) * 0.4), 20px);
@@ -9869,10 +9874,13 @@ document.body.classList.remove('docked-mode');
             background: #4CAF50;
         }
         body:not(.docked-mode) .progress-bar-container { display: none; }
+        .mini-time-label {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        }
     </style>
 </head>
 </head>
-<body class="${this.isDocked ? 'docked-mode' : ''} ${this.isMiniMode ? `mini-mode mini-style-${miniStyle}` : ''}">
+<body class="${this.isDocked ? 'docked-mode' : ''} ${this.isMiniMode ? `mini-mode ${initialStyleClass}` : ''}">
     <div class="custom-titlebar">
         <div class="titlebar-left">
             <button class="titlebar-btn" id="miniModeBtn" onclick="toggleMiniMode()" title="${miniModeTitle}">
