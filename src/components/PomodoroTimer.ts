@@ -7700,6 +7700,39 @@ export class PomodoroTimer {
             console.warn('[PomodoroTimer] Failed to restore/focus main window via electron:', e);
         }
 
+        // 先从数据库加载最新的、完整的属性（特别是项目 projectId 和分组 customGroupId），避免简化版的 reminder 丢失设置
+        if (this.plugin) {
+            try {
+                const isHabitCheck = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
+                if (isHabitCheck) {
+                    const habitData = await this.plugin.loadHabitData();
+                    const found = habitData[this.reminder.id];
+                    if (found) {
+                        this.reminder = Object.assign({}, found, this.reminder);
+                    }
+                } else {
+                    const reminderData = await this.plugin.loadReminderData();
+                    let found = reminderData[this.reminder.id];
+                    if (!found && this.reminder.originalId) {
+                        found = reminderData[this.reminder.originalId];
+                    }
+                    if (found) {
+                        // 我们保留 this.reminder 上的 runtime/instance 属性 (如 isRepeatInstance, instanceDate 等)
+                        // 并继承 database 中完整的字段值 (如 projectId, customGroupId 等)
+                        const merged = { ...found };
+                        for (const key of Object.keys(this.reminder)) {
+                            if (this.reminder[key] !== undefined) {
+                                merged[key] = this.reminder[key];
+                            }
+                        }
+                        this.reminder = merged;
+                    }
+                }
+            } catch (err) {
+                console.error('[PomodoroTimer] 加载完整任务/习惯数据失败:', err);
+            }
+        }
+
         const isHabit = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
 
         if (isHabit) {
