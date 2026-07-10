@@ -527,7 +527,7 @@ export class QuickReminderDialog {
     private singleDateDefaultRole: SingleDateRole = 'deadline'; // 单日期无关键词时默认识别目标
     private defaultProjectId?: string;
     private showKanbanStatus?: 'todo' | 'term' | 'none' = 'term'; // 看板状态显示模式，默认为 'term'
-    private defaultStatus?: 'short_term' | 'long_term' | 'doing' | 'todo'; // 默认任务状态
+    private defaultStatus?: 'short_term' | 'long_term' | 'doing' | 'todo' | 'completed'; // 默认任务状态
     private defaultCustomGroupId?: string | null;
     private defaultMilestoneId?: string;
     private defaultCustomReminderTime?: string;
@@ -1800,13 +1800,13 @@ export class QuickReminderDialog {
                 });
             }
 
-            // 填充任务状态（使用kanbanStatus）
-            if (this.reminder.kanbanStatus) {
+            // 填充任务状态（已完成任务优先显示已完成状态）
+            if (this.reminder.kanbanStatus || this.reminder?.completed === true) {
                 // 延迟一下确保选择器已渲染
                 setTimeout(() => {
                     this.updateKanbanStatusSelector();
                     const statusOptions = this.dialog.element.querySelectorAll('.task-status-option');
-                    const targetStatus = this.reminder.kanbanStatus;
+                    const targetStatus = this.reminder?.completed === true ? 'completed' : this.reminder.kanbanStatus;
 
                     statusOptions.forEach(option => {
                         if (option.getAttribute('data-status-type') === targetStatus) {
@@ -1820,6 +1820,8 @@ export class QuickReminderDialog {
                             (option as HTMLElement).style.background = 'transparent';
                         }
                     });
+                    // 选中完成后同步完成时间区域显示
+                    this.syncCompletedTimeVisibility();
                 }, 150);
             }
         }, 100);
@@ -2875,19 +2877,6 @@ export class QuickReminderDialog {
                                 </div>
                             </div>
                         </div>
-                        <!-- 完成时间显示和编辑 -->
-                        <div class="b3-form__group" id="quickCompletedTimeGroup" style="display: none;">
-                            <label class="b3-form__label">${i18n("completedAt")}</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <input type="datetime-local" id="quickCompletedTime" class="b3-text-field" style="flex: 1;" lang="${langTag}">
-                                <button type="button" id="quickSetCompletedNowBtn" class="b3-button b3-button--outline ariaLabel" aria-label="${i18n("setToNow")}">
-                                    <svg class="b3-button__icon"><use xlink:href="#iconClock"></use></svg>
-                                </button>
-                                <button type="button" id="quickClearCompletedBtn" class="b3-button b3-button--outline ariaLabel" aria-label="${i18n("clearCompletedTime")}">
-                                    <svg class="b3-button__icon"><use xlink:href="#iconTrashcan"></use></svg>
-                                </button>
-                            </div>
-                        </div>
                         <div class="b3-form__group">
                             <label class="b3-form__label">${i18n("customReminderTimes")}</label>
                             <div id="quickCustomTimeList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
@@ -3023,6 +3012,19 @@ export class QuickReminderDialog {
                         </div>
                         <!-- 任务状态渲染 -->
                         ${this.renderStatusSelector()}
+                        <!-- 完成时间显示和编辑 -->
+                        <div class="b3-form__group" id="quickCompletedTimeGroup" style="display: none;">
+                            <label class="b3-form__label">${i18n("completedAt")}</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="datetime-local" id="quickCompletedTime" class="b3-text-field" style="flex: 1;" lang="${langTag}">
+                                <button type="button" id="quickSetCompletedNowBtn" class="b3-button b3-button--outline ariaLabel" aria-label="${i18n("setToNow")}">
+                                    <svg class="b3-button__icon"><use xlink:href="#iconClock"></use></svg>
+                                </button>
+                                <button type="button" id="quickClearCompletedBtn" class="b3-button b3-button--outline ariaLabel" aria-label="${i18n("clearCompletedTime")}">
+                                    <svg class="b3-button__icon"><use xlink:href="#iconTrashcan"></use></svg>
+                                </button>
+                            </div>
+                        </div>
                         <div class="b3-form__group" id="quickHabitGroup">
                             <label class="b3-form__label">${i18n("bindHabit") || "绑定习惯"}</label>
                             <div class="custom-select" id="quickHabitSelectCustom" style="position: relative;">
@@ -3826,24 +3828,24 @@ export class QuickReminderDialog {
         const selector = this.dialog?.element?.querySelector('#quickStatusSelector') as HTMLElement;
         if (!selector) return;
 
-        // 过滤掉已完成状态，获取可用的状态列表
-        let availableStatuses = this.currentKanbanStatuses.filter(status => status.id !== 'completed');
+        // 获取可用的状态列表（包含已完成状态）
+        let availableStatuses = [...this.currentKanbanStatuses];
 
         // 如果没有可用状态，使用默认状态
         if (availableStatuses.length === 0) {
             const projectManager = ProjectManager.getInstance(this.plugin);
             this.currentKanbanStatuses = projectManager.getDefaultKanbanStatuses();
-            availableStatuses = this.currentKanbanStatuses.filter(status => status.id !== 'completed');
+            availableStatuses = [...this.currentKanbanStatuses];
         }
 
         // 如果选择了自定义分组，按分组可见状态过滤
         availableStatuses = this.filterKanbanStatusesBySelectedGroup(availableStatuses);
 
-        // 获取当前选中的状态
+        // 获取当前选中的状态（已完成任务优先显示已完成状态）
         const currentSelected = selector.querySelector('.task-status-option.selected') as HTMLElement;
         let currentStatusId =
             currentSelected?.getAttribute('data-status-type') ||
-            this.reminder?.kanbanStatus ||
+            (this.reminder?.completed === true ? 'completed' : this.reminder?.kanbanStatus) ||
             this.defaultStatus ||
             'doing';
 
@@ -3903,8 +3905,74 @@ export class QuickReminderDialog {
                 if (status) {
                     target.style.background = (status.color ? status.color + '20' : 'var(--b3-theme-background)');
                 }
+                // 同步完成时间区域的显示
+                this.syncCompletedTimeVisibility();
             });
         });
+
+        // 初始化完成时间区域显示
+        this.syncCompletedTimeVisibility();
+    }
+
+    /**
+     * 根据当前选中的任务状态同步完成时间区域的显示与默认值
+     */
+    private syncCompletedTimeVisibility() {
+        const selector = this.dialog?.element?.querySelector('#quickStatusSelector') as HTMLElement;
+        const completedTimeGroup = this.dialog?.element?.querySelector('#quickCompletedTimeGroup') as HTMLElement;
+        const completedTimeInput = this.dialog?.element?.querySelector('#quickCompletedTime') as HTMLInputElement;
+        if (!selector || !completedTimeGroup || !completedTimeInput) {
+            return;
+        }
+
+        // dateOnly 模式下不干预完成时间区域的显示（由 applyDateOnlyMode 控制）
+        if (this.dateOnly) {
+            return;
+        }
+
+        const selected = selector.querySelector('.task-status-option.selected') as HTMLElement;
+        const statusId = selected?.getAttribute('data-status-type');
+        if (statusId === 'completed') {
+            completedTimeGroup.style.display = '';
+            if (!completedTimeInput.value) {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                completedTimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+        } else {
+            completedTimeGroup.style.display = 'none';
+        }
+    }
+
+    /**
+     * 读取完成时间输入框的值，转换为本地时间格式；若未填写则返回当前时间
+     */
+    private getCompletedTimeInputValue(): string {
+        const completedTimeInput = this.dialog?.element?.querySelector('#quickCompletedTime') as HTMLInputElement;
+        if (completedTimeInput && completedTimeInput.value) {
+            try {
+                const completedDate = new Date(completedTimeInput.value);
+                const year = completedDate.getFullYear();
+                const month = String(completedDate.getMonth() + 1).padStart(2, '0');
+                const day = String(completedDate.getDate()).padStart(2, '0');
+                const hours = String(completedDate.getHours()).padStart(2, '0');
+                const minutes = String(completedDate.getMinutes()).padStart(2, '0');
+                return `${year}-${month}-${day} ${hours}:${minutes}`;
+            } catch (error) {
+                console.error('解析完成时间失败:', error);
+            }
+        }
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}`;
     }
 
     private async renderCategorySelector() {
@@ -6686,7 +6754,7 @@ export class QuickReminderDialog {
             ? (autoCheckInOptionSelect?.selectedOptions?.[0]?.getAttribute('data-emoji') || undefined)
             : undefined;
         const selectableStatuses = this.filterKanbanStatusesBySelectedGroup(
-            this.currentKanbanStatuses.filter(s => s.id !== 'completed')
+            [...this.currentKanbanStatuses]
         );
 
         // 获取选中的kanbanStatus，如果没有选中则使用第一个可用状态
@@ -7127,6 +7195,14 @@ export class QuickReminderDialog {
                         reminder.kanbanStatus = kanbanStatus;
                         reminder.updatedAt = new Date().toISOString();
 
+                        // 根据状态同步完成标记
+                        if (kanbanStatus === 'completed') {
+                            reminder.completed = true;
+                        } else {
+                            reminder.completed = false;
+                            delete reminder.completedTime;
+                        }
+
                         // 保存完成时间（如果任务已完成）
                         if (reminder.completed) {
                             const completedTimeInput = this.dialog.element.querySelector('#quickCompletedTime') as HTMLInputElement;
@@ -7378,6 +7454,15 @@ export class QuickReminderDialog {
 
                     // 设置看板状态
                     reminder.kanbanStatus = kanbanStatus;
+
+                    // 根据状态同步完成标记
+                    if (kanbanStatus === 'completed') {
+                        reminder.completed = true;
+                        reminder.completedTime = this.getCompletedTimeInputValue();
+                    } else {
+                        reminder.completed = false;
+                        delete reminder.completedTime;
+                    }
 
                     // 初始化字段级已提醒标志
                     reminder.notifiedTime = false;
