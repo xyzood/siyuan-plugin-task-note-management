@@ -180,7 +180,7 @@ export function createMilestoneSection(view: any, title: string, groupId: string
                 });
             }
             if (ms.archived) {
-                name.style.textDecoration = (name.style.textDecoration ? name.style.textDecoration + ' ' : '') + 'line-through';
+                name.style.textDecoration = ms.blockId ? 'underline line-through dotted' : 'line-through';
                 name.style.opacity = '0.6';
             }
             info.appendChild(name);
