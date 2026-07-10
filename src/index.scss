@@ -14,7 +14,7 @@
 
     // 批量操作面板样式
     .batch-operations-panel {
-        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        background: linear-gradient(135deg, var(--b3-theme-background), var(--b3-theme-surface-light));
         border: 1px solid var(--b3-theme-primary-light);
         border-radius: 12px;
         margin-bottom: 20px;
@@ -74,7 +74,7 @@
 
     .batch-operations-content {
         padding: 20px;
-        background: white;
+        background: var(--b3-theme-background);
         animation: slideDown 0.3s ease;
     }
 
@@ -694,30 +694,7 @@
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     }
 
-    // 加载动画
-    .block-item {
-        animation: slideInUp 0.3s ease forwards;
-    }
-
-    .block-item:nth-child(1) {
-        animation-delay: 0ms;
-    }
-
-    .block-item:nth-child(2) {
-        animation-delay: 50ms;
-    }
-
-    .block-item:nth-child(3) {
-        animation-delay: 100ms;
-    }
-
-    .block-item:nth-child(4) {
-        animation-delay: 150ms;
-    }
-
-    .block-item:nth-child(5) {
-        animation-delay: 200ms;
-    }
+    // 加载动画 (已取消闪烁动画)
 
     @keyframes slideInUp {
         from {

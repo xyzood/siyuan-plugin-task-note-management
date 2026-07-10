@@ -1498,10 +1498,7 @@ class SmartBatchDialog {
 
     private batchApplyDate(dialog: Dialog) {
         const dateInput = dialog.element.querySelector('#batchDateInput') as HTMLInputElement;
-        if (!dateInput.value) {
-            showMessage(i18n("pleaseSelectDate"));
-            return;
-        }
+        const dateValue = dateInput.value ? dateInput.value.trim() : '';
 
         const selectedBlocks = this.getSelectedBlockIds(dialog);
         if (selectedBlocks.length === 0) {
@@ -1512,7 +1509,14 @@ class SmartBatchDialog {
         selectedBlocks.forEach(blockId => {
             const setting = this.blockSettings.get(blockId);
             if (setting) {
-                setting.date = dateInput.value;
+                setting.date = dateValue;
+                if (!dateValue) {
+                    setting.time = '';
+                    setting.hasTime = false;
+                    setting.endDate = '';
+                    setting.endTime = '';
+                    setting.hasEndTime = false;
+                }
             }
         });
 
@@ -1633,13 +1637,7 @@ class SmartBatchDialog {
                 return depthA - depthB;
             });
 
-            // 创建单个任务的通用逻辑
             const createReminder = async (blockId: string, setting: BlockSetting, parentReminderId?: string) => {
-                if (!setting.date) {
-                    failureCount++;
-                    return;
-                }
-
                 const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 const block = blockMap[blockId];
 
@@ -1654,14 +1652,16 @@ class SmartBatchDialog {
 
                 // 更新字段
                 reminder.title = setting.cleanTitle;
-                reminder.date = setting.date;
+                if (setting.date) {
+                    reminder.date = setting.date;
+                }
                 reminder.priority = setting.priority;
                 reminder.categoryId = setting.categoryId || undefined;
                 reminder.projectId = setting.projectId || undefined;
                 if (setting.customGroupId) reminder.customGroupId = setting.customGroupId;
                 if (setting.milestoneId) reminder.milestoneId = setting.milestoneId;
                 if (setting.kanbanStatus) reminder.kanbanStatus = setting.kanbanStatus;
-                reminder.repeat = setting.repeatConfig?.enabled ? setting.repeatConfig : undefined;
+                reminder.repeat = (setting.repeatConfig?.enabled && setting.date) ? setting.repeatConfig : undefined;
 
                 // 设置父任务关联
                 if (parentReminderId) {
