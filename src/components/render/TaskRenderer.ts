@@ -1163,6 +1163,19 @@ export class TaskRenderer {
                 });
                 const imgTags = noteEl.querySelectorAll('img');
                 imgTags.forEach(img => {
+                    // Optimize image display in notes: automatic small thumbnail layout
+                    img.style.setProperty('max-width', '150px', 'important');
+                    img.style.setProperty('max-height', '60px', 'important');
+                    img.style.setProperty('width', 'auto', 'important');
+                    img.style.setProperty('height', 'auto', 'important');
+                    img.style.setProperty('object-fit', 'contain', 'important');
+                    img.style.setProperty('border-radius', '4px', 'important');
+                    img.style.setProperty('display', 'inline-block', 'important');
+                    img.style.setProperty('vertical-align', 'middle', 'important');
+                    img.style.setProperty('margin', '4px 8px 4px 0', 'important');
+                    img.style.setProperty('border', '1px solid var(--b3-border-color)', 'important');
+                    img.style.setProperty('background-color', 'var(--b3-theme-surface)', 'important');
+
                     const src = img.getAttribute('src');
                     if (src && src.startsWith('/data/storage/petal/siyuan-plugin-task-note-management/assets/')) {
                         import('../../api').then(({ getFileBlob }) => {
@@ -1195,6 +1208,14 @@ export class TaskRenderer {
                 transition: background-color 0.2s, color 0.2s;
                 position: relative;
             `;
+
+            // If the note contains images, adjust container styles to display them completely
+            const hasImages = noteEl.querySelector('img') !== null;
+            if (hasImages) {
+                noteEl.style.maxHeight = 'none';
+                noteEl.style.display = 'block';
+                noteEl.style.webkitLineClamp = 'unset';
+            }
 
             noteEl.addEventListener('click', (e) => {
                 e.stopPropagation();
