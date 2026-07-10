@@ -499,13 +499,13 @@ export class RepeatSettingsDialog {
 
     private createWeekdaySelector(): string {
         const weekdays = [
-            { value: 0, label: i18n("sunday"), short: i18n("sun") },
             { value: 1, label: i18n("monday"), short: i18n("mon") },
             { value: 2, label: i18n("tuesday"), short: i18n("tue") },
             { value: 3, label: i18n("wednesday"), short: i18n("wed") },
             { value: 4, label: i18n("thursday"), short: i18n("thu") },
             { value: 5, label: i18n("friday"), short: i18n("fri") },
-            { value: 6, label: i18n("saturday"), short: i18n("sat") }
+            { value: 6, label: i18n("saturday"), short: i18n("sat") },
+            { value: 0, label: i18n("sunday"), short: i18n("sun") }
         ];
 
         // 如果没有设置weekDays但有startDate，自动选中起始日期的星期
