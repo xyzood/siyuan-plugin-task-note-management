@@ -26,6 +26,7 @@ import { getLocalTimeString, getLocalDateString, getLocalDateTimeString, compare
 import { i18n, setPluginInstance } from "./pluginInstance";
 import { SettingUtils } from "./libs/setting-utils";
 import { PomodoroRecordManager } from "./utils/pomodoroRecord";
+import { HabitGroupManager } from "./utils/habitGroupManager";
 import { NotificationDialog } from "./components/NotificationDialog";
 import { DocumentReminderDialog } from "./components/DocumentReminderDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
@@ -1471,32 +1472,33 @@ export default class ReminderPlugin extends Plugin {
             const onDataUpdated = async (params: any) => {
                 const path = params?.path;
                 console.log('[plugin] data updated from kernel:', path);
+                const normalizedPath = typeof path === 'string' ? path.replace(/\\/g, '/') : '';
                 
                 try {
-                    if (path === 'categories.json') {
+                    if (normalizedPath === 'categories.json') {
                         await this.loadCategories(true);
                         await CategoryManager.getInstance(this).loadCategories();
                         window.dispatchEvent(new CustomEvent('projectUpdated'));
-                    } else if (path === 'project.json') {
+                    } else if (normalizedPath === 'project.json') {
                         await this.loadProjectData(true);
                         await ProjectManager.getInstance(this).loadProjects();
                         window.dispatchEvent(new CustomEvent('projectUpdated'));
-                    } else if (path === 'project_folders.json') {
+                    } else if (normalizedPath === 'project_folders.json') {
                         await ProjectFolderManager.getInstance(this).loadFolders();
                         window.dispatchEvent(new CustomEvent('projectUpdated'));
-                    } else if (path === 'project_status.json') {
+                    } else if (normalizedPath === 'project_status.json') {
                         await StatusManager.getInstance(this).loadStatuses();
                         window.dispatchEvent(new CustomEvent('projectUpdated'));
-                    } else if (path === 'reminder.json') {
+                    } else if (normalizedPath === 'reminder.json') {
                         await this.loadReminderData(true);
                         window.dispatchEvent(new CustomEvent('reminderUpdated'));
-                    } else if (path === 'habit.json' || (typeof path === 'string' && path.startsWith('habitCheckin/'))) {
+                    } else if (normalizedPath === 'habit.json' || normalizedPath.startsWith('habitCheckin/')) {
                         await this.loadHabitData(true);
                         await this.loadHabitGroupData(true);
                         await HabitGroupManager.getInstance().initialize(true);
                         window.dispatchEvent(new CustomEvent('habitUpdated'));
                         window.dispatchEvent(new CustomEvent('reminderUpdated'));
-                    } else if (typeof path === 'string' && path.startsWith('pomodoroRecords/')) {
+                    } else if (normalizedPath.startsWith('pomodoroRecords/')) {
                         await this.loadPomodoroRecords(true);
                         await PomodoroRecordManager.getInstance(this).reloadRecords();
                         window.dispatchEvent(new CustomEvent('reminderUpdated'));

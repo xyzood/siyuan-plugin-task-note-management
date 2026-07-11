@@ -54,6 +54,7 @@ export class HabitPanel {
     private groupManager: HabitGroupManager;
     private habitUpdatedHandler: () => void;
     private reminderUpdatedHandler: () => void;
+    private loadHabitsTimer: any = null;
     private collapsedGroups: Set<string> = new Set();
     // 拖拽状态
     private draggingHabitId: string | null = null;
@@ -70,11 +71,20 @@ export class HabitPanel {
         this.groupManager = HabitGroupManager.getInstance();
         this.pomodoroRecordManager = PomodoroRecordManager.getInstance(this.plugin);
 
+        const debounceLoad = () => {
+            if (this.loadHabitsTimer) {
+                clearTimeout(this.loadHabitsTimer);
+            }
+            this.loadHabitsTimer = setTimeout(() => {
+                this.loadHabits();
+            }, 50);
+        };
+
         this.habitUpdatedHandler = () => {
-            this.loadHabits();
+            debounceLoad();
         };
         this.reminderUpdatedHandler = () => {
-            this.loadHabits();
+            debounceLoad();
         };
 
         this.initializeAsync();
@@ -95,6 +105,9 @@ export class HabitPanel {
 
     public destroy() {
         this.saveCollapseStates();
+        if (this.loadHabitsTimer) {
+            clearTimeout(this.loadHabitsTimer);
+        }
         if (this.habitUpdatedHandler) {
             window.removeEventListener('habitUpdated', this.habitUpdatedHandler);
         }

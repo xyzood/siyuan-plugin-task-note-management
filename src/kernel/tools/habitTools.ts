@@ -11,15 +11,17 @@ import {
     assertString,
     assertDateString,
     assertOptionalString,
+    assertNumber,
     assertOptionalNumber,
     assertOptionalEnum,
     assertOptionalDateString,
+    assertObject,
     assertOptionalObject,
     assertOptionalArray,
     assertOptionalBoolean,
 } from "../utils/validation";
 
-const HABIT_ACTIONS = ["list", "create", "update", "get", "get_checkins", "upsert_checkins"] as const;
+const HABIT_ACTIONS = ["search_habit", "create_habit", "update_habit", "get_checkins", "upsert_checkins"] as const;
 type HabitAction = typeof HABIT_ACTIONS[number];
 
 export function createHabitTool(habitManager: HabitManager): ToolDefinition {
@@ -27,7 +29,7 @@ export function createHabitTool(habitManager: HabitManager): ToolDefinition {
         name: "habit",
         config: {
             title: "习惯管理",
-            description: "习惯管理操作。Actions: list(列出习惯), create(创建习惯), update(修改习惯), get(习惯详情), get_checkins(打卡记录), upsert_checkins(创建/更新打卡)。",
+            description: "习惯管理操作。Actions: search_habit(搜索/列出习惯), create_habit(创建习惯), update_habit(修改习惯), get_checkins(打卡记录), upsert_checkins(创建/更新打卡)。",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -36,9 +38,10 @@ export function createHabitTool(habitManager: HabitManager): ToolDefinition {
                         description: "操作类型",
                         enum: HABIT_ACTIONS,
                     },
-                    // list
+                    // search_habit
                     activeOnly: { type: "boolean", description: "仅返回未放弃的习惯" },
-                    // get / update / get_checkins / upsert_checkins
+                    keyword: { type: "string", description: "关键词，匹配习惯名称" },
+                    // update / get_checkins / upsert_checkins
                     id: { type: "string", description: "习惯 ID" },
                     // create / update
                     title: { type: "string", description: "习惯名称" },
@@ -90,18 +93,26 @@ export function createHabitTool(habitManager: HabitManager): ToolDefinition {
             const action = assertEnum(input.action, "action", HABIT_ACTIONS);
 
             switch (action) {
-                case "list": {
+                case "search_habit": {
                     const activeOnly = assertOptionalBoolean(input.activeOnly, "activeOnly");
-                    const habits = await habitManager.listHabits(activeOnly ?? false);
-                    return successResponse(habits);
+                    let habits = await habitManager.listHabits(activeOnly ?? false);
+                    if (input.keyword) {
+                        const kw = assertString(input.keyword, "keyword").toLowerCase();
+                        habits = habits.filter((h) => h.title.toLowerCase().includes(kw));
+                    }
+                    const result = habits.map((h) => {
+                        const { checkIns, hasNotify, totalCheckIns, ...base } = h as any;
+                        return base;
+                    });
+                    return successResponse(result);
                 }
 
-                case "create": {
+                case "create_habit": {
                     const habit = await habitManager.createHabit({
                         title: assertString(input.title, "title"),
-                        target: assertOptionalNumber(input.target, "target"),
-                        goalType: assertOptionalEnum(input.goalType, "goalType", ["count", "pomodoro"]),
-                        frequency: assertOptionalObject(input.frequency, "frequency") as any,
+                        target: assertNumber(input.target, "target"),
+                        goalType: assertEnum(input.goalType, "goalType", ["count", "pomodoro"]),
+                        frequency: assertObject(input.frequency, "frequency") as any,
                         startDate: assertDateString(input.startDate, "startDate"),
                         endDate: assertOptionalDateString(input.endDate, "endDate"),
                         icon: assertOptionalString(input.icon, "icon"),
@@ -110,7 +121,7 @@ export function createHabitTool(habitManager: HabitManager): ToolDefinition {
                     return successResponse(habit);
                 }
 
-                case "update": {
+                case "update_habit": {
                     const id = assertString(input.id, "id");
                     const habit = await habitManager.updateHabit(id, {
                         title: assertOptionalString(input.title, "title"),
@@ -123,13 +134,6 @@ export function createHabitTool(habitManager: HabitManager): ToolDefinition {
                         color: assertOptionalString(input.color, "color"),
                         abandoned: assertOptionalBoolean(input.abandoned, "abandoned"),
                     });
-                    if (!habit) return errorResponse(`习惯不存在: ${id}`);
-                    return successResponse(habit);
-                }
-
-                case "get": {
-                    const id = assertString(input.id, "id");
-                    const habit = await habitManager.getHabit(id);
                     if (!habit) return errorResponse(`习惯不存在: ${id}`);
                     return successResponse(habit);
                 }
