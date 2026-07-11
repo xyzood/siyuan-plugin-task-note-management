@@ -6,10 +6,13 @@
       "Bash(npm run build:*)",
       "Bash(npx tsc:*)",
       "Bash(pnpm tsc:*)",
-      "Bash(pnpm run build:*)"
+      "Bash(pnpm run build:*)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm build:kernel)",
+      "Bash(pnpm build *)"
     ],
     "deny": [],
     "ask": [],
-    "defaultMode":"acceptEdits"
+    "defaultMode": "acceptEdits"
   }
 }

@@ -1,4 +1,4 @@
-import { getAllReminders } from "./icsSubscription";
+import { getEnvironmentSafeAllReminders } from "./reminderLoadUtils";
 import { getLogicalDateString, compareDateStrings, getLocalDateString, getLocalDateTimeString } from "./dateUtils";
 import { generateRepeatInstances } from "./repeatUtils";
 import { isOpenEndedStartDateTask, shouldTreatStartDateOnlyAsOverdue } from "./startDateOverdue";
@@ -12,7 +12,7 @@ export class ReminderTaskLogic {
         const today = getLogicalDateString();
         const settings = await plugin.loadSettings?.();
         const holidayData = await plugin.loadHolidayData?.() || {};
-        const reminderData = await getAllReminders(plugin, undefined, false, 'sidebar');
+        const reminderData = await getEnvironmentSafeAllReminders(plugin, undefined, 'sidebar');
         const allReminders = this.generateAllRemindersWithInstances(reminderData, today, settings, holidayData);
 
         const reminderMap = new Map<string, any>();

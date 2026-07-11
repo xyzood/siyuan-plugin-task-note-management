@@ -94,6 +94,8 @@ export class ProjectManager {
                 throw new Error('ProjectManager需要plugin实例进行初始化');
             }
             ProjectManager.instance = new ProjectManager(plugin);
+        } else if (plugin && !ProjectManager.instance.plugin) {
+            ProjectManager.instance.plugin = plugin;
         }
         return ProjectManager.instance;
     }
@@ -112,7 +114,9 @@ export class ProjectManager {
             }
             this.projectColors[projectId] = color;
             // 触发项目颜色更新事件，通知日历视图等组件更新颜色缓存
-            window.dispatchEvent(new CustomEvent('projectColorUpdated'));
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('projectColorUpdated'));
+            }
         } catch (error) {
             console.error('Failed to set project color:', error);
             throw error;
@@ -269,9 +273,9 @@ export class ProjectManager {
         }
     }
 
-    public async loadProjects() {
+    public async loadProjects(forceUpdate: boolean = false) {
         try {
-            const projectData = await this.plugin.loadProjectData() || {};
+            const projectData = await this.plugin.loadProjectData(forceUpdate) || {};
             if (projectData && typeof projectData === 'object') {
                 let statuses = this.statusManager.getStatuses();
                 if (!statuses || statuses.length === 0) {
@@ -331,7 +335,8 @@ export class ProjectManager {
                         categoryId: project.categoryId,
                         folderId: project.folderId,
                         isSubscription: project.isSubscription,
-                        subscriptionId: project.subscriptionId
+                        subscriptionId: project.subscriptionId,
+                        customGroups: project.customGroups || []
                     }));
 
                 // 从项目中提取颜色到 projectColors
@@ -1034,5 +1039,136 @@ export class ProjectManager {
      */
     public generateKanbanStatusId(): string {
         return `status_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    private initialized = false;
+
+    /**
+     * MCP kernel compat: check project existence
+     */
+    public async projectExists(id: string): Promise<boolean> {
+        await this.initialize();
+        return this.projects.some(p => p.id === id);
+    }
+
+    /**
+     * MCP kernel compat: save projects to storage helper
+     */
+    private async saveProjects(): Promise<void> {
+        const projectData = await this.plugin.loadProjectData() || {};
+        const currentIds = new Set(this.projects.map(p => p.id));
+        Object.keys(projectData).forEach(id => {
+            if (!id.startsWith('_') && !currentIds.has(id)) {
+                delete projectData[id];
+            }
+        });
+        this.projects.forEach(project => {
+            const storageProject = { ...project };
+            if (storageProject.name !== undefined) {
+                storageProject.title = storageProject.name;
+            }
+            projectData[project.id] = storageProject;
+        });
+        await this.plugin.saveProjectData(projectData);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('projectUpdated'));
+        }
+    }
+
+    /**
+     * MCP kernel compat: create project
+     */
+    public async createProject(input: {
+        name: string;
+        status?: string;
+        color?: string;
+        priority?: "high" | "medium" | "low" | "none";
+        folderId?: string;
+        categoryId?: string;
+        startDate?: string;
+    }): Promise<Project> {
+        await this.initialize();
+        const id = `project_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const now = new Date().toISOString();
+
+        const project: Project = {
+            id,
+            name: input.name,
+            status: input.status ?? "active",
+            color: input.color ?? "#4f46e5",
+            priority: input.priority ?? "none",
+            createdTime: now,
+            updatedTime: now,
+            sort: 0,
+        };
+
+        if (input.folderId) project.folderId = input.folderId;
+        if (input.categoryId) project.categoryId = input.categoryId;
+        if (input.startDate) project.startDate = input.startDate;
+
+        this.projects.push(project);
+        await this.saveProjects();
+        return project;
+    }
+
+    /**
+     * MCP kernel compat: update project
+     */
+    public async updateProject(id: string, input: {
+        name?: string;
+        status?: string;
+        color?: string;
+        priority?: "high" | "medium" | "low" | "none";
+        folderId?: string;
+        categoryId?: string;
+        startDate?: string;
+    }): Promise<Project | undefined> {
+        await this.initialize();
+        const index = this.projects.findIndex(p => p.id === id);
+        if (index === -1) return undefined;
+
+        const updated = { ...this.projects[index] };
+        if (input.name !== undefined) updated.name = input.name;
+        if (input.status !== undefined) updated.status = input.status;
+        if (input.color !== undefined) updated.color = input.color;
+        if (input.priority !== undefined) updated.priority = input.priority;
+        if (input.folderId !== undefined) updated.folderId = input.folderId;
+        if (input.categoryId !== undefined) updated.categoryId = input.categoryId;
+        if (input.startDate !== undefined) updated.startDate = input.startDate;
+
+        updated.updatedTime = new Date().toISOString();
+        this.projects[index] = updated;
+        await this.saveProjects();
+        return updated;
+    }
+
+    /**
+     * MCP kernel compat: delete project
+     */
+    public async deleteProject(id: string): Promise<boolean> {
+        await this.initialize();
+        const index = this.projects.findIndex(p => p.id === id);
+        if (index === -1) return false;
+        this.projects.splice(index, 1);
+        await this.saveProjects();
+        return true;
+    }
+
+    /**
+     * MCP kernel compat: update projects folder ID
+     */
+    public async updateProjectsFolder(folderId: string, newFolderId: string = ""): Promise<void> {
+        await this.initialize();
+        let changed = false;
+        this.projects.forEach((project) => {
+            if (project.folderId === folderId) {
+                project.folderId = newFolderId;
+                project.updatedTime = new Date().toISOString();
+                changed = true;
+            }
+        });
+        if (changed) {
+            await this.saveProjects();
+        }
     }
 }

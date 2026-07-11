@@ -118,6 +118,8 @@ export class ProjectFolderManager {
     public static getInstance(plugin?: any): ProjectFolderManager {
         if (!ProjectFolderManager.instance) {
             ProjectFolderManager.instance = new ProjectFolderManager(plugin);
+        } else if (plugin && !ProjectFolderManager.instance.plugin) {
+            ProjectFolderManager.instance.plugin = plugin;
         }
         return ProjectFolderManager.instance;
     }
@@ -306,7 +308,9 @@ export class ProjectFolderManager {
                 if (changed) {
                     await this.plugin.saveProjectData(projectData);
                     // 触发项目更新事件
-                    window.dispatchEvent(new CustomEvent('projectUpdated'));
+                    if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('projectUpdated'));
+                    }
                 }
             }
         } catch (error) {
@@ -391,5 +395,57 @@ export class ProjectFolderManager {
         this.folders = this.sortFoldersForTree(this.folders);
         await this.saveFolders();
         return true;
+    }
+
+    /**
+     * MCP kernel compat: list project groups
+     */
+    public async listProjectGroups(): Promise<ProjectFolder[]> {
+        await this.initialize();
+        return this.getFolders();
+    }
+
+    /**
+     * MCP kernel compat: check folder existence
+     */
+    public async folderExists(id: string): Promise<boolean> {
+        await this.initialize();
+        return !!this.getFolderById(id);
+    }
+
+    /**
+     * MCP kernel compat: create project group
+     */
+    public async createProjectGroup(input: { name: string; icon?: string; parentId?: string }): Promise<ProjectFolder> {
+        const folder = await this.addFolder(input.name, input.icon, input.parentId);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('projectUpdated'));
+        }
+        return folder;
+    }
+
+    /**
+     * MCP kernel compat: update project group
+     */
+    public async updateProjectGroup(id: string, input: { name?: string; icon?: string; parentId?: string }): Promise<ProjectFolder | undefined> {
+        const success = await this.updateFolder(id, input);
+        if (success) {
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('projectUpdated'));
+            }
+            return this.getFolderById(id);
+        }
+        return undefined;
+    }
+
+    /**
+     * MCP kernel compat: delete project group
+     */
+    public async deleteProjectGroup(id: string): Promise<boolean> {
+        const success = await this.deleteFolder(id);
+        if (success && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('projectUpdated'));
+        }
+        return success;
     }
 }

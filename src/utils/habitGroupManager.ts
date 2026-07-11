@@ -23,8 +23,8 @@ export class HabitGroupManager {
         return HabitGroupManager.instance;
     }
 
-    async initialize() {
-        if (this.initialized) return;
+    async initialize(force: boolean = false) {
+        if (this.initialized && !force) return;
 
         try {
             // 使用插件实例加载数据

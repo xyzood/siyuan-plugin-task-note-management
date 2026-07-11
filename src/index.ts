@@ -1466,6 +1466,53 @@ export default class ReminderPlugin extends Plugin {
         await this.categoryManager.initialize();
         await ProjectManager.getInstance(this).initialize();
 
+        // 监听来自内核的更新通知以触发前端数据重载及UI更新
+        if (this.kernel?.rpc) {
+            const onDataUpdated = async (params: any) => {
+                const path = params?.path;
+                console.log('[plugin] data updated from kernel:', path);
+                
+                try {
+                    if (path === 'categories.json') {
+                        await this.loadCategories(true);
+                        await CategoryManager.getInstance(this).loadCategories();
+                        window.dispatchEvent(new CustomEvent('projectUpdated'));
+                    } else if (path === 'project.json') {
+                        await this.loadProjectData(true);
+                        await ProjectManager.getInstance(this).loadProjects();
+                        window.dispatchEvent(new CustomEvent('projectUpdated'));
+                    } else if (path === 'project_folders.json') {
+                        await ProjectFolderManager.getInstance(this).loadFolders();
+                        window.dispatchEvent(new CustomEvent('projectUpdated'));
+                    } else if (path === 'project_status.json') {
+                        await StatusManager.getInstance(this).loadStatuses();
+                        window.dispatchEvent(new CustomEvent('projectUpdated'));
+                    } else if (path === 'reminder.json') {
+                        await this.loadReminderData(true);
+                        window.dispatchEvent(new CustomEvent('reminderUpdated'));
+                    } else if (path === 'habit.json' || (typeof path === 'string' && path.startsWith('habitCheckin/'))) {
+                        await this.loadHabitData(true);
+                        await this.loadHabitGroupData(true);
+                        await HabitGroupManager.getInstance().initialize(true);
+                        window.dispatchEvent(new CustomEvent('habitUpdated'));
+                        window.dispatchEvent(new CustomEvent('reminderUpdated'));
+                    } else if (typeof path === 'string' && path.startsWith('pomodoroRecords/')) {
+                        await this.loadPomodoroRecords(true);
+                        await PomodoroRecordManager.getInstance(this).reloadRecords();
+                        window.dispatchEvent(new CustomEvent('reminderUpdated'));
+                    }
+                } catch (e) {
+                    console.error('[plugin] failed to process data update from kernel:', e);
+                }
+            };
+            this.kernel.rpc.bind('data-updated', onDataUpdated);
+            this.addCleanup(() => {
+                if (this.kernel?.rpc) {
+                    this.kernel.rpc.unbind('data-updated', onDataUpdated);
+                }
+            });
+        }
+
 
         // 添加用户交互监听器来启用音频
         this.enableAudioOnUserInteraction();

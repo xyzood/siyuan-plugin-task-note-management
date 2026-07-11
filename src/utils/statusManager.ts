@@ -49,6 +49,8 @@ export class StatusManager {
     public static getInstance(plugin?: any): StatusManager {
         if (!StatusManager.instance) {
             StatusManager.instance = new StatusManager(plugin);
+        } else if (plugin && !StatusManager.instance.plugin) {
+            StatusManager.instance.plugin = plugin;
         }
         return StatusManager.instance;
     }

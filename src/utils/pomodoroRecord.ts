@@ -1341,4 +1341,100 @@ export class PomodoroRecordManager {
 
         return total;
     }
+
+    /**
+     * MCP kernel compat: reload records
+     */
+    public async reloadRecords() {
+        await this.loadRecords(true);
+    }
+
+    /**
+     * MCP kernel compat: get focuses by time range
+     */
+    public getFocusesByTime(startDate: string, endDate: string, eventId?: string): PomodoroSession[] {
+        const results: PomodoroSession[] = [];
+        Object.values(this.records).forEach((record) => {
+            if (record.date < startDate || record.date > endDate) return;
+            if (record.sessions) {
+                record.sessions.forEach((session) => {
+                    if (eventId && session.eventId !== eventId) return;
+                    results.push(session);
+                });
+            }
+        });
+        return results.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    }
+
+    /**
+     * MCP kernel compat: get focus by ID
+     */
+    public getFocusById(sessionId: string): { session: PomodoroSession; date: string } | undefined {
+        const loc = this.findSessionLocation(sessionId);
+        if (loc) {
+            return { session: loc.session, date: loc.date };
+        }
+        return undefined;
+    }
+
+    /**
+     * MCP kernel compat: create focus
+     */
+    public async createFocus(input: {
+        type: 'work' | 'shortBreak' | 'longBreak';
+        eventId?: string;
+        eventTitle?: string;
+        startTime: string;
+        endTime: string;
+        duration?: number;
+        plannedDuration?: number;
+        completed?: boolean;
+        note?: string;
+    }): Promise<PomodoroSession> {
+        const startTimeObj = new Date(input.startTime);
+        const endTimeObj = new Date(input.endTime);
+        const duration = input.duration ?? Math.max(0, Math.round((endTimeObj.getTime() - startTimeObj.getTime()) / 60000));
+        const session: PomodoroSession = {
+            id: `focus_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            type: input.type,
+            eventId: input.eventId || '',
+            eventTitle: input.eventTitle || '',
+            startTime: input.startTime,
+            endTime: input.endTime,
+            duration,
+            plannedDuration: input.plannedDuration ?? 25,
+            completed: input.completed ?? true,
+            note: input.note || '',
+        };
+        const date = getLogicalDateString(startTimeObj);
+        if (!this.records[date]) {
+            this.records[date] = {
+                date,
+                workSessions: 0,
+                totalWorkTime: 0,
+                totalBreakTime: 0,
+                sessions: []
+            };
+        }
+        this.records[date].sessions.push(session);
+        this.recalculateRecordTotals(date);
+        await this.saveRecords([date]);
+        return session;
+    }
+
+    /**
+     * MCP kernel compat: delete focus
+     */
+    public async deleteFocus(sessionId: string): Promise<boolean> {
+        return this.deleteSession(sessionId);
+    }
+
+    /**
+     * MCP kernel compat: update focus
+     */
+    public async updateFocus(session: PomodoroSession): Promise<boolean> {
+        return this.updateSession(session);
+    }
 }
+
+export { PomodoroRecordManager as PomodoroManager };

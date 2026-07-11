@@ -48,6 +48,8 @@ export class CategoryManager {
     public static getInstance(plugin?: any): CategoryManager {
         if (!CategoryManager.instance) {
             CategoryManager.instance = new CategoryManager(plugin);
+        } else if (plugin && !CategoryManager.instance.plugin) {
+            CategoryManager.instance.plugin = plugin;
         }
         return CategoryManager.instance;
     }
@@ -234,5 +236,21 @@ export class CategoryManager {
         // 更新分类顺序
         this.categories = [...reorderedCategories];
         await this.saveCategories();
+    }
+
+    /**
+     * MCP kernel compat: list categories
+     */
+    public async listCategories(): Promise<Category[]> {
+        await this.initialize();
+        return this.getCategories();
+    }
+
+    /**
+     * MCP kernel compat: check category existence
+     */
+    public async categoryExists(id: string): Promise<boolean> {
+        await this.initialize();
+        return !!this.getCategoryById(id);
     }
 }
