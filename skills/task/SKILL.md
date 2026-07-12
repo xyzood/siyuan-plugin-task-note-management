@@ -32,6 +32,15 @@ description: 用于在思源任务笔记管理插件中管理任务和分类的 
 - **projectId** (字符串, 可选): 项目 ID。
 - **categoryId** (字符串, 可选): 分类 ID。
 - **completed** (布尔值, 可选): 是否完成，默认为 `false`。
+- **blockId** (字符串, 可选): 绑定的思源块 ID。设置后会自动获取并关联文档 ID，并在思源中同步块属性与书签。
+- **url** (字符串, 可选): 网页链接。
+- **kanbanStatus** (字符串, 可选): 看板状态。如果任务绑定了项目，所设看板状态必须是该项目已配置的看板状态（可以通过 `get_project` 或 `list_columns` 查询该项目的看板配置）。如果未绑定项目，必须是系统默认的看板状态之一。如果设置为 `"completed"` 且 `completed` 未显式传入，会自动将任务标记为已完成。
+- **customProgress** (数字, 可选): 自定义进度条百分比，取值范围为 `0` 到 `100` 的整数。
+- **linkedHabitId** (字符串, 可选): 绑定的习惯 ID。可以通过 `habit` 相关的工具查询习惯列表来获取此 ID。
+- **linkedHabitSyncPomodoroToday** (布尔值, 可选): 是否同步今日的番茄钟数据到绑定的习惯（必须在 `linkedHabitId` 设置时才生效）。
+- **linkedHabitAutoCheckInOnComplete** (布尔值, 可选): 任务完成时是否自动为关联的习惯打卡（必须在 `linkedHabitId` 设置时才生效）。
+- **linkedHabitAutoCheckInOptionKey** (字符串, 可选): 自动打卡习惯时的选项 Key。
+- **linkedHabitAutoCheckInEmoji** (字符串, 可选): 自动打卡习惯时的 Emoji。
 - **repeat** (对象, 可选): 重复周期性任务配置。**注意：如果启用了重复配置（enabled 为 true），但是开始日期 date 传入了 ""（空字符串），系统会自动将其默认设置为今日本地日期。** 属性如下：
   - **enabled** (布尔值, 必填): 是否启用。
   - **type** (字符串, 必填): 重复类型，支持 `"daily"` (每日), `"weekly"` (每周), `"monthly"` (每月), `"yearly"` (每年), `"custom"` (自定义), `"ebbinghaus"` (艾宾浩斯), `"lunar-monthly"` (农历每月), `"lunar-yearly"` (农历每年)。
@@ -46,13 +55,13 @@ description: 用于在思源任务笔记管理插件中管理任务和分类的 
   - **reminderSkipHolidays** (布尔值, 可选): 是否跳过法定节假日。
 - **subtasks** (对象数组, 可选): 要一并创建的子任务列表。创建时会自动绑定其 `parentId` 为当前创建的主任务 ID。每个子任务项支持的属性有：
   - **title** (字符串, 必填): 子任务标题。
-  - 以及上面支持的其他可选参数 (备注、日期、时间、优先级等)。
+  - 以及上面支持的其他可选参数 (备注、日期、时间、优先级、绑定的块 ID、网页链接、看板状态、自定义进度条、绑定的习惯 ID 及打卡设置等)。
 
 ### 3. `update_task`
 批量修改更新任务。
 - **updates** (对象数组, 必填): 更新项列表。每个对象必须包含：
   - **id** (字符串, 必填): 要修改的任务 ID。
-  - 其他在 `create` 中支持的可选参数，包含 `repeat` 对象。
+  - 其他在 `create` 中支持的可选参数 (包含 `blockId`, `url`, `kanbanStatus`, `customProgress`, `linkedHabitId` 及打卡设置, `repeat` 对象等)。
 
 ### 4. `delete_task`
 删除任务。

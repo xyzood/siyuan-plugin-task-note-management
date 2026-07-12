@@ -28,6 +28,14 @@ export interface CreateReminderInput {
     url?: string;
     parentId?: string;
     repeat?: any;
+    blockId?: string;
+    docId?: string;
+    customProgress?: number;
+    linkedHabitId?: string;
+    linkedHabitSyncPomodoroToday?: boolean;
+    linkedHabitAutoCheckInOnComplete?: boolean;
+    linkedHabitAutoCheckInOptionKey?: string;
+    linkedHabitAutoCheckInEmoji?: string;
 }
 
 export interface UpdateReminderInput {
@@ -45,6 +53,14 @@ export interface UpdateReminderInput {
     kanbanStatus?: string;
     url?: string;
     repeat?: any;
+    blockId?: string;
+    docId?: string;
+    customProgress?: number;
+    linkedHabitId?: string;
+    linkedHabitSyncPomodoroToday?: boolean;
+    linkedHabitAutoCheckInOnComplete?: boolean;
+    linkedHabitAutoCheckInOptionKey?: string;
+    linkedHabitAutoCheckInEmoji?: string;
 }
 
 const REMINDER_DATA_FILE = "reminder.json";
@@ -202,6 +218,14 @@ export class ReminderManager {
             if (update.kanbanStatus !== undefined) patched.kanbanStatus = update.kanbanStatus;
             if (update.url !== undefined) patched.url = update.url;
             if (update.repeat !== undefined) patched.repeat = update.repeat;
+            if (update.blockId !== undefined) patched.blockId = update.blockId;
+            if (update.docId !== undefined) patched.docId = update.docId;
+            if (update.customProgress !== undefined) patched.customProgress = update.customProgress;
+            if (update.linkedHabitId !== undefined) patched.linkedHabitId = update.linkedHabitId;
+            if (update.linkedHabitSyncPomodoroToday !== undefined) patched.linkedHabitSyncPomodoroToday = update.linkedHabitSyncPomodoroToday;
+            if (update.linkedHabitAutoCheckInOnComplete !== undefined) patched.linkedHabitAutoCheckInOnComplete = update.linkedHabitAutoCheckInOnComplete;
+            if (update.linkedHabitAutoCheckInOptionKey !== undefined) patched.linkedHabitAutoCheckInOptionKey = update.linkedHabitAutoCheckInOptionKey;
+            if (update.linkedHabitAutoCheckInEmoji !== undefined) patched.linkedHabitAutoCheckInEmoji = update.linkedHabitAutoCheckInEmoji;
 
             this.reminders[id] = patched;
             updated.push(patched);

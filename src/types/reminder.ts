@@ -19,6 +19,23 @@ export interface ReminderItem {
     notified?: boolean;
     kanbanStatus?: string;  // 任务类型：长期、短期或进行中
     url?: string;        // 网页链接，可选
+    blockId?: string;    // 绑定思源块 ID
+    docId?: string;      // 绑定思源文档 ID
+    projectId?: string;  // 项目 ID
+    priority?: "high" | "medium" | "low" | "none"; // 优先级
+    categoryId?: string; // 分类 ID
+    endDate?: string;    // 结束日期 YYYY-MM-DD
+    endTime?: string;    // 结束时间 HH:MM
+    repeat?: any;        // 重复配置
+    parentId?: string;   // 父任务 ID
+    completedTime?: string; // 完成时间
+    sort?: number;       // 排序号
+    customProgress?: number; // 自定义进度条百分比 (0-100)
+    linkedHabitId?: string; // 绑定习惯 ID
+    linkedHabitSyncPomodoroToday?: boolean; // 是否同步番茄钟到习惯
+    linkedHabitAutoCheckInOnComplete?: boolean; // 完成任务时是否自动打卡习惯
+    linkedHabitAutoCheckInOptionKey?: string; // 自动打卡选项 Key
+    linkedHabitAutoCheckInEmoji?: string; // 自动打卡 Emoji
     treatStartDateAsDeadline?: boolean; // 只有开始日期且无截止日期时，是否按过期任务处理
     reminderSkipWeekendMode?: ReminderSkipWeekendMode; // 跳过周末模式；未设置时跟随全局设置
     reminderSkipWeekends?: boolean; // 旧字段：是否跳过周末提醒；未设置时跟随全局设置

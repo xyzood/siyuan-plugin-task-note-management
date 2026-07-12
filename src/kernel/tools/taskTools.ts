@@ -3,6 +3,12 @@ import type { CategoryManager } from "../../utils/categoryManager";
 import type { ProjectManager } from "../../utils/projectManager";
 import type { ToolDefinition } from "./common";
 import {
+    getBlockByID,
+    updateBindBlockAtrrs,
+    addBlockProjectId,
+    setBlockProjectIds,
+} from "../utils/siyuanApi";
+import {
     objectSchema,
     wrapHandler,
     successResponse,
@@ -59,6 +65,15 @@ export function createTaskTool(
                     endDate: { type: "string", description: "结束日期 YYYY-MM-DD" },
                     endTime: { type: "string", description: "结束时间 HH:MM" },
                     categoryId: { type: "string", description: "分类 ID" },
+                    blockId: { type: "string", description: "绑定的思源块 ID，可选" },
+                    url: { type: "string", description: "网页链接，可选" },
+                    kanbanStatus: { type: "string", description: "看板状态，可选" },
+                    customProgress: { type: "number", minimum: 0, maximum: 100, description: "自定义进度条百分比 (0-100)，可选" },
+                    linkedHabitId: { type: "string", description: "关联的习惯 ID，可选" },
+                    linkedHabitSyncPomodoroToday: { type: "boolean", description: "是否同步番茄钟到习惯，可选" },
+                    linkedHabitAutoCheckInOnComplete: { type: "boolean", description: "是否在任务完成时自动打卡习惯，可选" },
+                    linkedHabitAutoCheckInOptionKey: { type: "string", description: "自动打卡选项 Key，可选" },
+                    linkedHabitAutoCheckInEmoji: { type: "string", description: "自动打卡 Emoji，可选" },
                     subtasks: {
                         type: "array",
                         description: "可选。创建任务时可以一并创建的子任务列表",
@@ -73,7 +88,16 @@ export function createTaskTool(
                                 endTime: { type: "string", description: "子任务结束时间 HH:MM" },
                                 priority: { type: "string", enum: ["high", "medium", "low", "none"] },
                                 categoryId: { type: "string", description: "子任务分类 ID" },
-                                completed: { type: "boolean", description: "是否已完成" }
+                                completed: { type: "boolean", description: "是否已完成" },
+                                blockId: { type: "string", description: "子任务绑定的思源块 ID，可选" },
+                                url: { type: "string", description: "子任务网页链接，可选" },
+                                kanbanStatus: { type: "string", description: "子任务看板状态，可选" },
+                                customProgress: { type: "number", minimum: 0, maximum: 100, description: "子任务自定义进度条百分比 (0-100)，可选" },
+                                linkedHabitId: { type: "string", description: "子任务关联的习惯 ID，可选" },
+                                linkedHabitSyncPomodoroToday: { type: "boolean", description: "是否同步番茄钟到习惯，可选" },
+                                linkedHabitAutoCheckInOnComplete: { type: "boolean", description: "是否在任务完成时自动打卡习惯，可选" },
+                                linkedHabitAutoCheckInOptionKey: { type: "string", description: "自动打卡选项 Key，可选" },
+                                linkedHabitAutoCheckInEmoji: { type: "string", description: "自动打卡 Emoji，可选" }
                             },
                             required: ["title"]
                         }
@@ -118,6 +142,15 @@ export function createTaskTool(
                                 projectId: { type: "string" },
                                 categoryId: { type: "string" },
                                 completed: { type: "boolean" },
+                                blockId: { type: "string" },
+                                url: { type: "string" },
+                                kanbanStatus: { type: "string" },
+                                customProgress: { type: "number", minimum: 0, maximum: 100 },
+                                linkedHabitId: { type: "string" },
+                                linkedHabitSyncPomodoroToday: { type: "boolean" },
+                                linkedHabitAutoCheckInOnComplete: { type: "boolean" },
+                                linkedHabitAutoCheckInOptionKey: { type: "string" },
+                                linkedHabitAutoCheckInEmoji: { type: "string" },
                                 repeat: {
                                     type: "object",
                                     description: "重复设置",
@@ -149,6 +182,31 @@ export function createTaskTool(
         },
         handler: wrapHandler(async (input) => {
             const action = assertEnum(input.action, "action", TASK_ACTIONS);
+
+            const ensureKanbanStatusExists = async (status: string | undefined, pId: string | undefined) => {
+                if (!status) return;
+                if (pId) {
+                    const allowedStatuses = await projectManager.getProjectKanbanStatuses(pId);
+                    const allowedStatusIds = allowedStatuses.map(s => s.id);
+                    if (!allowedStatusIds.includes(status)) {
+                        const newStatus = {
+                            id: status,
+                            name: status,
+                            color: "#6c757d",
+                            icon: "info",
+                            isFixed: false,
+                            sort: allowedStatuses.length > 0 ? Math.max(...allowedStatuses.map(s => s.sort)) + 1 : 1
+                        };
+                        await projectManager.setProjectKanbanStatuses(pId, [...allowedStatuses, newStatus]);
+                    }
+                }
+            };
+
+            const parseCustomProgress = (val: any, fieldName: string): number | undefined => {
+                const num = assertOptionalNumber(val, fieldName);
+                if (num === undefined) return undefined;
+                return Math.max(0, Math.min(100, Math.round(num)));
+            };
 
             switch (action) {
                 case "search_task": {
@@ -204,6 +262,33 @@ export function createTaskTool(
                         if (!exists) return errorResponse(`分类不存在: ${input.categoryId}`);
                     }
 
+                    const blockId = assertOptionalString(input.blockId, "blockId");
+                    let docId: string | undefined = undefined;
+                    if (blockId) {
+                        try {
+                            const block = await getBlockByID(blockId);
+                            docId = block?.root_id || (block?.type === 'd' ? block?.id : undefined);
+                        } catch (error) {
+                            console.error('获取绑定块信息失败:', error);
+                        }
+                    }
+
+                    const inputCompleted = assertOptionalBoolean(input.completed, "completed");
+                    const inputKanbanStatus = assertOptionalString(input.kanbanStatus, "kanbanStatus");
+                    await ensureKanbanStatusExists(inputKanbanStatus, input.projectId ? assertString(input.projectId, "projectId") : undefined);
+
+                    const completed = inputCompleted !== undefined 
+                        ? inputCompleted 
+                        : (inputKanbanStatus === 'completed' ? true : undefined);
+
+                    const customProgress = parseCustomProgress(input.customProgress, "customProgress");
+
+                    const linkedHabitId = assertOptionalString(input.linkedHabitId, "linkedHabitId");
+                    const linkedHabitSyncPomodoroToday = assertOptionalBoolean(input.linkedHabitSyncPomodoroToday, "linkedHabitSyncPomodoroToday");
+                    const linkedHabitAutoCheckInOnComplete = assertOptionalBoolean(input.linkedHabitAutoCheckInOnComplete, "linkedHabitAutoCheckInOnComplete");
+                    const linkedHabitAutoCheckInOptionKey = assertOptionalString(input.linkedHabitAutoCheckInOptionKey, "linkedHabitAutoCheckInOptionKey");
+                    const linkedHabitAutoCheckInEmoji = assertOptionalString(input.linkedHabitAutoCheckInEmoji, "linkedHabitAutoCheckInEmoji");
+
                     const parentTask = await reminderManager.createReminder({
                         title,
                         date,
@@ -214,9 +299,33 @@ export function createTaskTool(
                         priority: assertOptionalEnum(input.priority, "priority", ["high", "medium", "low", "none"]),
                         projectId: assertOptionalString(input.projectId, "projectId"),
                         categoryId: assertOptionalString(input.categoryId, "categoryId"),
-                        completed: assertOptionalBoolean(input.completed, "completed"),
+                        completed,
                         repeat: assertOptionalObject(input.repeat, "repeat"),
+                        blockId,
+                        docId,
+                        url: assertOptionalString(input.url, "url"),
+                        kanbanStatus: inputKanbanStatus,
+                        customProgress,
+                        linkedHabitId,
+                        linkedHabitSyncPomodoroToday,
+                        linkedHabitAutoCheckInOnComplete,
+                        linkedHabitAutoCheckInOptionKey,
+                        linkedHabitAutoCheckInEmoji,
                     });
+
+                    if (blockId) {
+                        try {
+                            const projectId = assertOptionalString(input.projectId, "projectId");
+                            if (projectId) {
+                                await addBlockProjectId(blockId, projectId);
+                            } else {
+                                await setBlockProjectIds(blockId, []);
+                            }
+                            await updateBindBlockAtrrs(blockId, (reminderManager as any).plugin);
+                        } catch (error) {
+                            console.warn('同步绑定块属性失败:', error);
+                        }
+                    }
 
                     const subtasksResult: any[] = [];
                     if (input.subtasks && Array.isArray(input.subtasks)) {
@@ -232,6 +341,33 @@ export function createTaskTool(
                                 subDate = getTodayDateString();
                             }
 
+                            const subBlockId = assertOptionalString(subtask.blockId, "subtasks[].blockId");
+                            let subDocId: string | undefined = undefined;
+                            if (subBlockId) {
+                                try {
+                                    const block = await getBlockByID(subBlockId);
+                                    subDocId = block?.root_id || (block?.type === 'd' ? block?.id : undefined);
+                                } catch (error) {
+                                    console.error('获取子任务绑定块信息失败:', error);
+                                }
+                            }
+
+                            const subCompletedInput = assertOptionalBoolean(subtask.completed, "subtasks[].completed");
+                            const subKanbanStatus = assertOptionalString(subtask.kanbanStatus, "subtasks[].kanbanStatus");
+                            await ensureKanbanStatusExists(subKanbanStatus, input.projectId ? assertString(input.projectId, "projectId") : undefined);
+
+                            const subCompleted = subCompletedInput !== undefined 
+                                ? subCompletedInput 
+                                : (subKanbanStatus === 'completed' ? true : undefined);
+
+                            const subCustomProgress = parseCustomProgress(subtask.customProgress, "subtasks[].customProgress");
+
+                            const subLinkedHabitId = assertOptionalString(subtask.linkedHabitId, "subtasks[].linkedHabitId");
+                            const subLinkedHabitSyncPomodoroToday = assertOptionalBoolean(subtask.linkedHabitSyncPomodoroToday, "subtasks[].linkedHabitSyncPomodoroToday");
+                            const subLinkedHabitAutoCheckInOnComplete = assertOptionalBoolean(subtask.linkedHabitAutoCheckInOnComplete, "subtasks[].linkedHabitAutoCheckInOnComplete");
+                            const subLinkedHabitAutoCheckInOptionKey = assertOptionalString(subtask.linkedHabitAutoCheckInOptionKey, "subtasks[].linkedHabitAutoCheckInOptionKey");
+                            const subLinkedHabitAutoCheckInEmoji = assertOptionalString(subtask.linkedHabitAutoCheckInEmoji, "subtasks[].linkedHabitAutoCheckInEmoji");
+
                             const subTask = await reminderManager.createReminder({
                                 title: subTitle,
                                 date: subDate,
@@ -242,10 +378,34 @@ export function createTaskTool(
                                 priority: assertOptionalEnum(subtask.priority, "subtasks[].priority", ["high", "medium", "low", "none"]),
                                 projectId: assertOptionalString(input.projectId, "projectId"),
                                 categoryId: assertOptionalString(subtask.categoryId, "subtasks[].categoryId"),
-                                completed: assertOptionalBoolean(subtask.completed, "subtasks[].completed"),
+                                completed: subCompleted,
                                 parentId: parentTask.id,
                                 repeat: assertOptionalObject(subtask.repeat, "subtasks[].repeat"),
+                                blockId: subBlockId,
+                                docId: subDocId,
+                                url: assertOptionalString(subtask.url, "subtasks[].url"),
+                                kanbanStatus: subKanbanStatus,
+                                customProgress: subCustomProgress,
+                                linkedHabitId: subLinkedHabitId,
+                                linkedHabitSyncPomodoroToday: subLinkedHabitSyncPomodoroToday,
+                                linkedHabitAutoCheckInOnComplete: subLinkedHabitAutoCheckInOnComplete,
+                                linkedHabitAutoCheckInOptionKey: subLinkedHabitAutoCheckInOptionKey,
+                                linkedHabitAutoCheckInEmoji: subLinkedHabitAutoCheckInEmoji,
                             });
+
+                            if (subBlockId) {
+                                try {
+                                    const projectId = assertOptionalString(input.projectId, "projectId");
+                                    if (projectId) {
+                                        await addBlockProjectId(subBlockId, projectId);
+                                    } else {
+                                        await setBlockProjectIds(subBlockId, []);
+                                    }
+                                    await updateBindBlockAtrrs(subBlockId, (reminderManager as any).plugin);
+                                } catch (error) {
+                                    console.warn('同步子任务绑定块属性失败:', error);
+                                }
+                            }
                             subtasksResult.push(subTask);
                         }
                     }
@@ -257,11 +417,58 @@ export function createTaskTool(
                 }
 
                 case "update_task": {
-                    const updates = assertArray(input.updates, "updates");
-                    const normalized = updates.map((update: any) => {
+                    const updates = assertArray(input.updates, "updates") as any[];
+                    const normalized: any[] = [];
+                    const plugin = (reminderManager as any).plugin;
+
+                    for (const update of updates) {
                         assertDefined(update.id, "updates[].id");
-                        return {
-                            id: assertString(update.id, "updates[].id"),
+                        const id = assertString(update.id, "updates[].id");
+
+                        const existing = await reminderManager.getReminderById(id);
+                        if (!existing) {
+                            continue;
+                        }
+
+                        const oldBlockId = existing.blockId;
+                        const newBlockId = update.blockId !== undefined ? assertOptionalString(update.blockId, "updates[].blockId") : oldBlockId;
+
+                        const oldProjectId = existing.projectId;
+                        const newProjectId = update.projectId !== undefined ? assertOptionalString(update.projectId, "updates[].projectId") : oldProjectId;
+
+                        let docId = existing.docId;
+                        if (update.blockId !== undefined) {
+                            if (newBlockId) {
+                                try {
+                                    const block = await getBlockByID(newBlockId);
+                                    docId = block?.root_id || (block?.type === 'd' ? block?.id : undefined);
+                                } catch (error) {
+                                    console.error('获取块信息失败:', error);
+                                    docId = undefined;
+                                }
+                            } else {
+                                docId = undefined;
+                            }
+                        }
+
+                        const updateCompleted = assertOptionalBoolean(update.completed, "updates[].completed");
+                        const updateKanbanStatus = assertOptionalString(update.kanbanStatus, "updates[].kanbanStatus");
+                        await ensureKanbanStatusExists(updateKanbanStatus, newProjectId);
+
+                        const completed = updateCompleted !== undefined 
+                            ? updateCompleted 
+                            : (updateKanbanStatus === 'completed' ? true : undefined);
+
+                        const customProgress = parseCustomProgress(update.customProgress, "updates[].customProgress");
+
+                        const linkedHabitId = update.linkedHabitId !== undefined ? assertOptionalString(update.linkedHabitId, "updates[].linkedHabitId") : undefined;
+                        const linkedHabitSyncPomodoroToday = update.linkedHabitSyncPomodoroToday !== undefined ? assertOptionalBoolean(update.linkedHabitSyncPomodoroToday, "updates[].linkedHabitSyncPomodoroToday") : undefined;
+                        const linkedHabitAutoCheckInOnComplete = update.linkedHabitAutoCheckInOnComplete !== undefined ? assertOptionalBoolean(update.linkedHabitAutoCheckInOnComplete, "updates[].linkedHabitAutoCheckInOnComplete") : undefined;
+                        const linkedHabitAutoCheckInOptionKey = update.linkedHabitAutoCheckInOptionKey !== undefined ? assertOptionalString(update.linkedHabitAutoCheckInOptionKey, "updates[].linkedHabitAutoCheckInOptionKey") : undefined;
+                        const linkedHabitAutoCheckInEmoji = update.linkedHabitAutoCheckInEmoji !== undefined ? assertOptionalString(update.linkedHabitAutoCheckInEmoji, "updates[].linkedHabitAutoCheckInEmoji") : undefined;
+
+                        const normalizedUpdate: any = {
+                            id,
                             title: assertOptionalString(update.title, "updates[].title"),
                             note: assertOptionalString(update.note, "updates[].note"),
                             date: assertOptionalDateString(update.date, "updates[].date"),
@@ -271,10 +478,43 @@ export function createTaskTool(
                             priority: assertOptionalEnum(update.priority, "updates[].priority", ["high", "medium", "low", "none"]),
                             projectId: assertOptionalString(update.projectId, "updates[].projectId"),
                             categoryId: assertOptionalString(update.categoryId, "updates[].categoryId"),
-                            completed: assertOptionalBoolean(update.completed, "updates[].completed"),
+                            completed,
                             repeat: assertOptionalObject(update.repeat, "updates[].repeat"),
+                            blockId: update.blockId !== undefined ? newBlockId : undefined,
+                            docId: update.blockId !== undefined ? docId : undefined,
+                            url: assertOptionalString(update.url, "updates[].url"),
+                            kanbanStatus: updateKanbanStatus,
+                            customProgress,
+                            linkedHabitId,
+                            linkedHabitSyncPomodoroToday,
+                            linkedHabitAutoCheckInOnComplete,
+                            linkedHabitAutoCheckInOptionKey,
+                            linkedHabitAutoCheckInEmoji,
                         };
-                    });
+
+                        normalized.push(normalizedUpdate);
+
+                        // 执行思源块的属性和书签同步
+                        try {
+                            if (oldBlockId && newBlockId !== oldBlockId) {
+                                // 块绑定发生改变，解绑老块
+                                await updateBindBlockAtrrs(oldBlockId, plugin);
+                            }
+                            if (newBlockId) {
+                                if (newBlockId !== oldBlockId || newProjectId !== oldProjectId) {
+                                    if (newProjectId) {
+                                        await addBlockProjectId(newBlockId, newProjectId);
+                                    } else {
+                                        await setBlockProjectIds(newBlockId, []);
+                                    }
+                                }
+                                await updateBindBlockAtrrs(newBlockId, plugin);
+                            }
+                        } catch (error) {
+                            console.warn('同步更新绑定块属性失败:', id, error);
+                        }
+                    }
+
                     const tasks = await reminderManager.updateReminders(normalized);
                     return successResponse(tasks);
                 }
