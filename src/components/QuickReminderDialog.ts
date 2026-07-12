@@ -52,6 +52,7 @@ type CustomReminderTimeItem = {
 };
 
 export class QuickReminderDialog {
+    private static activeDialogs: Map<string, QuickReminderDialog> = new Map();
     private dialog: Dialog;
     private editor?: Editor;
     private currentNote: string = '';
@@ -2631,106 +2632,135 @@ export class QuickReminderDialog {
     }
 
     public async show() {
-        // 如果是跨天已完成的今日实例，我们需要编辑原始任务本身而不是实例副本
-        if (this.reminder && this.reminder.isSpanningTodayCompletedInstance && this.reminder.originalId) {
-            try {
-                const reminderData = await this.plugin.loadReminderData();
-                if (reminderData && reminderData[this.reminder.originalId]) {
-                    this.reminder = reminderData[this.reminder.originalId];
+        const reminderId = this.reminder?.id;
+        if (reminderId && this.mode === 'edit') {
+            const existing = QuickReminderDialog.activeDialogs.get(reminderId);
+            if (existing) {
+                if (existing.dialog && existing.dialog.element) {
+                    existing.dialog.element.focus();
+                    const clickEvent = new MouseEvent('click', { bubbles: true });
+                    existing.dialog.element.dispatchEvent(clickEvent);
+                    const input = existing.dialog.element.querySelector('input, textarea') as HTMLElement;
+                    if (input) {
+                        input.focus();
+                    }
                 }
-            } catch (err) {
-                console.warn('QuickReminderDialog: failed to load original spanning task:', err);
+                return;
             }
-        }
-
-        await this.categoryManager.initialize();
-        await this.projectManager.initialize();
-        await this.habitGroupManager.initialize();
-
-        // 如果未通过构造器显式指定 autoDetectDateTime，则从插件设置中读取（如果有传入 plugin）
-        if (this.autoDetectDateTime === undefined) {
-            if (this.plugin && typeof this.plugin.getAutoDetectDateTimeEnabled === 'function') {
-                try {
-                    this.autoDetectDateTime = await this.plugin.getAutoDetectDateTimeEnabled();
-                } catch (err) {
-                    console.warn('获取自动识别设置失败，使用默认值 false:', err);
-                    this.autoDetectDateTime = false;
-                }
-            } else {
-                // 如果未提供 plugin，默认关闭自动识别以保守处理
-                this.autoDetectDateTime = false;
-            }
-        }
-
-        if (this.plugin && typeof this.plugin.getSingleDateDefaultRole === 'function') {
-            try {
-                this.singleDateDefaultRole = await this.plugin.getSingleDateDefaultRole();
-            } catch (err) {
-                console.warn('获取单日期默认识别设置失败，使用默认截止日期:', err);
-                this.singleDateDefaultRole = 'deadline';
-            }
-        }
-
-        if (this.plugin && typeof this.plugin.getQuickReminderTitlePasteAutoDetectEnabled === 'function') {
-            try {
-                this.titlePasteAutoDetect = await this.plugin.getQuickReminderTitlePasteAutoDetectEnabled();
-            } catch (err) {
-                console.warn('获取标题粘贴自动识别设置失败，使用默认开启:', err);
-                this.titlePasteAutoDetect = true;
-            }
+            QuickReminderDialog.activeDialogs.set(reminderId, this);
         }
 
         try {
-            this.reminderSkipHolidayData = await this.plugin?.loadHolidayData?.() || {};
-        } catch (err) {
-            console.warn('加载节假日数据失败，任务提醒跳过节假日设置将隐藏:', err);
-            this.reminderSkipHolidayData = {};
-        }
-
-        // 初始化自定义提醒时间
-        if (this.reminder && this.reminder.reminderTimes) {
-            this.customTimes = this.reminder.reminderTimes
-                .map((t: any) => this.normalizeCustomTimeItem(t, this.reminder.date, this.reminder.endDate))
-                .filter((item: any) => item && item.time);
-        } else {
-            this.customTimes = [];
-        }
-
-        const currentTime = this.initialTime;
-
-        // 如果传入了blockId，尝试获取块内容作为默认标题（优先 DOM 内容；文档根直接使用块/文档标题）
-        // 对于batch_edit模式，块内容已从reminder中设置
-        if (this.mode !== 'batch_edit' && this.blockId) {
-            try {
-                const block = await getBlockByID(this.blockId);
-                if (!block) {
-                    showMessage(i18n("blockNotExist"));
-                    return;
-                }
+            // 如果是跨天已完成的今日实例，我们需要编辑原始任务本身而不是实例副本
+            if (this.reminder && this.reminder.isSpanningTodayCompletedInstance && this.reminder.originalId) {
                 try {
-                    // 如果是文档块，直接使用文档/块的标题内容
-                    if (block.type === 'd') {
-                        this.blockContent = block.content || i18n("unnamedNote");
-                    } else {
-                        // 对于其他块类型，尝试获取 DOM 并提取正文段落
-                        const domString = await getBlockDOM(this.blockId);
-                        const parser = new DOMParser();
-                        const dom = parser.parseFromString(domString.dom, 'text/html');
-                        const element = dom.querySelector('div[data-type="NodeParagraph"]');
-                        if (element) {
-                            const attrElement = element.querySelector('div.protyle-attr');
-                            if (attrElement) {
-                                attrElement.remove();
-                            }
-                        }
-                        this.blockContent = element ? (element.textContent || '').trim() : (block?.fcontent || block?.content || i18n("unnamedNote"));
+                    const reminderData = await this.plugin.loadReminderData();
+                    if (reminderData && reminderData[this.reminder.originalId]) {
+                        this.reminder = reminderData[this.reminder.originalId];
                     }
-                } catch (e) {
-                    this.blockContent = block?.fcontent || block?.content || i18n("unnamedNote");
+                } catch (err) {
+                    console.warn('QuickReminderDialog: failed to load original spanning task:', err);
                 }
-            } catch (error) {
-                console.warn('获取块信息失败:', error);
             }
+
+            await this.categoryManager.initialize();
+            await this.projectManager.initialize();
+            await this.habitGroupManager.initialize();
+
+            // 如果未通过构造器显式指定 autoDetectDateTime，则从插件设置中读取（如果有传入 plugin）
+            if (this.autoDetectDateTime === undefined) {
+                if (this.plugin && typeof this.plugin.getAutoDetectDateTimeEnabled === 'function') {
+                    try {
+                        this.autoDetectDateTime = await this.plugin.getAutoDetectDateTimeEnabled();
+                    } catch (err) {
+                        console.warn('获取自动识别设置失败，使用默认值 false:', err);
+                        this.autoDetectDateTime = false;
+                    }
+                } else {
+                    // 如果未提供 plugin，默认关闭自动识别以保守处理
+                    this.autoDetectDateTime = false;
+                }
+            }
+
+            if (this.plugin && typeof this.plugin.getSingleDateDefaultRole === 'function') {
+                try {
+                    this.singleDateDefaultRole = await this.plugin.getSingleDateDefaultRole();
+                } catch (err) {
+                    console.warn('获取单日期默认识别设置失败，使用默认截止日期:', err);
+                    this.singleDateDefaultRole = 'deadline';
+                }
+            }
+
+            if (this.plugin && typeof this.plugin.getQuickReminderTitlePasteAutoDetectEnabled === 'function') {
+                try {
+                    this.titlePasteAutoDetect = await this.plugin.getQuickReminderTitlePasteAutoDetectEnabled();
+                } catch (err) {
+                    console.warn('获取标题粘贴自动识别设置失败，使用默认开启:', err);
+                    this.titlePasteAutoDetect = true;
+                }
+            }
+
+            try {
+                this.reminderSkipHolidayData = await this.plugin?.loadHolidayData?.() || {};
+            } catch (err) {
+                console.warn('加载节假日数据失败，任务提醒跳过节假日设置将隐藏:', err);
+                this.reminderSkipHolidayData = {};
+            }
+
+            // 初始化自定义提醒时间
+            if (this.reminder && this.reminder.reminderTimes) {
+                this.customTimes = this.reminder.reminderTimes
+                    .map((t: any) => this.normalizeCustomTimeItem(t, this.reminder.date, this.reminder.endDate))
+                    .filter((item: any) => item && item.time);
+            } else {
+                this.customTimes = [];
+            }
+
+            const currentTime = this.initialTime;
+
+            // 如果传入了blockId，尝试获取块内容作为默认标题（优先 DOM 内容；文档根直接使用块/文档标题）
+            // 对于batch_edit模式，块内容已从reminder中设置
+            if (this.mode !== 'batch_edit' && this.blockId) {
+                try {
+                    const block = await getBlockByID(this.blockId);
+                    if (!block) {
+                        showMessage(i18n("blockNotExist"));
+                        if (reminderId && this.mode === 'edit') {
+                            QuickReminderDialog.activeDialogs.delete(reminderId);
+                        }
+                        return;
+                    }
+                    try {
+                        // 如果是文档块，直接使用文档/块的标题内容
+                        if (block.type === 'd') {
+                            this.blockContent = block.content || i18n("unnamedNote");
+                        } else {
+                            // 对于其他块类型，尝试获取 DOM 并提取正文段落
+                            const domString = await getBlockDOM(this.blockId);
+                            const parser = new DOMParser();
+                            const dom = parser.parseFromString(domString.dom, 'text/html');
+                            const element = dom.querySelector('div[data-type="NodeParagraph"]');
+                            if (element) {
+                                const attrElement = element.querySelector('div.protyle-attr');
+                                if (attrElement) {
+                                    attrElement.remove();
+                                }
+                            }
+                            this.blockContent = element ? (element.textContent || '').trim() : (block?.fcontent || block?.content || i18n("unnamedNote"));
+                        }
+                    } catch (e) {
+                        this.blockContent = block?.fcontent || block?.content || i18n("unnamedNote");
+                    }
+                } catch (error) {
+                    console.warn('获取块信息失败:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to initialize QuickReminderDialog show:', error);
+            if (reminderId && this.mode === 'edit') {
+                QuickReminderDialog.activeDialogs.delete(reminderId);
+            }
+            throw error;
         }
 
         const langTag = (window as any).siyuan?.config?.lang?.replace('_', '-') || 'en-US';
@@ -3178,7 +3208,18 @@ export class QuickReminderDialog {
                 </div>
             `,
             width: "min(500px, 90%)",
-            height: (this.mode === 'note' || this.dateOnly) ? "auto" : "81vh"
+            height: (this.mode === 'note' || this.dateOnly) ? "auto" : "81vh",
+            destroyCallback: () => {
+                if (this.editor) {
+                    this.editor.destroy();
+                    this.editor = undefined;
+                }
+                const reminderId = this.reminder?.id;
+                if (reminderId && this.mode === 'edit') {
+                    QuickReminderDialog.activeDialogs.delete(reminderId);
+                }
+                this.dialog = undefined;
+            }
         });
 
         // Initialize Vditor

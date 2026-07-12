@@ -52,6 +52,7 @@ export class PomodoroTimer {
     private exitFullscreenBtn: HTMLElement; // 新增：退出全屏按钮
     private plugin: any; // 插件实例引用，用于调用插件方法
 
+    private isOpeningEditDialog: boolean = false;
     private isRunning: boolean = false;
     private isPaused: boolean = false;
     private isWorkPhase: boolean = true;
@@ -7698,78 +7699,145 @@ export class PomodoroTimer {
     }
 
     public async openTaskEditDialog() {
-        // 尝试激活/恢复思源主窗口
-        window.focus();
+        if (this.isOpeningEditDialog) {
+            return;
+        }
+        this.isOpeningEditDialog = true;
+
         try {
-            const electron = (window as any).require?.('electron');
-            const remote = (window as any).require?.('@electron/remote') || electron?.remote;
-            if (remote) {
-                const mainWin = remote.getCurrentWindow();
-                if (mainWin) {
-                    if (mainWin.isMinimized()) {
-                        mainWin.restore();
+            // 尝试激活/恢复思源主窗口
+            window.focus();
+            try {
+                const electron = (window as any).require?.('electron');
+                const remote = (window as any).require?.('@electron/remote') || electron?.remote;
+                if (remote) {
+                    const mainWin = remote.getCurrentWindow();
+                    if (mainWin) {
+                        if (mainWin.isMinimized()) {
+                            mainWin.restore();
+                        }
+                        mainWin.show();
+                        mainWin.focus();
                     }
-                    mainWin.show();
-                    mainWin.focus();
+                }
+            } catch (e) {
+                console.warn('[PomodoroTimer] Failed to restore/focus main window via electron:', e);
+            }
+
+            // 先从数据库加载最新的、完整的属性（特别是项目 projectId 和分组 customGroupId），避免简化版的 reminder 丢失设置
+            if (this.plugin) {
+                try {
+                    const isHabitCheck = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
+                    if (isHabitCheck) {
+                        const habitData = await this.plugin.loadHabitData();
+                        const found = habitData[this.reminder.id];
+                        if (found) {
+                            this.reminder = Object.assign({}, found, this.reminder);
+                        }
+                    } else {
+                        const reminderData = await this.plugin.loadReminderData();
+                        let found = reminderData[this.reminder.id];
+                        if (!found && this.reminder.originalId) {
+                            found = reminderData[this.reminder.originalId];
+                        }
+                        if (found) {
+                            // 我们保留 this.reminder 上的 runtime/instance 属性 (如 isRepeatInstance, instanceDate 等)
+                            // 并继承 database 中完整的字段值 (如 projectId, customGroupId 等)
+                            const merged = { ...found };
+                            for (const key of Object.keys(this.reminder)) {
+                                if (this.reminder[key] !== undefined) {
+                                    merged[key] = this.reminder[key];
+                                }
+                            }
+                            this.reminder = merged;
+                        }
+                    }
+                } catch (err) {
+                    console.error('[PomodoroTimer] 加载完整任务/习惯数据失败:', err);
                 }
             }
-        } catch (e) {
-            console.warn('[PomodoroTimer] Failed to restore/focus main window via electron:', e);
-        }
 
-        // 先从数据库加载最新的、完整的属性（特别是项目 projectId 和分组 customGroupId），避免简化版的 reminder 丢失设置
-        if (this.plugin) {
-            try {
-                const isHabitCheck = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
-                if (isHabitCheck) {
-                    const habitData = await this.plugin.loadHabitData();
-                    const found = habitData[this.reminder.id];
-                    if (found) {
-                        this.reminder = Object.assign({}, found, this.reminder);
-                    }
-                } else {
-                    const reminderData = await this.plugin.loadReminderData();
-                    let found = reminderData[this.reminder.id];
-                    if (!found && this.reminder.originalId) {
-                        found = reminderData[this.reminder.originalId];
-                    }
-                    if (found) {
-                        // 我们保留 this.reminder 上的 runtime/instance 属性 (如 isRepeatInstance, instanceDate 等)
-                        // 并继承 database 中完整的字段值 (如 projectId, customGroupId 等)
-                        const merged = { ...found };
-                        for (const key of Object.keys(this.reminder)) {
-                            if (this.reminder[key] !== undefined) {
-                                merged[key] = this.reminder[key];
+            const isHabit = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
+
+            if (isHabit) {
+                const { HabitEditDialog } = await import("./HabitEditDialog");
+                const editDialog = new HabitEditDialog(
+                    this.reminder,
+                    async (updatedHabit) => {
+                        if (updatedHabit) {
+                            try {
+                                const habitData = await this.plugin.loadHabitData();
+                                const oldHabit = habitData[updatedHabit.id];
+                                habitData[updatedHabit.id] = updatedHabit;
+                                await this.plugin.saveHabitData(habitData);
+
+                                // 同步移动端通知
+                                if (this.plugin && typeof this.plugin.updateMobileNotification === 'function') {
+                                    await this.plugin.updateMobileNotification(updatedHabit, oldHabit, 7);
+                                }
+
+                                this.reminder = updatedHabit;
+
+                                // 更新 UI
+                                const titleEls = document.querySelectorAll('.pomodoro-event-title');
+                                titleEls.forEach((el: HTMLElement) => {
+                                    el.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
+                                    el.title = (i18n("openNote") || '打开笔记') + ': ' + (this.reminder.title || i18n('unnamedNote') || '未命名笔记');
+                                });
+
+                                const miniTitleEl = document.getElementById('miniTaskTitle');
+                                if (miniTitleEl) {
+                                    miniTitleEl.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
+                                    miniTitleEl.setAttribute('title', this.reminder.title || i18n('unnamedNote') || '未命名笔记');
+                                }
+
+                                // 同时更新 BrowserWindow 上的显示
+                                if (this.container && typeof (this.container as any).webContents !== 'undefined') {
+                                    this.updateBrowserWindowDisplay(this.container);
+                                }
+                            } catch (err) {
+                                console.error('更新番茄钟习惯标题失败:', err);
                             }
                         }
-                        this.reminder = merged;
-                    }
-                }
-            } catch (err) {
-                console.error('[PomodoroTimer] 加载完整任务/习惯数据失败:', err);
+                        window.dispatchEvent(new CustomEvent('habitUpdated'));
+                        window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'habitPanel' } }));
+                    },
+                    this.plugin
+                );
+                await editDialog.show();
+                return;
             }
-        }
 
-        const isHabit = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
+            // 动态引入 QuickReminderDialog，以防循环依赖
+            const { QuickReminderDialog } = await import("./QuickReminderDialog");
+            
+            const editDialog = new QuickReminderDialog(
+                undefined,
+                undefined,
+                async (updatedReminder?: any) => {
+                    // 回调：加载最新提醒数据
+                    try {
+                        const reminderData = await this.plugin.loadReminderData();
+                        let updated = updatedReminder;
 
-        if (isHabit) {
-            const { HabitEditDialog } = await import("./HabitEditDialog");
-            const editDialog = new HabitEditDialog(
-                this.reminder,
-                async (updatedHabit) => {
-                    if (updatedHabit) {
-                        try {
-                            const habitData = await this.plugin.loadHabitData();
-                            const oldHabit = habitData[updatedHabit.id];
-                            habitData[updatedHabit.id] = updatedHabit;
-                            await this.plugin.saveHabitData(habitData);
-
-                            // 同步移动端通知
-                            if (this.plugin && typeof this.plugin.updateMobileNotification === 'function') {
-                                await this.plugin.updateMobileNotification(updatedHabit, oldHabit, 7);
+                        // 如果传入的不是完整的 reminder，而是 reminderData 或者是 undefined，我们就从数据库中查出
+                        if (!updated || !updated.id || !updated.title) {
+                            updated = reminderData[this.reminder.id];
+                            if (!updated && this.reminder.originalId) {
+                                updated = reminderData[this.reminder.originalId];
                             }
+                        }
 
-                            this.reminder = updatedHabit;
+                        if (updated) {
+                            if (this.reminder.isRepeatInstance) {
+                                // 保留当前重复实例的 id，合并修改后的原始字段
+                                this.reminder = Object.assign({}, this.reminder, updated, {
+                                    id: this.reminder.id,
+                                    originalId: this.reminder.originalId
+                                });
+                            } else {
+                                this.reminder = updated;
+                            }
 
                             // 更新 UI
                             const titleEls = document.querySelectorAll('.pomodoro-event-title');
@@ -7778,6 +7846,7 @@ export class PomodoroTimer {
                                 el.title = (i18n("openNote") || '打开笔记') + ': ' + (this.reminder.title || i18n('unnamedNote') || '未命名笔记');
                             });
 
+                            // 同时更新 mini 模式标题显示
                             const miniTitleEl = document.getElementById('miniTaskTitle');
                             if (miniTitleEl) {
                                 miniTitleEl.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
@@ -7788,82 +7857,23 @@ export class PomodoroTimer {
                             if (this.container && typeof (this.container as any).webContents !== 'undefined') {
                                 this.updateBrowserWindowDisplay(this.container);
                             }
-                        } catch (err) {
-                            console.error('更新番茄钟习惯标题失败:', err);
                         }
+                    } catch (err) {
+                        console.error('更新番茄钟任务标题失败:', err);
                     }
-                    window.dispatchEvent(new CustomEvent('habitUpdated'));
-                    window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'habitPanel' } }));
+                    window.dispatchEvent(new CustomEvent('reminderUpdated'));
                 },
-                this.plugin
+                undefined,
+                {
+                    mode: 'edit',
+                    reminder: this.reminder,
+                    plugin: this.plugin
+                }
             );
             await editDialog.show();
-            return;
+        } finally {
+            this.isOpeningEditDialog = false;
         }
-
-        // 动态引入 QuickReminderDialog，以防循环依赖
-        const { QuickReminderDialog } = await import("./QuickReminderDialog");
-        
-        const editDialog = new QuickReminderDialog(
-            undefined,
-            undefined,
-            async (updatedReminder?: any) => {
-                // 回调：加载最新提醒数据
-                try {
-                    const reminderData = await this.plugin.loadReminderData();
-                    let updated = updatedReminder;
-
-                    // 如果传入的不是完整的 reminder，而是 reminderData 或者是 undefined，我们就从数据库中查出
-                    if (!updated || !updated.id || !updated.title) {
-                        updated = reminderData[this.reminder.id];
-                        if (!updated && this.reminder.originalId) {
-                            updated = reminderData[this.reminder.originalId];
-                        }
-                    }
-
-                    if (updated) {
-                        if (this.reminder.isRepeatInstance) {
-                            // 保留当前重复实例的 id，合并修改后的原始字段
-                            this.reminder = Object.assign({}, this.reminder, updated, {
-                                id: this.reminder.id,
-                                originalId: this.reminder.originalId
-                            });
-                        } else {
-                            this.reminder = updated;
-                        }
-
-                        // 更新 UI
-                        const titleEls = document.querySelectorAll('.pomodoro-event-title');
-                        titleEls.forEach((el: HTMLElement) => {
-                            el.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
-                            el.title = (i18n("openNote") || '打开笔记') + ': ' + (this.reminder.title || i18n('unnamedNote') || '未命名笔记');
-                        });
-
-                        // 同时更新 mini 模式标题显示
-                        const miniTitleEl = document.getElementById('miniTaskTitle');
-                        if (miniTitleEl) {
-                            miniTitleEl.textContent = this.reminder.title || i18n('unnamedNote') || '未命名笔记';
-                            miniTitleEl.setAttribute('title', this.reminder.title || i18n('unnamedNote') || '未命名笔记');
-                        }
-
-                        // 同时更新 BrowserWindow 上的显示
-                        if (this.container && typeof (this.container as any).webContents !== 'undefined') {
-                            this.updateBrowserWindowDisplay(this.container);
-                        }
-                    }
-                } catch (err) {
-                    console.error('更新番茄钟任务标题失败:', err);
-                }
-                window.dispatchEvent(new CustomEvent('reminderUpdated'));
-            },
-            undefined,
-            {
-                mode: 'edit',
-                reminder: this.reminder,
-                plugin: this.plugin
-            }
-        );
-        editDialog.show();
     }
 
     public async handleTaskTitleClick() {
