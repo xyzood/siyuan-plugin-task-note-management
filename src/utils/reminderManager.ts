@@ -1,5 +1,5 @@
 import type { ReminderItem, ReminderData } from "../types/reminder";
-import { getEnvironmentSafeAllReminders } from "./reminderLoadUtils";
+import { getEnvironmentSafeAllReminders, cleanReminderItem } from "./reminderLoadUtils";
 import { ReminderTaskLogic } from "./reminderTaskLogic";
 
 export interface SearchReminderOptions {
@@ -104,6 +104,13 @@ export class ReminderManager {
     }
 
     private async saveReminders(): Promise<void> {
+        if (this.reminders && typeof this.reminders === 'object') {
+            for (const key of Object.keys(this.reminders)) {
+                if (this.reminders[key]) {
+                    cleanReminderItem(this.reminders[key]);
+                }
+            }
+        }
         await this.plugin.saveData(REMINDER_DATA_FILE, this.reminders);
     }
 

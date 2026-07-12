@@ -4988,7 +4988,6 @@ export class CalendarView {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 notifiedTime: false,
-                notifiedCustomTime: false,
                 repeat: undefined, // 复制为普通副本，不继承重复性
                 parentId: originalReminder.parentId || null
             };

@@ -7241,9 +7241,7 @@ export class QuickReminderDialog {
 
                         this.applyCompletedInstanceSnapshots(reminderData, reminder);
 
-                        // 不在编辑时修改已提醒标志（notifiedTime / notifiedCustomTime）。
-                        // 过去的提醒无需在编辑时处理，未来的提醒将在未来正常触发，
-                        // 所以这里保留原有的 notified 字段值，不做重置或计算。
+                        // 不在编辑时修改已提醒标志（notifiedTime）。
 
                         reminderData[reminderId] = reminder;
                         if (reminder.isSubscribed) {
@@ -7466,7 +7464,6 @@ export class QuickReminderDialog {
 
                     // 初始化字段级已提醒标志
                     reminder.notifiedTime = false;
-                    reminder.notifiedCustomTime = false;
                     // 如果任务时间早于当前时间，则标记 time 已提醒（仅当有日期时）
                     if (date) {
                         const reminderDateTime = new Date(time ? `${date}T${time}` : date);
@@ -7828,8 +7825,7 @@ export class QuickReminderDialog {
                     estimatedPomodoroDuration: tempSubtask.estimatedPomodoroDuration || undefined,
                     customProgress: this.normalizeCustomProgressValue(tempSubtask.customProgress),
                     pinned: tempSubtask.pinned || false,
-                    notifiedTime: false,
-                    notifiedCustomTime: false
+                    notifiedTime: false
                 };
 
                 // 如果子任务有完成时间，保留它

@@ -40,6 +40,7 @@ import { resolveAudioPath } from "./utils/audioUtils";
 import { showVipDialog } from "./components/vip/VipDialog";
 import { performDataMigration } from "./utils/dataMigration";
 import { initIcsSync, initIcsSubscriptionSync, handleIcsSyncSettingsChange, cleanupIcsSync } from "./utils/icsSync";
+import { cleanReminderItem } from "./utils/reminderLoadUtils";
 import { TaskNoteDOMManager } from "./components/render/taskNoteDOM";
 import { addDaysToDate, generateRepeatInstances, getDaysDifference, getRelativeReminderWindow } from "./utils/repeatUtils";
 import { getDockItemSelector, setDockBadgeByType as applyDockBadgeByType } from "./utils/addDockBadge";
@@ -464,6 +465,13 @@ export default class ReminderPlugin extends Plugin {
      * @param data 提醒数据
      */
     public async saveReminderData(data: any): Promise<void> {
+        if (data && typeof data === 'object') {
+            for (const key of Object.keys(data)) {
+                if (data[key]) {
+                    cleanReminderItem(data[key]);
+                }
+            }
+        }
         this.reminderDataCache = data;
         await this.saveData(REMINDER_DATA_FILE, data);
     }
