@@ -62,6 +62,10 @@ export interface Project {
     folderId?: string;
     isSubscription?: boolean;
     subscriptionId?: string;
+    customGroupTabsMode?: boolean;
+    activeCustomGroupTabId?: string;
+    kanbanStatuses?: KanbanStatus[];
+    updatedTime?: string;
 }
 
 /**
@@ -323,6 +327,7 @@ export class ProjectManager {
 
                 this.projects = projectEntries
                     .map(([id, project]: [string, any]) => ({
+                        ...project,
                         id: id,
                         name: project.title || i18n('unnamedProject'),
                         status: project.status || 'active',
@@ -1063,9 +1068,10 @@ export class ProjectManager {
             }
         });
         this.projects.forEach(project => {
-            const storageProject = { ...project };
+            const storageProject: any = { ...project };
             if (storageProject.name !== undefined) {
                 storageProject.title = storageProject.name;
+                delete storageProject.name;
             }
             projectData[project.id] = storageProject;
         });
