@@ -1,6 +1,7 @@
 import type { ReminderItem, ReminderData } from "../types/reminder";
 import { getEnvironmentSafeAllReminders, cleanReminderItem } from "./reminderLoadUtils";
 import { ReminderTaskLogic } from "./reminderTaskLogic";
+import { getLogicalDateString } from "./dateUtils";
 
 export interface SearchReminderOptions {
     keyword?: string;
@@ -140,7 +141,51 @@ export class ReminderManager {
             const holidayData = (this.plugin && typeof this.plugin.loadHolidayData === 'function') ? await this.plugin.loadHolidayData() : {};
             const allRawReminders = await getEnvironmentSafeAllReminders(this.plugin, undefined, 'sidebar');
             const expandedReminders = ReminderTaskLogic.generateAllRemindersWithInstances(allRawReminders, queryDate, settings, holidayData);
-            results = ReminderTaskLogic.filterRemindersByTab(expandedReminders, queryDate, 'today', false, settings, holidayData);
+            const activeTasks = ReminderTaskLogic.filterRemindersByTab(expandedReminders, queryDate, 'today', false, settings, holidayData);
+            
+            // 获取今日已完成的任务
+            const completedTasks = expandedReminders.filter(r => {
+                const isCompleted = r.completed || 
+                    r.isSpanningTodayCompletedInstance || 
+                    (r.dailyCompletions && r.dailyCompletions[queryDate] === true) ||
+                    (r.dailyDessertCompleted && Array.isArray(r.dailyDessertCompleted) && r.dailyDessertCompleted.includes(queryDate));
+                
+                if (!isCompleted) return false;
+
+                if (r.isSpanningTodayCompletedInstance || (r.dailyCompletions && r.dailyCompletions[queryDate] === true)) {
+                    return true;
+                }
+                
+                if (r.dailyDessertCompleted && Array.isArray(r.dailyDessertCompleted) && r.dailyDessertCompleted.includes(queryDate)) {
+                    return true;
+                }
+
+                if (r.completedTime) {
+                    try {
+                        const completedDate = getLogicalDateString(new Date(r.completedTime.replace(' ', 'T')));
+                        if (completedDate === queryDate) return true;
+                    } catch (e) {
+                        // ignore and fallback
+                    }
+                }
+
+                const hasDate = r.date || r.endDate;
+                if (hasDate) {
+                    const taskDate = r.date || r.endDate;
+                    return taskDate === queryDate;
+                }
+
+                return false;
+            });
+
+            const combined = [...activeTasks];
+            const activeIds = new Set(activeTasks.map(t => t.id));
+            completedTasks.forEach(t => {
+                if (!activeIds.has(t.id)) {
+                    combined.push(t);
+                }
+            });
+            results = combined;
         } else {
             results = Object.values(this.reminders);
         }

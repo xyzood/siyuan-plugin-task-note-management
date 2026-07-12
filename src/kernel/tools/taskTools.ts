@@ -28,7 +28,7 @@ import {
     assertOptionalObject,
 } from "../utils/validation";
 
-const TASK_ACTIONS = ["search_task", "create_task", "update_task", "delete_task", "list_categories"] as const;
+const TASK_ACTIONS = ["search_task", "get_task", "create_task", "update_task", "delete_task", "list_categories"] as const;
 type TaskAction = typeof TASK_ACTIONS[number];
 
 export function createTaskTool(
@@ -40,7 +40,7 @@ export function createTaskTool(
         name: "task",
         config: {
             title: "任务管理",
-            description: "任务管理操作。Actions: search_task(关键词/id/多条件搜索), create_task(创建任务), update_task(批量更新任务), delete_task(删除任务), list_categories(列出分类)。",
+            description: "任务管理操作。Actions: search_task(关键词/id/多条件搜索), get_task(获取单个任务详情), create_task(创建任务), update_task(批量更新任务), delete_task(删除任务), list_categories(列出分类)。",
             inputSchema: {
                 type: "object",
                 properties: {
@@ -53,7 +53,7 @@ export function createTaskTool(
                     keyword: { type: "string", description: "关键词，匹配任务标题和备注" },
                     id: { type: "string", description: "任务 ID，精确匹配" },
                     projectId: { type: "string", description: "所属项目 ID" },
-                    date: { type: "string", description: "日期 YYYY-MM-DD，或传入 'today'。创建任务时为必填，可传入 '' 以创建无日期任务" },
+                    date: { type: "string", description: "日期 YYYY-MM-DD，或传入 'today'。创建任务或在 get_task 中指定重复实例时使用，可传入 '' 以创建无日期任务" },
                     priority: { type: "string", enum: ["high", "medium", "low", "none"], description: "优先级" },
                     status: { type: "string", description: "看板状态" },
                     completed: { type: "boolean", description: "是否已完成" },
@@ -231,7 +231,49 @@ export function createTaskTool(
                     if (input.completed !== undefined) options.completed = assertOptionalBoolean(input.completed, "completed");
                     if (input.limit !== undefined) options.limit = assertOptionalNumber(input.limit, "limit");
                     const tasks = await reminderManager.searchReminders(options);
-                    return successResponse(tasks);
+                    return successResponse(cleanObject(filterRepeatInstances(tasks, options.date)));
+                }
+
+                case "get_task": {
+                    const id = assertString(input.id, "id");
+                    const date = assertOptionalDateString(input.date, "date");
+                    await reminderManager.reload();
+                    
+                    let targetId = id;
+                    let targetDate = date;
+                    const match = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+                    if (match) {
+                        targetId = match[1];
+                        targetDate = match[2];
+                    }
+                    
+                    let task = await reminderManager.getReminderById(targetId);
+                    if (!task) {
+                        const allReminders = await reminderManager.getAllReminders();
+                        for (const key of Object.keys(allReminders)) {
+                            if (targetId === key || id.startsWith(key + "_")) {
+                                task = allReminders[key];
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!task) {
+                        return errorResponse(`任务不存在: ${id}`);
+                    }
+                    
+                    if (task.repeat?.enabled && targetDate) {
+                        const settings = (reminderManager as any).plugin?.loadSettings ? await (reminderManager as any).plugin.loadSettings() : {};
+                        const holidayData = (reminderManager as any).plugin?.loadHolidayData ? await (reminderManager as any).plugin.loadHolidayData() : {};
+                        const allRawReminders = { [task.id]: task };
+                        const expandedReminders = ReminderTaskLogic.generateAllRemindersWithInstances(allRawReminders, targetDate, settings, holidayData);
+                        const instanceTask = expandedReminders.find(r => r.date === targetDate || r.id === id);
+                        if (instanceTask) {
+                            task = instanceTask;
+                        }
+                    }
+                    
+                    return successResponse(cleanObject(task));
                 }
 
                 case "create_task": {
@@ -410,10 +452,10 @@ export function createTaskTool(
                         }
                     }
 
-                    return successResponse({
+                    return successResponse(cleanObject({
                         ...parentTask,
                         subtasks: subtasksResult,
-                    });
+                    }));
                 }
 
                 case "update_task": {
@@ -516,7 +558,7 @@ export function createTaskTool(
                     }
 
                     const tasks = await reminderManager.updateReminders(normalized);
-                    return successResponse(tasks);
+                    return successResponse(cleanObject(tasks));
                 }
 
                 case "delete_task": {
@@ -527,7 +569,7 @@ export function createTaskTool(
 
                 case "list_categories": {
                     const categories = await categoryManager.listCategories();
-                    return successResponse(categories);
+                    return successResponse(cleanObject(categories));
                 }
 
                 default:
@@ -539,4 +581,55 @@ export function createTaskTool(
 
 function assertEnum<T extends string>(value: unknown, field: string, allowed: readonly T[]): T {
     return assertOptionalEnum(value, field, allowed) as T;
+}
+
+function cleanObject<T>(obj: T): T {
+    if (obj === null || obj === undefined) {
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(item => cleanObject(item)) as any;
+    }
+    if (typeof obj === "object") {
+        const result: any = {};
+        for (const key of Object.keys(obj)) {
+            const val = (obj as any)[key];
+            if (val !== null && val !== undefined) {
+                result[key] = cleanObject(val);
+            }
+        }
+        return result;
+    }
+    return obj;
+}
+
+function filterRepeatInstances(obj: any, targetDate?: string): any {
+    if (obj === null || obj === undefined) return obj;
+    if (Array.isArray(obj)) {
+        return obj.map(item => filterRepeatInstances(item, targetDate));
+    }
+    if (typeof obj === "object") {
+        const result: any = {};
+        for (const key of Object.keys(obj)) {
+            if (key === "repeat" && obj.repeat && typeof obj.repeat === "object") {
+                const { instances, ...restRepeat } = obj.repeat;
+                if (targetDate && instances && typeof instances === "object") {
+                    const filteredInstances: any = {};
+                    if (instances[targetDate]) {
+                        filteredInstances[targetDate] = instances[targetDate];
+                    }
+                    result.repeat = {
+                        ...filterRepeatInstances(restRepeat, targetDate),
+                        instances: filteredInstances
+                    };
+                } else {
+                    result.repeat = filterRepeatInstances(restRepeat, targetDate);
+                }
+            } else {
+                result[key] = filterRepeatInstances(obj[key], targetDate);
+            }
+        }
+        return result;
+    }
+    return obj;
 }
