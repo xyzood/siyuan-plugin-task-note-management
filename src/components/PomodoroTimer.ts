@@ -139,6 +139,8 @@ export class PomodoroTimer {
     private inheritedWindowBounds: { x: number; y: number; width: number; height: number } | null = null; // 继承的窗口位置信息
     private scheduledNotificationIds: number[] = []; // 已调度的移动端通知ID列表
     private blockPomodoroMetricCache: { blockId: string; count: number; minutes: number } | null = null;
+    private volumeSyncTimeout: number = null; // BrowserWindow 音量同步防抖定时器
+    private volumeSaveTimeout: number = null; // 音量设置保存防抖定时器
 
     private static async isWindowFromWorkspace(win: any, workspaceDir: string): Promise<boolean> {
         if (!workspaceDir) {
@@ -3982,30 +3984,45 @@ export class PomodoroTimer {
             this.settings.breakVolume = volume;
         }
         this.settings.backgroundAudioMuted = this.isBackgroundAudioMuted;
-        // 持久化到插件设置
-        try {
-            const pluginAny = this.plugin as any;
-            if (pluginAny?.saveSettings) {
-                pluginAny.saveSettings({ ...pluginAny.settings, ...this.getVolumeSettingsForSave() });
-            }
-        } catch (e) {
-            console.warn('[PomodoroTimer] 保存音量设置失败:', e);
-        }
+
+        // 立即更新 DOM 模式音频音量
         this.updateAudioVolume();
 
-        // BrowserWindow 模式：实时同步到窗口内音频元素
+        // BrowserWindow 模式：防抖同步到窗口内音频元素，避免拖动滑块时频繁 executeJavaScript
         const isBrowserWindow = !this.isTabMode && PomodoroTimer.browserWindowInstance;
         if (isBrowserWindow) {
-            try {
-                const activeAudio = this.isWorkPhase ? this.workAudio : (this.isLongBreak ? this.longBreakAudio : this.breakAudio);
-                const activeSrc = activeAudio ? activeAudio.src : '';
-                this.setBrowserWindowAudioVolume(
-                    this.isBackgroundAudioMuted ? 0 : volume,
-                    !this.isBackgroundAudioMuted && this.isRunning && !this.isPaused,
-                    activeSrc
-                );
-            } catch (e) { }
+            if (this.volumeSyncTimeout) {
+                clearTimeout(this.volumeSyncTimeout);
+            }
+            this.volumeSyncTimeout = window.setTimeout(() => {
+                this.volumeSyncTimeout = null;
+                try {
+                    const activeAudio = this.isWorkPhase ? this.workAudio : (this.isLongBreak ? this.longBreakAudio : this.breakAudio);
+                    const activeSrc = activeAudio ? activeAudio.src : '';
+                    this.setBrowserWindowAudioVolume(
+                        this.isBackgroundAudioMuted ? 0 : volume,
+                        !this.isBackgroundAudioMuted && this.isRunning && !this.isPaused,
+                        activeSrc
+                    );
+                } catch (e) { }
+            }, 80);
         }
+
+        // 持久化到插件设置（防抖，避免拖动时连续写盘）
+        if (this.volumeSaveTimeout) {
+            clearTimeout(this.volumeSaveTimeout);
+        }
+        this.volumeSaveTimeout = window.setTimeout(() => {
+            this.volumeSaveTimeout = null;
+            try {
+                const pluginAny = this.plugin as any;
+                if (pluginAny?.saveSettings) {
+                    pluginAny.saveSettings({ ...pluginAny.settings, ...this.getVolumeSettingsForSave() });
+                }
+            } catch (e) {
+                console.warn('[PomodoroTimer] 保存音量设置失败:', e);
+            }
+        }, 300);
 
         // 同步 DOM 模式音量控制显示
         if (this.volumeSlider) {
@@ -10025,7 +10042,7 @@ document.body.classList.remove('docked-mode');
             <span id="volumeMenuTitle">${i18n('backgroundVolume') || '背景音量'}</span>
             <span class="volume-percent" id="volumePercent">50%</span>
         </div>
-        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" oninput="onVolumeSliderInput(this.value)" title="${i18n('backgroundVolume') || '背景音量'}">
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" title="${i18n('backgroundVolume') || '背景音量'}">
     </div>
     <script>
         const { ipcRenderer } = require('electron');
@@ -10102,8 +10119,9 @@ document.body.classList.remove('docked-mode');
             const isWork = localState.isWorkPhase;
             const isLongBreak = localState.isLongBreak;
             const vol = isMuted ? 0 : (isWork ? localState.workVolume : (isLongBreak ? localState.longBreakVolume : localState.breakVolume));
-            if (slider) slider.value = vol;
-            if (percent) percent.textContent = Math.round(vol * 100) + '%';
+            // 拖动过程中不覆盖滑块和百分比，避免滑块来回跳动（UI 由 input 事件实时更新）
+            if (slider && !isVolumeSliderDragging) slider.value = vol;
+            if (percent && !isVolumeSliderDragging) percent.textContent = Math.round(vol * 100) + '%';
             if (title) {
                 if (isWork) {
                     title.textContent = '${i18n('workVolume') || '工作背景音音量'}';
@@ -10115,10 +10133,28 @@ document.body.classList.remove('docked-mode');
             }
             const isSilent = isMuted || vol === 0;
             const icon = isSilent ? '🔇' : '🔊';
-            if (soundBtn) {
+            // 拖动过程中不覆盖按钮状态，避免图标来回闪烁
+            if (soundBtn && !isVolumeSliderDragging) {
                 soundBtn.textContent = icon;
                 soundBtn.title = isSilent ? '${i18n('enableBackgroundAudio') || '开启背景音'}' : '${i18n('muteBackgroundAudio') || '静音背景音'}';
             }
+        }
+
+        function setLocalAudioVolume(vol) {
+            document.querySelectorAll('audio').forEach(a => {
+                try {
+                    if (!a._userPaused && a.loop) {
+                        a.volume = vol;
+                    }
+                } catch (e) {}
+            });
+        }
+
+        let isVolumeSliderDragging = false;
+        let volumeSliderTimeout = null;
+
+        function sendVolumeToMain(vol) {
+            ipcRenderer.send('${actionChannel}', 'setBackgroundVolume', vol);
         }
 
         function onVolumeSliderInput(value) {
@@ -10128,7 +10164,31 @@ document.body.classList.remove('docked-mode');
             if (percent) percent.textContent = Math.round(vol * 100) + '%';
             const icon = vol === 0 ? '🔇' : '🔊';
             if (soundBtn) soundBtn.textContent = icon;
-            ipcRenderer.send('${actionChannel}', 'setBackgroundVolume', vol);
+            // 本地立即更新音频音量，避免 IPC 往返延迟导致的声音卡顿或滑块回弹
+            setLocalAudioVolume(vol);
+            // 节流发送 IPC，避免拖动时消息堆积
+            if (volumeSliderTimeout) return;
+            volumeSliderTimeout = setTimeout(() => {
+                volumeSliderTimeout = null;
+                const slider = document.getElementById('volumeSlider');
+                if (slider) sendVolumeToMain(parseFloat(slider.value));
+            }, 80);
+        }
+
+        const volumeSliderEl = document.getElementById('volumeSlider');
+        if (volumeSliderEl) {
+            volumeSliderEl.addEventListener('pointerdown', () => { isVolumeSliderDragging = true; });
+            volumeSliderEl.addEventListener('input', (e) => { onVolumeSliderInput(e.target.value); });
+            volumeSliderEl.addEventListener('change', (e) => {
+                isVolumeSliderDragging = false;
+                if (volumeSliderTimeout) {
+                    clearTimeout(volumeSliderTimeout);
+                    volumeSliderTimeout = null;
+                }
+                sendVolumeToMain(parseFloat(e.target.value));
+            });
+            // 防止拖拽到元素外部释放时未清除标记
+            document.addEventListener('pointerup', () => { isVolumeSliderDragging = false; });
         }
 
         function requestTimerSync() {
