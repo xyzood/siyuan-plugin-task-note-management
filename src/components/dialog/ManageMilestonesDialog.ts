@@ -852,11 +852,11 @@ export async function deleteMilestone(view: any, milestoneId: string, groupId: s
                 taskChanged = true;
             }
 
-            if (task.repeat && task.repeat.instanceModifications) {
-                const mods = task.repeat.instanceModifications;
-                for (const date in mods) {
-                    if (mods[date] && mods[date].milestoneId === milestoneId) {
-                        delete mods[date].milestoneId;
+            if (task.repeat && task.repeat.instances) {
+                const instances = task.repeat.instances;
+                for (const date in instances) {
+                    if (instances[date] && instances[date].milestoneId === milestoneId) {
+                        delete instances[date].milestoneId;
                         taskChanged = true;
                     }
                 }

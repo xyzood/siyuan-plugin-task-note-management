@@ -1,6 +1,6 @@
 import { getEnvironmentSafeAllReminders } from "./reminderLoadUtils";
-import { getLogicalDateString, compareDateStrings, getLocalDateString, getLocalDateTimeString } from "./dateUtils";
-import { generateRepeatInstances } from "./repeatUtils";
+import { getLogicalDateString, compareDateStrings, getLocalDateTimeString } from "./dateUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted } from "./repeatUtils";
 import { isOpenEndedStartDateTask, shouldTreatStartDateOnlyAsOverdue } from "./startDateOverdue";
 import { shouldSkipReminderOnDate, type HolidayData } from "./reminderSkipDate";
 
@@ -86,9 +86,11 @@ export class ReminderTaskLogic {
                 const isLunarRepeat = reminder.repeat?.enabled &&
                     (reminder.repeat.type === 'lunar-monthly' || reminder.repeat.type === 'lunar-yearly');
 
-                const repeatInstances = this.generateInstancesWithFutureGuarantee(reminder, today, isLunarRepeat, settings, holidayData);
-                const completedInstances = reminder.repeat.completedInstances || [];
-                const instanceModifications = reminder.repeat?.instanceModifications || {};
+                const repeatInstances = generateRepeatInstancesWithFutureGuarantee(reminder, today, {
+                    isLunarRepeat,
+                    settings,
+                    holidayData
+                });
 
                 let pastIncompleteList: any[] = [];
                 let todayIncompleteList: any[] = [];
@@ -97,10 +99,8 @@ export class ReminderTaskLogic {
                 let pastCompletedList: any[] = [];
 
                 repeatInstances.forEach(instance => {
-                    const originalInstanceDate = instance.instanceId.split('_').pop() || instance.date;
-                    let isInstanceCompleted = completedInstances.includes(originalInstanceDate);
-
-                    const instanceMod = instanceModifications[originalInstanceDate];
+                    const originalInstanceDate = getRepeatInstanceOriginalKey(instance);
+                    const isInstanceCompleted = instance.completed ?? isRepeatInstanceCompleted(reminder, originalInstanceDate);
 
                     const instanceTask = {
                         ...reminder,
@@ -109,15 +109,9 @@ export class ReminderTaskLogic {
                         isRepeatInstance: true,
                         originalId: instance.originalId,
                         completed: isInstanceCompleted,
-                        note: instanceMod?.note !== undefined ? instanceMod.note : reminder.note,
-                        priority: instanceMod?.priority !== undefined ? instanceMod.priority : reminder.priority,
-                        categoryId: instanceMod?.categoryId !== undefined ? instanceMod.categoryId : reminder.categoryId,
-                        projectId: instanceMod?.projectId !== undefined ? instanceMod.projectId : reminder.projectId,
-                        customGroupId: instanceMod?.customGroupId !== undefined ? instanceMod.customGroupId : reminder.customGroupId,
-                        kanbanStatus: instanceMod?.kanbanStatus !== undefined ? instanceMod.kanbanStatus : reminder.kanbanStatus,
-                        milestoneId: instanceMod?.milestoneId !== undefined ? instanceMod.milestoneId : reminder.milestoneId,
-                        tagIds: instanceMod?.tagIds !== undefined ? instanceMod.tagIds : reminder.tagIds,
-                        completedTime: isInstanceCompleted ? getLocalDateTimeString(new Date(instance.date)) : undefined
+                        completedTime: isInstanceCompleted
+                            ? instance.completedTime || getLocalDateTimeString(new Date(instance.date))
+                            : undefined
                     };
 
                     const instanceLogicalDate = this.getReminderLogicalDate(instance.date, instance.time);
@@ -265,53 +259,6 @@ export class ReminderTaskLogic {
 
     private static canReminderShowOnDate(reminder: any, targetDate: string, settings?: any, holidayData: HolidayData = {}): boolean {
         return !shouldSkipReminderOnDate(reminder, targetDate, settings, holidayData);
-    }
-
-    private static generateInstancesWithFutureGuarantee(reminder: any, today: string, isLunarRepeat: boolean, settings?: any, holidayData: HolidayData = {}): any[] {
-        let monthsToAdd = 2;
-        if (isLunarRepeat) monthsToAdd = 14;
-        else if (reminder.repeat.type === 'yearly') monthsToAdd = 14;
-        else if (reminder.repeat.type === 'monthly') monthsToAdd = 3;
-
-        let repeatInstances: any[] = [];
-        let hasUncompletedFutureInstance = false;
-        const maxAttempts = 5;
-        let attempts = 0;
-        const completedInstances = reminder.repeat?.completedInstances || [];
-
-        while (!hasUncompletedFutureInstance && attempts < maxAttempts) {
-            const monthStart = new Date();
-            monthStart.setDate(1);
-            monthStart.setMonth(monthStart.getMonth() - 1);
-            const monthEnd = new Date();
-            monthEnd.setMonth(monthEnd.getMonth() + monthsToAdd);
-            monthEnd.setDate(0);
-
-            const startDate = getLocalDateString(monthStart);
-            const endDate = getLocalDateString(monthEnd);
-            const maxInstances = monthsToAdd * 50;
-            repeatInstances = generateRepeatInstances(reminder, startDate, endDate, maxInstances)
-                .filter(instance => this.canReminderShowOnDate(
-                    instance,
-                    this.getReminderLogicalDate(instance.date, instance.time) || instance.date,
-                    settings,
-                    holidayData
-                ));
-
-            hasUncompletedFutureInstance = repeatInstances.some(instance => {
-                const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                return compareDateStrings(instance.date, today) > 0 && !completedInstances.includes(originalKey);
-            });
-
-            if (!hasUncompletedFutureInstance) {
-                if (reminder.repeat.type === 'yearly') monthsToAdd += 12;
-                else if (isLunarRepeat) monthsToAdd += 12;
-                else monthsToAdd += 6;
-                attempts++;
-            }
-        }
-        return repeatInstances;
     }
 
     private static getReminderLogicalDate(dateStr?: string, timeStr?: string): string {

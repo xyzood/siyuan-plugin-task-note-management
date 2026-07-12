@@ -1,8 +1,8 @@
-import { RepeatConfig } from '../components/RepeatSettingsDialog';
+import { RepeatConfig, RepeatInstanceState } from '../components/RepeatSettingsDialog';
 import { compareDateStrings, getLocalDateTimeString } from './dateUtils';
 import { i18n } from '../pluginInstance';
 import { solarToLunar, formatLunarMonth, formatLunarDay } from './lunarUtils';
-import { normalizeReminderSkipWeekendMode, type ReminderSkipWeekendMode } from './reminderSkipDate';
+import { normalizeReminderSkipWeekendMode, type ReminderSkipWeekendMode, shouldSkipReminderOnDate } from './reminderSkipDate';
 
 export interface RepeatInstance {
     title?: string; // 实例标题（可选，覆盖原始标题）
@@ -20,6 +20,8 @@ export interface RepeatInstance {
     isRepeatedInstance: boolean;
     completed?: boolean; // 添加实例级别的完成状态
     completedTime?: string; // 实例完成时间
+    notified?: boolean;
+    customGroupName?: string;
     // 实例级别覆盖字段
     note?: string;
     priority?: string;
@@ -65,6 +67,134 @@ function resolveReminderSkipWeekendMode(...sources: any[]): ReminderSkipWeekendM
     }
     return undefined;
 }
+
+// ===================== 统一 repeat.instances 操作 helper =====================
+
+export function parseReminderInstanceId(id?: string): { originalId: string; instanceDate: string } | null {
+    if (!id || typeof id !== 'string') return null;
+    const splitIndex = id.lastIndexOf('_');
+    if (splitIndex <= 0 || splitIndex >= id.length - 1) return null;
+    const originalId = id.substring(0, splitIndex);
+    const instanceDate = id.substring(splitIndex + 1);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(instanceDate)) return null;
+    return { originalId, instanceDate };
+}
+
+export function getRepeatInstanceOriginalKey(instance: any): string {
+    if (!instance) return '';
+    const instanceId = (instance as any).instanceId || instance.id;
+    if (typeof instanceId === 'string') {
+        const parsed = parseReminderInstanceId(instanceId);
+        if (parsed) return parsed.instanceDate;
+    }
+    return instance.date || '';
+}
+
+export function ensureRepeatInstances(reminder: any): Record<string, RepeatInstanceState> {
+    if (!reminder.repeat) reminder.repeat = {};
+    if (!reminder.repeat.instances) reminder.repeat.instances = {};
+    return reminder.repeat.instances;
+}
+
+export function getRepeatInstanceState(reminder: any, dateKey: string): RepeatInstanceState | undefined {
+    return reminder?.repeat?.instances?.[dateKey];
+}
+
+export function getInstanceField<T>(
+    state: RepeatInstanceState | undefined,
+    field: keyof RepeatInstanceState,
+    fallback: T
+): T {
+    if (!state || !Object.prototype.hasOwnProperty.call(state, field)) return fallback;
+    return (state as any)[field];
+}
+
+export function hasInstanceField(state: RepeatInstanceState | undefined, field: keyof RepeatInstanceState): boolean {
+    return !!state && Object.prototype.hasOwnProperty.call(state, field);
+}
+
+export function patchRepeatInstanceState(
+    reminder: any,
+    dateKey: string,
+    patch: Partial<RepeatInstanceState>
+): RepeatInstanceState {
+    const instances = ensureRepeatInstances(reminder);
+    const existing = instances[dateKey] || {};
+    const updatedPatch = { ...patch };
+    if (patch.hasOwnProperty('date') && patch.date === null) {
+        updatedPatch.deleted = true;
+    }
+    instances[dateKey] = {
+        ...existing,
+        ...updatedPatch,
+        modifiedAt: getLocalDateString(new Date())
+    };
+    return instances[dateKey];
+}
+
+export function setRepeatInstanceOverride<T extends keyof RepeatInstanceState>(
+    reminder: any,
+    dateKey: string,
+    field: T,
+    value: RepeatInstanceState[T] | undefined
+): void {
+    const instances = ensureRepeatInstances(reminder);
+    const existing = instances[dateKey] || {};
+    if (value === undefined) {
+        delete (existing as any)[field];
+    } else {
+        (existing as any)[field] = value;
+    }
+    existing.modifiedAt = getLocalDateString(new Date());
+    instances[dateKey] = existing;
+}
+
+export function setRepeatInstanceCompletion(
+    reminder: any,
+    dateKey: string,
+    completed: boolean,
+    completedTime?: string
+): boolean {
+    const state = ensureRepeatInstances(reminder);
+    const existing = state[dateKey] || {};
+    let changed = false;
+    if (existing.completed !== completed) {
+        existing.completed = completed;
+        changed = true;
+    }
+    if (completed) {
+        const time = completedTime || getLocalDateTimeString(new Date());
+        if (existing.completedTime !== time) {
+            existing.completedTime = time;
+            changed = true;
+        }
+    } else if (existing.completedTime !== undefined) {
+        delete existing.completedTime;
+        changed = true;
+    }
+    existing.modifiedAt = getLocalDateString(new Date());
+    state[dateKey] = existing;
+    return changed;
+}
+
+export function isRepeatInstanceCompleted(reminder: any, dateKey: string): boolean {
+    return !!getRepeatInstanceState(reminder, dateKey)?.completed;
+}
+
+export function getRepeatInstanceCompletedTime(reminder: any, dateKey: string): string | undefined {
+    return getRepeatInstanceState(reminder, dateKey)?.completedTime;
+}
+
+export function removeRepeatInstance(reminder: any, dateKey: string): void {
+    patchRepeatInstanceState(reminder, dateKey, { deleted: true });
+}
+
+export function deleteRepeatInstanceState(reminder: any, dateKey: string): void {
+    const instances = reminder?.repeat?.instances;
+    if (instances) delete instances[dateKey];
+}
+
+// ===================== 统一 repeat.instances 操作 helper 结束 =====================
 
 /**
  * 将 Date 对象转换为 YYYY-MM-DD 格式的本地日期字符串
@@ -354,14 +484,9 @@ export function generateRepeatInstances(
     const endDateObj = new Date(endDate + 'T23:59:59');
     let instanceCount = 0;
 
-    // 获取排除日期列表
+    // 获取排除日期列表与统一实例状态表
     const excludeDates = repeatConfig.excludeDates || [];
-    // 获取实例修改列表
-    const instanceModifications = repeatConfig.instanceModifications || {};
-    // 获取已完成实例列表
-    const completedInstances = repeatConfig.completedInstances || [];
-    // 获取实例完成时间列表
-    const instanceCompletedTimes = repeatConfig.instanceCompletedTimes || repeatConfig.completedTimes || {};
+    const instancesMap: Record<string, RepeatInstanceState> = repeatConfig.instances || {};
 
     // 检查重复结束条件
     const hasEndDate = repeatConfig.endType === 'date' && repeatConfig.endDate;
@@ -369,27 +494,18 @@ export function generateRepeatInstances(
     const repeatEndDate = hasEndDate ? new Date(repeatConfig.endDate + 'T23:59:59') : null;
 
     const generatedInstanceKeys = new Set<string>();
-    const hasModificationField = (modification: any, field: string): boolean =>
-        !!modification && Object.prototype.hasOwnProperty.call(modification, field);
-    const readModificationField = (modification: any, field: string, fallback: any): any => {
-        if (hasModificationField(modification, field)) {
-            const value = modification[field];
-            return value === null ? undefined : value;
-        }
-        return fallback;
-    };
-    const buildInstance = (originalDateKey: string, occurrenceDateStr: string, modification: any): RepeatInstance | null => {
-        if (modification && Object.prototype.hasOwnProperty.call(modification, 'date') && modification.date === null) {
+    const buildInstance = (originalDateKey: string, occurrenceDateStr: string, state?: RepeatInstanceState): RepeatInstance | null => {
+        if (state?.deleted || state?.date === null) {
             return null;
         }
 
-        const instanceDate = readModificationField(modification, 'date', occurrenceDateStr) || occurrenceDateStr;
+        const instanceDate = getInstanceField(state, 'date', occurrenceDateStr) || occurrenceDateStr;
         const defaultEndDate = reminder.endDate && reminder.date
             ? addDaysToDate(instanceDate, getDaysDifference(reminder.date, reminder.endDate))
             : undefined;
-        const instanceEndDate = readModificationField(modification, 'endDate', defaultEndDate);
-        const reminderTimesSource = readModificationField(modification, 'reminderTimes', reminder.reminderTimes);
-        const reminderTimes = modification?.preservedFromSeriesEdit
+        const instanceEndDate = getInstanceField(state, 'endDate', defaultEndDate);
+        const reminderTimesSource = getInstanceField(state, 'reminderTimes', reminder.reminderTimes);
+        const reminderTimes = state?.preservedFromSeriesEdit
             ? reminderTimesSource || undefined
             : resolveRepeatReminderTimes(
                 reminderTimesSource,
@@ -398,56 +514,55 @@ export function generateRepeatInstances(
                 reminder.date,
                 reminder.endDate
             );
-        const isInstanceCompleted = completedInstances.includes(originalDateKey);
-        const skipWeekendMode = hasModificationField(modification, 'reminderSkipWeekendMode') ||
-            hasModificationField(modification, 'reminderSkipWeekends')
-            ? resolveReminderSkipWeekendMode(modification)
+        const isInstanceCompleted = !!state?.completed;
+        const skipWeekendMode = hasInstanceField(state, 'reminderSkipWeekendMode') || hasInstanceField(state, 'reminderSkipWeekends')
+            ? resolveReminderSkipWeekendMode(state)
             : resolveReminderSkipWeekendMode(reminder, repeatConfig);
 
         return {
-            title: readModificationField(modification, 'title', reminder.title),
+            title: getInstanceField(state, 'title', reminder.title),
             date: instanceDate,
-            time: readModificationField(modification, 'time', reminder.time),
+            time: getInstanceField(state, 'time', reminder.time),
             endDate: instanceEndDate,
-            endTime: readModificationField(modification, 'endTime', reminder.endTime),
+            endTime: getInstanceField(state, 'endTime', reminder.endTime),
             reminderTimes,
-            customReminderPreset: readModificationField(modification, 'customReminderPreset', reminder.customReminderPreset),
-            blockId: readModificationField(modification, 'blockId', reminder.blockId),
-            docId: readModificationField(modification, 'docId', reminder.docId),
-            url: readModificationField(modification, 'url', reminder.url),
+            customReminderPreset: getInstanceField(state, 'customReminderPreset', reminder.customReminderPreset),
+            blockId: getInstanceField(state, 'blockId', reminder.blockId),
+            docId: getInstanceField(state, 'docId', reminder.docId),
+            url: getInstanceField(state, 'url', reminder.url),
             instanceId: `${reminder.id}_${originalDateKey}`,
             originalId: reminder.id,
             isRepeatedInstance: true,
             completed: isInstanceCompleted,
-            completedTime: isInstanceCompleted ? readModificationField(modification, 'completedTime', instanceCompletedTimes[originalDateKey]) : undefined,
-            note: readModificationField(modification, 'note', reminder.note || ''),
-            priority: readModificationField(modification, 'priority', reminder.priority || 'none'),
-            categoryId: readModificationField(modification, 'categoryId', reminder.categoryId),
-            projectId: readModificationField(modification, 'projectId', reminder.projectId),
-            customGroupId: readModificationField(modification, 'customGroupId', reminder.customGroupId),
-            kanbanStatus: readModificationField(modification, 'kanbanStatus', reminder.kanbanStatus),
-            tagIds: readModificationField(modification, 'tagIds', reminder.tagIds),
-            milestoneId: readModificationField(modification, 'milestoneId', reminder.milestoneId),
-            linkedHabitId: readModificationField(modification, 'linkedHabitId', reminder.linkedHabitId),
-            linkedHabitSyncPomodoroToday: readModificationField(modification, 'linkedHabitSyncPomodoroToday', reminder.linkedHabitSyncPomodoroToday),
-            linkedHabitAutoCheckInOnComplete: readModificationField(modification, 'linkedHabitAutoCheckInOnComplete', reminder.linkedHabitAutoCheckInOnComplete),
-            linkedHabitAutoCheckInOptionKey: readModificationField(modification, 'linkedHabitAutoCheckInOptionKey', reminder.linkedHabitAutoCheckInOptionKey),
-            linkedHabitAutoCheckInEmoji: readModificationField(modification, 'linkedHabitAutoCheckInEmoji', reminder.linkedHabitAutoCheckInEmoji),
-            estimatedPomodoroDuration: readModificationField(modification, 'estimatedPomodoroDuration', reminder.estimatedPomodoroDuration),
-            customProgress: readModificationField(modification, 'customProgress', reminder.customProgress),
-            pinned: readModificationField(modification, 'pinned', reminder.pinned),
-            hideInCalendar: readModificationField(modification, 'hideInCalendar', reminder.hideInCalendar),
-            isAvailableToday: readModificationField(modification, 'isAvailableToday', reminder.isAvailableToday),
-            availableStartDate: readModificationField(modification, 'availableStartDate', reminder.availableStartDate),
-            treatStartDateAsDeadline: readModificationField(modification, 'treatStartDateAsDeadline', reminder.treatStartDateAsDeadline),
+            completedTime: isInstanceCompleted ? getInstanceField(state, 'completedTime', undefined) : undefined,
+            note: getInstanceField(state, 'note', reminder.note || ''),
+            priority: getInstanceField(state, 'priority', reminder.priority || 'none'),
+            categoryId: getInstanceField(state, 'categoryId', reminder.categoryId),
+            projectId: getInstanceField(state, 'projectId', reminder.projectId),
+            customGroupId: getInstanceField(state, 'customGroupId', reminder.customGroupId),
+            kanbanStatus: getInstanceField(state, 'kanbanStatus', reminder.kanbanStatus),
+            tagIds: getInstanceField(state, 'tagIds', reminder.tagIds),
+            milestoneId: getInstanceField(state, 'milestoneId', reminder.milestoneId),
+            linkedHabitId: getInstanceField(state, 'linkedHabitId', reminder.linkedHabitId),
+            linkedHabitSyncPomodoroToday: getInstanceField(state, 'linkedHabitSyncPomodoroToday', reminder.linkedHabitSyncPomodoroToday),
+            linkedHabitAutoCheckInOnComplete: getInstanceField(state, 'linkedHabitAutoCheckInOnComplete', reminder.linkedHabitAutoCheckInOnComplete),
+            linkedHabitAutoCheckInOptionKey: getInstanceField(state, 'linkedHabitAutoCheckInOptionKey', reminder.linkedHabitAutoCheckInOptionKey),
+            linkedHabitAutoCheckInEmoji: getInstanceField(state, 'linkedHabitAutoCheckInEmoji', reminder.linkedHabitAutoCheckInEmoji),
+            estimatedPomodoroDuration: getInstanceField(state, 'estimatedPomodoroDuration', reminder.estimatedPomodoroDuration),
+            customProgress: getInstanceField(state, 'customProgress', reminder.customProgress),
+            pinned: getInstanceField(state, 'pinned', reminder.pinned),
+            hideInCalendar: getInstanceField(state, 'hideInCalendar', reminder.hideInCalendar),
+            isAvailableToday: getInstanceField(state, 'isAvailableToday', reminder.isAvailableToday),
+            availableStartDate: getInstanceField(state, 'availableStartDate', reminder.availableStartDate),
+            treatStartDateAsDeadline: getInstanceField(state, 'treatStartDateAsDeadline', reminder.treatStartDateAsDeadline),
             reminderSkipWeekendMode: skipWeekendMode,
-            reminderSkipHolidays: readModificationField(
-                modification,
+            reminderSkipHolidays: getInstanceField(
+                state,
                 'reminderSkipHolidays',
                 reminder.reminderSkipHolidays !== undefined ? reminder.reminderSkipHolidays : repeatConfig.reminderSkipHolidays
             ),
-            sort: readModificationField(modification, 'sort', reminder.sort || 0),
-            preservedFromSeriesEdit: modification?.preservedFromSeriesEdit === true
+            sort: getInstanceField(state, 'sort', reminder.sort || 0),
+            preservedFromSeriesEdit: state?.preservedFromSeriesEdit === true
         };
     };
 
@@ -470,11 +585,11 @@ export function generateRepeatInstances(
                 !excludeDates.includes(currentDateStr)) {
 
                 // 检查是否有针对此实例的修改
-                const modification = instanceModifications[currentDateStr];
+                const state = instancesMap[currentDateStr];
                 generatedInstanceKeys.add(currentDateStr);
 
-                // 如果修改中明确将 date 设为 null，表示用户选择“清除日期/移除此实例”，因此跳过生成该实例
-                const instance = buildInstance(currentDateStr, currentDateStr, modification);
+                // 如果实例状态标记为 deleted，表示用户选择“清除日期/移除此实例”，因此跳过生成该实例
+                const instance = buildInstance(currentDateStr, currentDateStr, state);
                 if (instance) {
                     instances.push(instance);
                     instanceCount++;
@@ -486,18 +601,18 @@ export function generateRepeatInstances(
         currentDate = getNextDate(currentDate, repeatConfig);
     }
 
-    Object.entries(instanceModifications).forEach(([originalDateKey, modification]: [string, any]) => {
-        if (!modification?.preservedFromSeriesEdit || generatedInstanceKeys.has(originalDateKey)) {
+    Object.entries(instancesMap).forEach(([originalDateKey, state]) => {
+        if (!state?.preservedFromSeriesEdit || generatedInstanceKeys.has(originalDateKey) || state?.deleted) {
             return;
         }
         if (excludeDates.includes(originalDateKey)) {
             return;
         }
-        const instanceDate = modification.date || originalDateKey;
+        const instanceDate = state.date || originalDateKey;
         if (compareDateStrings(instanceDate, startDate) < 0 || compareDateStrings(instanceDate, endDate) > 0) {
             return;
         }
-        const instance = buildInstance(originalDateKey, originalDateKey, modification);
+        const instance = buildInstance(originalDateKey, originalDateKey, state);
         if (instance) {
             instances.push(instance);
         }
@@ -512,6 +627,73 @@ export function generateRepeatInstances(
     });
 
     return instances;
+}
+
+/**
+ * 生成重复实例，并保证视野内至少存在一个未来的未完成实例。
+ * 如果当前窗口内没有未来未完成实例，会自动扩展窗口重试。
+ */
+export function generateRepeatInstancesWithFutureGuarantee(
+    reminder: any,
+    today: string,
+    options: {
+        isLunarRepeat?: boolean;
+        settings?: any;
+        holidayData?: any;
+        maxAttempts?: number;
+        startDate?: string;
+    } = {}
+): RepeatInstance[] {
+    const {
+        isLunarRepeat = false,
+        settings,
+        holidayData,
+        maxAttempts = 5,
+        startDate: requestedStartDate
+    } = options;
+    let monthsToAdd = isLunarRepeat
+        ? 14
+        : reminder.repeat?.type === 'yearly'
+            ? 14
+            : reminder.repeat?.type === 'monthly'
+                ? 3
+                : 2;
+
+    let repeatInstances: RepeatInstance[] = [];
+    let hasUncompletedFutureInstance = false;
+    let attempts = 0;
+
+    while (!hasUncompletedFutureInstance && attempts < maxAttempts) {
+        const monthStart = requestedStartDate
+            ? new Date(requestedStartDate + 'T00:00:00')
+            : new Date();
+        monthStart.setDate(1);
+        monthStart.setMonth(monthStart.getMonth() - 1);
+
+        const monthEnd = new Date();
+        monthEnd.setMonth(monthEnd.getMonth() + monthsToAdd);
+        monthEnd.setDate(0);
+
+        const rangeStartDate = getLocalDateString(monthStart);
+        const rangeEndDate = getLocalDateString(monthEnd);
+        const maxInstances = monthsToAdd * 50;
+
+        repeatInstances = generateRepeatInstances(reminder, rangeStartDate, rangeEndDate, maxInstances)
+            .filter(instance => !shouldSkipReminderOnDate(instance, instance.date, settings, holidayData));
+
+        hasUncompletedFutureInstance = repeatInstances.some(instance => {
+            const originalKey = getRepeatInstanceOriginalKey(instance);
+            return compareDateStrings(instance.date, today) > 0 && !isRepeatInstanceCompleted(reminder, originalKey);
+        });
+
+        if (!hasUncompletedFutureInstance) {
+            if (reminder.repeat?.type === 'yearly' || isLunarRepeat) monthsToAdd += 12;
+            else monthsToAdd += 6;
+            attempts++;
+        }
+    }
+
+    return repeatInstances;
 }
 
 /**
@@ -885,50 +1067,59 @@ export function generateSubtreeInstances(
         }
 
         const instanceId = `${child.id}_${instanceDate}`;
-        const completedInstances = child.repeat?.completedInstances || [];
-        const isInstanceCompleted = completedInstances.includes(instanceDate);
-        const instanceModifications = child.repeat?.instanceModifications || {};
-        const instanceMod = instanceModifications[instanceDate];
+        const instanceState = getRepeatInstanceState(child, instanceDate);
+        if (instanceState?.deleted || instanceState?.date === null) {
+            return;
+        }
+        const isInstanceCompleted = !!instanceState?.completed;
+        const defaultEndDate = child.endDate && child.date
+            ? addDaysToDate(instanceDate, getDaysDifference(child.date, child.endDate))
+            : undefined;
 
         const instanceTask = {
             ...child,
+            ...instanceState,
             id: instanceId,
             parentId: instanceParentId,
-            date: instanceDate,
+            date: getInstanceField(instanceState, 'date', instanceDate),
             // If subtask has end date, calculate based on original span
-            endDate: instanceMod?.endDate || (child.endDate && child.date ? addDaysToDate(instanceDate, getDaysDifference(child.date, child.endDate)) : undefined),
-            time: instanceMod?.time || child.time,
-            endTime: instanceMod?.endTime || child.endTime,
-            blockId: instanceMod?.blockId !== undefined ? instanceMod.blockId : child.blockId,
-            docId: instanceMod?.docId !== undefined ? instanceMod.docId : child.docId,
-            url: instanceMod?.url !== undefined ? instanceMod.url : child.url,
+            endDate: getInstanceField(instanceState, 'endDate', defaultEndDate),
+            time: getInstanceField(instanceState, 'time', child.time),
+            endTime: getInstanceField(instanceState, 'endTime', child.endTime),
+            blockId: getInstanceField(instanceState, 'blockId', child.blockId),
+            docId: getInstanceField(instanceState, 'docId', child.docId),
+            url: getInstanceField(instanceState, 'url', child.url),
             // 确保实例级 title 会覆盖模板 title（修复 ghost 子任务实例标题未更新的问题）
-            title: instanceMod?.title !== undefined ? instanceMod.title : child.title,
+            title: getInstanceField(instanceState, 'title', child.title || ''),
             isRepeatInstance: true,
             originalId: child.id,
             completed: isInstanceCompleted,
             // Inherit/override properties
-            note: instanceMod?.note !== undefined ? instanceMod.note : child.note,
-            priority: instanceMod?.priority !== undefined ? instanceMod.priority : child.priority,
-            categoryId: instanceMod?.categoryId !== undefined ? instanceMod.categoryId : child.categoryId,
-            projectId: instanceMod?.projectId !== undefined ? instanceMod.projectId : child.projectId,
-            customGroupId: instanceMod?.customGroupId !== undefined ? instanceMod.customGroupId : child.customGroupId,
-            kanbanStatus: instanceMod?.kanbanStatus !== undefined ? instanceMod.kanbanStatus : child.kanbanStatus,
-            milestoneId: instanceMod?.milestoneId !== undefined ? instanceMod.milestoneId : child.milestoneId,
-            tagIds: instanceMod?.tagIds !== undefined ? instanceMod.tagIds : child.tagIds,
-            treatStartDateAsDeadline: instanceMod?.treatStartDateAsDeadline !== undefined ? instanceMod.treatStartDateAsDeadline : child.treatStartDateAsDeadline,
-            reminderSkipWeekendMode: resolveReminderSkipWeekendMode(instanceMod, child, child.repeat),
-            reminderSkipHolidays: instanceMod?.reminderSkipHolidays !== undefined ? instanceMod.reminderSkipHolidays : (child.reminderSkipHolidays !== undefined ? child.reminderSkipHolidays : child.repeat?.reminderSkipHolidays),
+            note: getInstanceField(instanceState, 'note', child.note),
+            priority: getInstanceField(instanceState, 'priority', child.priority),
+            categoryId: getInstanceField(instanceState, 'categoryId', child.categoryId),
+            projectId: getInstanceField(instanceState, 'projectId', child.projectId),
+            customGroupId: getInstanceField(instanceState, 'customGroupId', child.customGroupId),
+            kanbanStatus: getInstanceField(instanceState, 'kanbanStatus', child.kanbanStatus),
+            milestoneId: getInstanceField(instanceState, 'milestoneId', child.milestoneId),
+            tagIds: getInstanceField(instanceState, 'tagIds', child.tagIds),
+            treatStartDateAsDeadline: getInstanceField(instanceState, 'treatStartDateAsDeadline', child.treatStartDateAsDeadline),
+            reminderSkipWeekendMode: resolveReminderSkipWeekendMode(instanceState, child, child.repeat),
+            reminderSkipHolidays: getInstanceField(
+                instanceState,
+                'reminderSkipHolidays',
+                child.reminderSkipHolidays !== undefined ? child.reminderSkipHolidays : child.repeat?.reminderSkipHolidays
+            ),
             reminderTimes: resolveRepeatReminderTimes(
-                instanceMod?.reminderTimes !== undefined ? instanceMod.reminderTimes : child.reminderTimes,
+                getInstanceField(instanceState, 'reminderTimes', child.reminderTimes),
                 instanceDate,
-                instanceMod?.endDate || (child.endDate && child.date ? addDaysToDate(instanceDate, getDaysDifference(child.date, child.endDate)) : undefined),
+                getInstanceField(instanceState, 'endDate', defaultEndDate),
                 child.date,
                 child.endDate
             ),
-            customReminderPreset: instanceMod?.customReminderPreset !== undefined ? instanceMod.customReminderPreset : child.customReminderPreset,
-            completedTime: isInstanceCompleted ? (instanceMod?.completedTime || child.repeat?.completedTimes?.[instanceDate] || getLocalDateTimeString(new Date(instanceDate))) : undefined,
-            sort: (instanceMod && typeof instanceMod.sort === 'number') ? instanceMod.sort : (child.sort || 0)
+            customReminderPreset: getInstanceField(instanceState, 'customReminderPreset', child.customReminderPreset),
+            completedTime: isInstanceCompleted ? (instanceState?.completedTime || getLocalDateTimeString(new Date(instanceDate))) : undefined,
+            sort: getInstanceField(instanceState, 'sort', child.sort || 0)
         };
 
         targetList.push(instanceTask);

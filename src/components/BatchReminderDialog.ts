@@ -1691,7 +1691,7 @@ class SmartBatchDialog {
 
                 // 如果是周期任务，自动完成所有过去的实例
                 if (setting.repeatConfig?.enabled && setting.date) {
-                    const { generateRepeatInstances } = await import("../utils/repeatUtils");
+                    const { generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey } = await import("../utils/repeatUtils");
 
                     const today = getLogicalDateString();
 
@@ -1716,19 +1716,10 @@ class SmartBatchDialog {
                     const instances = generateRepeatInstances(reminder, setting.date, today, maxInstances);
 
                     // 将所有早于今天的实例标记为已完成
-                    const pastInstances: string[] = [];
-                    instances.forEach(instance => {
+                    for (const instance of instances) {
                         if (instance.date < today) {
-                            pastInstances.push(instance.date);
+                            setRepeatInstanceCompletion(reminder, getRepeatInstanceOriginalKey(instance), true);
                         }
-                    });
-
-                    // 如果有过去的实例，添加到completedInstances
-                    if (pastInstances.length > 0) {
-                        if (!reminder.repeat.completedInstances) {
-                            reminder.repeat.completedInstances = [];
-                        }
-                        reminder.repeat.completedInstances.push(...pastInstances);
                     }
                 }
 

@@ -221,27 +221,25 @@ export async function updateBindBlockAtrrs(blockId: string, bridge: any): Promis
             reminder && reminder.blockId === blockId
         );
         const instanceBlockReminders = (Object.values(reminderData) as any[]).flatMap((reminder: any) => {
-            const modifications = reminder?.repeat?.instanceModifications;
-            if (!reminder || !modifications || typeof modifications !== 'object') {
+            const instances = reminder?.repeat?.instances;
+            if (!reminder || !instances || typeof instances !== 'object') {
                 return [];
             }
 
             const excludeDates = reminder.repeat?.excludeDates || [];
-            return Object.entries(modifications as Record<string, any>)
-                .filter(([instanceDate, mod]: [string, any]) => mod?.blockId === blockId && !excludeDates.includes(instanceDate))
-                .map(([instanceDate, mod]: [string, any]) => {
-                    const completedInstances = reminder.repeat?.completedInstances || [];
-                    const completedTimes = reminder.repeat?.completedTimes || reminder.repeat?.instanceCompletedTimes || {};
-                    const isCompleted = completedInstances.includes(instanceDate);
+            return Object.entries(instances as Record<string, any>)
+                .filter(([instanceDate, state]: [string, any]) => state?.blockId === blockId && !excludeDates.includes(instanceDate) && !state?.deleted)
+                .map(([instanceDate, state]: [string, any]) => {
+                    const isCompleted = !!state?.completed;
                     return {
                         ...reminder,
-                        ...mod,
+                        ...state,
                         id: `${reminder.id}_${instanceDate}`,
                         originalId: reminder.id,
                         isRepeatInstance: true,
                         completed: isCompleted,
-                        completedTime: isCompleted ? completedTimes[instanceDate] : undefined,
-                        projectId: mod.projectId !== undefined ? mod.projectId : reminder.projectId
+                        completedTime: isCompleted ? state?.completedTime : undefined,
+                        projectId: state.projectId !== undefined ? state.projectId : reminder.projectId
                     };
                 });
         });

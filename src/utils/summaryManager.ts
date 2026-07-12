@@ -1,4 +1,5 @@
 import type { ReminderItem, Project, Habit } from "../kernel/types";
+import { isRepeatInstanceCompleted } from "./repeatUtils";
 import { ReminderManager } from "./reminderManager";
 import { ProjectManager } from "./projectManager";
 import { HabitManager } from "./habitManager";
@@ -233,13 +234,12 @@ export class SummaryManager {
             const isRepeat = reminder.repeat?.enabled && reminder.repeat?.type;
             if (isRepeat) {
                 const instances = expandRepeatInstances(reminder, startDate, endDate);
-                const completedInstances = reminder.repeat?.completedInstances || [];
                 for (const instance of instances) {
                     const day = dayMap.get(instance.date);
                     if (!day) continue;
 
                     const projectName = instance.projectId ? await this.getProjectName(instance.projectId) : undefined;
-                    const isCompleted = completedInstances.includes(instance.date);
+                    const isCompleted = isRepeatInstanceCompleted(reminder, instance.date);
 
                     day.tasks.push({
                         id: instance.id,

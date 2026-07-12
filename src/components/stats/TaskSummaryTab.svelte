@@ -3,7 +3,7 @@
     import { i18n } from "../../pluginInstance";
     import { getLocalDateString, getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
     import { ProjectManager } from "../../utils/projectManager";
-    import { generateRepeatInstances } from "@/utils/repeatUtils";
+    import { generateRepeatInstances, getRepeatInstanceOriginalKey } from "@/utils/repeatUtils";
     import { PomodoroRecordManager } from "@/utils/pomodoroRecord";
     import { getLuteInstance } from "../../utils/luteSingleton";
     import { Dialog, showMessage, platformUtils } from "siyuan";
@@ -408,27 +408,20 @@
 
                 if (reminder.repeat?.enabled) {
                     const repeatInstances = generateRepeatInstances(reminder, startDate, endDate);
-                    const sameDateInstance = repeatInstances.find(i => i.date === reminder.date);
+                    const sameDateInstance = repeatInstances.find(i => getRepeatInstanceOriginalKey(i) === reminder.date);
                     if (!sameDateInstance) {
                         addEventToList(events, reminder, reminder.id, false);
                     }
 
                     repeatInstances.forEach(instance => {
-                        const originalKey = instance.date;
-                        const completedInstances = reminder.repeat?.completedInstances || [];
-                        const isInstanceCompleted = completedInstances.includes(originalKey);
-                        const instanceModifications = reminder.repeat?.instanceModifications || {};
-                        const instanceMod = instanceModifications[originalKey];
+                        const originalKey = getRepeatInstanceOriginalKey(instance);
+                        const isInstanceCompleted = instance.completed ?? false;
 
                         const instanceReminder = {
                             ...reminder,
-                            date: instance.date,
-                            endDate: instance.endDate,
-                            time: instance.time,
-                            endTime: instance.endTime,
+                            ...instance,
                             completed: isInstanceCompleted,
-                            note: instanceMod?.note || "",
-                            customGroupId: instanceMod?.customGroupId !== undefined ? instanceMod.customGroupId : (instance as any).customGroupId ?? reminder.customGroupId,
+                            note: instance.note || "",
                             docTitle: reminder.docTitle,
                         };
 

@@ -11,6 +11,51 @@ export interface MonthlyWeekRule {
     weekday: number;
 }
 
+export interface RepeatInstanceState {
+    completed?: boolean;
+    completedTime?: string;
+    modifiedAt?: string;
+    preservedFromSeriesEdit?: boolean;
+    deleted?: boolean;
+
+    title?: string;
+    date?: string;
+    endDate?: string;
+    time?: string;
+    endTime?: string;
+    reminderTimes?: Array<{ time: string; endTime?: string; note?: string }>;
+    customReminderPreset?: string;
+    blockId?: string | null;
+    docId?: string | null;
+    url?: string;
+    note?: string;
+    priority?: string;
+    categoryId?: string;
+    projectId?: string;
+    customGroupId?: string;
+    kanbanStatus?: string;
+    tagIds?: string[];
+    milestoneId?: string;
+    linkedHabitId?: string;
+    linkedHabitSyncPomodoroToday?: boolean;
+    linkedHabitAutoCheckInOnComplete?: boolean;
+    linkedHabitAutoCheckInOptionKey?: string;
+    linkedHabitAutoCheckInEmoji?: string;
+    estimatedPomodoroDuration?: number;
+    customProgress?: number;
+    pinned?: boolean;
+    hideInCalendar?: boolean;
+    isAvailableToday?: boolean;
+    availableStartDate?: string;
+    treatStartDateAsDeadline?: boolean;
+    reminderSkipWeekendMode?: ReminderSkipWeekendMode;
+    reminderSkipWeekends?: boolean;
+    reminderSkipHolidays?: boolean;
+    sort?: number;
+    notified?: boolean;
+    customGroupName?: string;
+}
+
 export interface RepeatConfig {
     enabled: boolean;
     type: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' | 'ebbinghaus' | 'lunar-monthly' | 'lunar-yearly';
@@ -32,25 +77,7 @@ export interface RepeatConfig {
     reminderSkipWeekends?: boolean; // 旧字段：重复任务提醒是否跳过周末；未设置时跟随全局设置
     reminderSkipHolidays?: boolean; // 重复任务提醒是否跳过节假日；未设置时跟随全局设置
     excludeDates?: string[]; // 排除的日期列表
-    instanceModifications?: {
-        [date: string]: {
-            title?: string;
-            date?: string;
-            endDate?: string;
-            time?: string;
-            endTime?: string;
-            blockId?: string | null;
-            docId?: string | null;
-            url?: string;
-            note?: string; // 实例级别的备注
-            priority?: string;
-            reminderSkipWeekendMode?: ReminderSkipWeekendMode;
-            reminderSkipWeekends?: boolean;
-            reminderSkipHolidays?: boolean;
-            modifiedAt?: string;
-        }
-    }; // 实例修改列表
-    completedInstances?: string[]; // 已完成的实例日期列表
+    instances?: Record<string, RepeatInstanceState>; // 统一实例状态
 }
 
 export class RepeatSettingsDialog {

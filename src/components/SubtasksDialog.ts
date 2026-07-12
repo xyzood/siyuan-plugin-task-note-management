@@ -9,7 +9,7 @@ import { CategoryManager } from "../utils/categoryManager";
 import { ProjectManager } from "../utils/projectManager";
 import { getLogicalDateString } from "../utils/dateUtils";
 import { getSortCriterionName, loadSortConfig, saveSortConfig, type SortCriterion } from "../utils/sortConfig";
-import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference } from "../utils/repeatUtils";
+import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, getRepeatInstanceState } from "../utils/repeatUtils";
 import { getLuteInstance } from "../utils/luteSingleton";
 
 export class SubtasksDialog {
@@ -248,14 +248,14 @@ export class SubtasksDialog {
 
         const createGhostTask = (templateTask: any, renderedParentId: string) => {
             const ghostId = `${templateTask.id}_${instanceDate}`;
-            const instanceMod = templateTask.repeat?.instanceModifications?.[instanceDate!] || {};
-            const instanceDateVal = instanceMod.date !== undefined ? instanceMod.date : instanceDate!;
+            const instanceState = getRepeatInstanceState(templateTask, instanceDate!) || {};
+            const instanceDateVal = instanceState.date !== undefined ? instanceState.date : instanceDate!;
             const defaultEndDate = templateTask.endDate && templateTask.date
                 ? addDaysToDate(instanceDateVal, getDaysDifference(templateTask.date, templateTask.endDate))
                 : undefined;
-            const instanceEndDate = instanceMod.endDate !== undefined ? instanceMod.endDate : defaultEndDate;
-            const reminderTimesSource = instanceMod.reminderTimes !== undefined ? instanceMod.reminderTimes : templateTask.reminderTimes;
-            const reminderTimes = instanceMod.preservedFromSeriesEdit
+            const instanceEndDate = instanceState.endDate !== undefined ? instanceState.endDate : defaultEndDate;
+            const reminderTimesSource = instanceState.reminderTimes !== undefined ? instanceState.reminderTimes : templateTask.reminderTimes;
+            const reminderTimes = instanceState.preservedFromSeriesEdit
                 ? reminderTimesSource || undefined
                 : resolveRepeatReminderTimes(
                     reminderTimesSource,
@@ -267,17 +267,17 @@ export class SubtasksDialog {
 
             return {
                 ...templateTask,
-                ...instanceMod,
+                ...instanceState,
                 id: ghostId,
                 parentId: renderedParentId,
                 isRepeatInstance: true,
                 originalId: templateTask.id,
-                completed: templateTask.repeat?.completedInstances?.includes(instanceDate!) || false,
-                title: instanceMod.title || templateTask.title || '(无标题)',
+                completed: instanceState.completed || false,
+                title: instanceState.title || templateTask.title || '(无标题)',
                 date: instanceDateVal,
                 endDate: instanceEndDate,
-                time: instanceMod.time !== undefined ? instanceMod.time : templateTask.time,
-                endTime: instanceMod.endTime !== undefined ? instanceMod.endTime : templateTask.endTime,
+                time: instanceState.time !== undefined ? instanceState.time : templateTask.time,
+                endTime: instanceState.endTime !== undefined ? instanceState.endTime : templateTask.endTime,
                 reminderTimes
             };
         };
@@ -493,7 +493,7 @@ export class SubtasksDialog {
         if (task?.isRepeatInstance) {
             const parsed = this.parseInstanceParentId(task.id);
             const instanceDate = task.instanceDate || parsed.instanceDate || task.date;
-            return task.repeat?.completedTimes?.[instanceDate] || null;
+            return getRepeatInstanceCompletedTime(task, instanceDate) || null;
         }
         return null;
     }
@@ -928,22 +928,7 @@ export class SubtasksDialog {
 
         if (date) {
             // 重复实例逻辑：将完成状态记录在 repeat 对象中
-            if (!task.repeat) task.repeat = {};
-            if (!task.repeat.completedInstances) task.repeat.completedInstances = [];
-            if (!task.repeat.completedTimes) task.repeat.completedTimes = {};
-
-            if (completed) {
-                if (!task.repeat.completedInstances.includes(date)) {
-                    task.repeat.completedInstances.push(date);
-                }
-                task.repeat.completedTimes[date] = new Date().toISOString();
-            } else {
-                const idx = task.repeat.completedInstances.indexOf(date);
-                if (idx > -1) {
-                    task.repeat.completedInstances.splice(idx, 1);
-                }
-                delete task.repeat.completedTimes[date];
-            }
+            setRepeatInstanceCompletion(task, date, completed);
         } else {
             // 普通任务逻辑
             task.completed = completed;

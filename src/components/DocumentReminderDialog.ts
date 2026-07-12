@@ -1,11 +1,11 @@
 import { Dialog, showMessage, confirm } from "siyuan";
 import { updateBindBlockAtrrs, getBlockByID, openBlock } from "../api";
-import { getLocalDateString, compareDateStrings, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../utils/dateUtils";
+import { getLocalDateString, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../utils/dateUtils";
 import { CategoryManager } from "../utils/categoryManager";
 import { ProjectManager } from "../utils/projectManager";
 import { QuickReminderDialog } from "./QuickReminderDialog";
 import { TaskRenderer } from "./render/TaskRenderer";
-import { generateRepeatInstances, resolveRepeatReminderTimes, addDaysToDate, getDaysDifference } from "../utils/repeatUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, setRepeatInstanceCompletion, deleteRepeatInstanceState, addDaysToDate, getDaysDifference, resolveRepeatReminderTimes } from "../utils/repeatUtils";
 import { i18n } from "../pluginInstance";
 
 export class DocumentReminderDialog {
@@ -302,36 +302,21 @@ export class DocumentReminderDialog {
                     const today = getLogicalDateString();
                     const isLunarRepeat = reminder.repeat.type === 'lunar-monthly' || reminder.repeat.type === 'lunar-yearly';
 
-                    const instances = this.generateInstancesWithFutureGuarantee(reminder, today, isLunarRepeat);
+                    const instances = generateRepeatInstancesWithFutureGuarantee(reminder, today, { isLunarRepeat });
                     instances.forEach(instance => {
                         if (instance.date !== reminder.date) {
-                            const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                            const originalKey = instanceIdStr.split('_').pop() || instance.date;
-
-                            const completedInstances = reminder.repeat?.completedInstances || [];
-                            const completedTimes = reminder.repeat?.completedTimes || reminder.repeat?.instanceCompletedTimes || {};
-                            const isInstanceCompleted = completedInstances.includes(originalKey);
-
-                            const instanceModifications = reminder.repeat?.instanceModifications || {};
-                            const instanceMod = instanceModifications[originalKey];
+                            const originalKey = getRepeatInstanceOriginalKey(instance);
+                            const isInstanceCompleted = instance.completed ?? false;
 
                             const instanceReminder = {
                                 ...reminder,
+                                ...instance,
                                 id: instance.instanceId,
-                                date: instance.date,
-                                endDate: instance.endDate,
-                                time: instance.time,
-                                endTime: instance.endTime,
-                                reminderTimes: instance.reminderTimes,
                                 isRepeatInstance: true,
                                 originalId: instance.originalId,
                                 instanceDate: originalKey,
                                 completed: isInstanceCompleted,
-                                completedTime: isInstanceCompleted ? completedTimes[originalKey] : undefined,
-                                projectId: instanceMod?.projectId !== undefined ? instanceMod.projectId : reminder.projectId,
-                                customGroupId: instanceMod?.customGroupId !== undefined ? instanceMod.customGroupId : reminder.customGroupId,
-                                customGroupName: instanceMod?.customGroupName !== undefined ? instanceMod.customGroupName : reminder.customGroupName,
-                                note: instanceMod?.note || ''
+                                completedTime: isInstanceCompleted ? instance.completedTime : undefined
                             };
 
                             reminders.push(instanceReminder);
@@ -710,29 +695,8 @@ export class DocumentReminderDialog {
                 // 处理重复事件实例
                 const originalId = reminder.originalId;
                 if (reminderData[originalId]) {
-                    if (!reminderData[originalId].repeat.completedInstances) {
-                        reminderData[originalId].repeat.completedInstances = [];
-                    }
-                    if (!reminderData[originalId].repeat.completedTimes) {
-                        reminderData[originalId].repeat.completedTimes = {};
-                    }
-
-                    const completedInstances = reminderData[originalId].repeat.completedInstances;
-                    const completedTimes = reminderData[originalId].repeat.completedTimes;
                     const instanceKey = reminder.instanceDate || reminder.date;
-
-                    if (completed) {
-                        if (!completedInstances.includes(instanceKey)) {
-                            completedInstances.push(instanceKey);
-                        }
-                        completedTimes[instanceKey] = getLocalDateTimeString(new Date());
-                    } else {
-                        const index = completedInstances.indexOf(instanceKey);
-                        if (index > -1) {
-                            completedInstances.splice(index, 1);
-                        }
-                        delete completedTimes[instanceKey];
-                    }
+                    setRepeatInstanceCompletion(reminderData[originalId], instanceKey, completed);
                 }
             } else {
                 // 处理普通事件
@@ -997,32 +961,17 @@ export class DocumentReminderDialog {
 
         // 如果是删除特定日期的实例，我们需要将其标记为已删除
         // 而不是真正删除，以避免重复生成
-        if (!originalReminder.repeat.deletedInstances) {
-            originalReminder.repeat.deletedInstances = [];
+        if (!originalReminder.repeat.excludeDates) {
+            originalReminder.repeat.excludeDates = [];
         }
 
-        // 添加到已删除实例列表
-        if (!originalReminder.repeat.deletedInstances.includes(originalInstanceDate)) {
-            originalReminder.repeat.deletedInstances.push(originalInstanceDate);
+        // 添加到已排除实例列表
+        if (!originalReminder.repeat.excludeDates.includes(originalInstanceDate)) {
+            originalReminder.repeat.excludeDates.push(originalInstanceDate);
         }
 
-        // 如果该实例已完成，也需要从已完成列表中移除
-        if (originalReminder.repeat.completedInstances) {
-            const completedIndex = originalReminder.repeat.completedInstances.indexOf(originalInstanceDate);
-            if (completedIndex > -1) {
-                originalReminder.repeat.completedInstances.splice(completedIndex, 1);
-            }
-        }
-
-        // 删除完成时间记录
-        if (originalReminder.repeat.completedTimes) {
-            delete originalReminder.repeat.completedTimes[originalInstanceDate];
-        }
-
-        // 删除实例修改记录
-        if (originalReminder.repeat.instanceModifications) {
-            delete originalReminder.repeat.instanceModifications[originalInstanceDate];
-        }
+        // 删除该实例的统一状态
+        deleteRepeatInstanceState(originalReminder, originalInstanceDate);
     }
 
     // 新增：删除普通提醒
@@ -1040,69 +989,4 @@ export class DocumentReminderDialog {
         await this.plugin.cancelMobileNotification(reminder.id);
     }
 
-    /**
-     * 智能生成重复任务实例，确保至少能找到下一个未来实例
-     * @param reminder 提醒任务对象
-     * @param today 今天的日期字符串
-     * @param isLunarRepeat 是否是农历重复
-     * @returns 生成的实例数组
-     */
-    private generateInstancesWithFutureGuarantee(reminder: any, today: string, isLunarRepeat: boolean): any[] {
-        // 根据重复类型确定初始范围
-        let monthsToAdd = 2; // 默认范围
-
-        if (isLunarRepeat) {
-            monthsToAdd = 14; // 农历重复需要更长范围
-        } else if (reminder.repeat.type === 'yearly') {
-            monthsToAdd = 14; // 年度重复初始范围为14个月
-        } else if (reminder.repeat.type === 'monthly') {
-            monthsToAdd = 3; // 月度重复使用3个月
-        }
-
-        let repeatInstances: any[] = [];
-        let hasUncompletedFutureInstance = false;
-        const maxAttempts = 5; // 最多尝试5次扩展
-        let attempts = 0;
-
-        // 获取已完成实例列表
-        const completedInstances = reminder.repeat?.completedInstances || [];
-
-        while (!hasUncompletedFutureInstance && attempts < maxAttempts) {
-            const monthStart = new Date();
-            monthStart.setDate(1);
-            monthStart.setMonth(monthStart.getMonth() - 1);
-
-            const monthEnd = new Date();
-            monthEnd.setMonth(monthEnd.getMonth() + monthsToAdd);
-            monthEnd.setDate(0);
-
-            const startDate = getLocalDateString(monthStart);
-            const endDate = getLocalDateString(monthEnd);
-
-            // 生成实例，使用足够大的 maxInstances 以确保生成所有实例
-            const maxInstances = monthsToAdd * 50; // 根据范围动态调整
-            repeatInstances = generateRepeatInstances(reminder, startDate, endDate, maxInstances);
-
-            // 检查是否有未完成的未来实例（关键修复：不仅要是未来的，还要是未完成的）
-            hasUncompletedFutureInstance = repeatInstances.some(instance => {
-                const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                return compareDateStrings(instance.date, today) > 0 && !completedInstances.includes(originalKey);
-            });
-
-            if (!hasUncompletedFutureInstance) {
-                // 如果没有找到未完成的未来实例，扩展范围
-                if (reminder.repeat.type === 'yearly') {
-                    monthsToAdd += 12; // 年度重复每次增加12个月
-                } else if (isLunarRepeat) {
-                    monthsToAdd += 12; // 农历重复每次增加12个月
-                } else {
-                    monthsToAdd += 6; // 其他类型每次增加6个月
-                }
-                attempts++;
-            }
-        }
-
-        return repeatInstances;
-    }
 }

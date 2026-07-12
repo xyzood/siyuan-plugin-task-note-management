@@ -4241,38 +4241,22 @@ export default class ReminderPlugin extends Plugin {
                     const repeatInstances = generateRepeatInstances(reminder, today, today);
                     repeatInstances.forEach(instance => {
                         // 为生成的实例创建独立的呈现对象（包含 instance 级别的修改）
-                        // 从 instanceId (格式: originalId_YYYY-MM-DD) 中提取原始生成日期
-                        const originalInstanceDate = instance.instanceId.split('_').pop() || instance.date;
-
-                        // 检查实例级别的完成状态
-                        const completedInstances = reminder.repeat?.completedInstances || [];
-                        let isInstanceCompleted = completedInstances.includes(originalInstanceDate);
-
-                        // 检查实例级别的修改（包括备注、优先级、分类等）
-                        const instanceModifications = reminder.repeat?.instanceModifications || {};
-                        const instanceMod = instanceModifications[originalInstanceDate];
+                        // generateRepeatInstances 已经合并了 instances 中的覆盖字段和完成状态
+                        let isInstanceCompleted = instance.completed ?? false;
 
                         // 如果原始任务在每日完成记录中标记了今天已完成（跨天标记），则该实例应视为已完成
-                        if (!isInstanceCompleted && reminder.dailyCompletions && reminder.dailyCompletions[originalInstanceDate]) {
+                        if (!isInstanceCompleted && reminder.dailyCompletions && reminder.dailyCompletions[instance.date]) {
                             isInstanceCompleted = true;
                         }
 
                         const instanceReminder = {
                             ...reminder,
+                            ...instance,
                             id: instance.instanceId,
-                            date: instance.date,
-                            endDate: instance.endDate,
-                            reminderTimes: instanceMod?.reminderTimes !== undefined ? instanceMod.reminderTimes : instance.reminderTimes,
-                            customReminderPreset: instanceMod?.customReminderPreset !== undefined ? instanceMod.customReminderPreset : instance.customReminderPreset,
-                            time: instance.time,
-                            endTime: instance.endTime,
                             isRepeatInstance: true,
                             originalId: instance.originalId,
                             completed: isInstanceCompleted,
-                            note: instanceMod?.note || reminder.note,
-                            priority: instanceMod?.priority !== undefined ? instanceMod.priority : reminder.priority,
-                            categoryId: instanceMod?.categoryId !== undefined ? instanceMod.categoryId : reminder.categoryId,
-                            projectId: instanceMod?.projectId !== undefined ? instanceMod.projectId : reminder.projectId
+                            completedTime: isInstanceCompleted ? instance.completedTime : undefined
                         };
 
                         const key = `${reminder.id}_${instance.date}`;
@@ -4535,45 +4519,47 @@ export default class ReminderPlugin extends Plugin {
                     // 处理重复提醒
                     let instances = generateRepeatInstances(reminderObj, today, today);
 
-                    // 额外处理：如果存在 instanceModifications，将那些被修改后日期为今天的实例也加入检查。
+                    // 额外处理：如果存在 repeat.instances，将那些被修改后日期为今天的实例也加入检查。
                     // 情形：原始实例键（例如 2025-12-01）被修改为另一个日期（例如 2025-12-05），当今天为 2025-12-05 时
-                    // generateRepeatInstances 可能不会基于原始键生成该实例，因此需要显式加入由 instanceModifications 指定并移动到今天的实例。
+                    // generateRepeatInstances 可能不会基于原始键生成该实例，因此需要显式加入被移动到今天的实例。
                     try {
-                        const mods = reminderObj.repeat?.instanceModifications || {};
-                        for (const [origKey, mod] of Object.entries(mods)) {
+                        const instStates = reminderObj.repeat?.instances || {};
+                        for (const [origKey, state] of Object.entries(instStates)) {
                             try {
-                                if (!mod || typeof mod !== 'object') continue;
-                                const modObj = mod as any;
-                                if (modObj.date !== today) continue; // 只关心被改到今天的实例
+                                if (!state || typeof state !== 'object') continue;
+                                const stateObj = state as any;
+                                if (stateObj.date !== today) continue; // 只关心被改到今天的实例
+                                if (stateObj.deleted) continue;
                                 const instanceId = `${reminderObj.id}_${origKey}`;
                                 const exists = instances.some((it: any) => it.instanceId === instanceId);
                                 if (exists) continue;
 
                                 const constructed = {
-                                    title: modObj.title || reminderObj.title || i18n('unnamedNote'),
-                                    date: modObj.date || today,
-                                    time: modObj.time || reminderObj.time,
-                                    endDate: modObj.endDate || reminderObj.endDate,
-                                    endTime: modObj.endTime || reminderObj.endTime,
-                                    reminderTimes: modObj.reminderTimes !== undefined ? modObj.reminderTimes : reminderObj.reminderTimes,
-                                    customReminderPreset: modObj.customReminderPreset !== undefined ? modObj.customReminderPreset : reminderObj.customReminderPreset,
+                                    title: stateObj.title || reminderObj.title || i18n('unnamedNote'),
+                                    date: stateObj.date || today,
+                                    time: stateObj.time !== undefined ? stateObj.time : reminderObj.time,
+                                    endDate: stateObj.endDate !== undefined ? stateObj.endDate : reminderObj.endDate,
+                                    endTime: stateObj.endTime !== undefined ? stateObj.endTime : reminderObj.endTime,
+                                    reminderTimes: stateObj.reminderTimes !== undefined ? stateObj.reminderTimes : reminderObj.reminderTimes,
+                                    customReminderPreset: stateObj.customReminderPreset !== undefined ? stateObj.customReminderPreset : reminderObj.customReminderPreset,
                                     instanceId: instanceId,
                                     originalId: reminderObj.id,
                                     isRepeatedInstance: true,
-                                    completed: (reminderObj.repeat?.completedInstances || []).includes(origKey),
-                                    note: modObj.note || reminderObj.note,
-                                    priority: modObj.priority !== undefined ? modObj.priority : reminderObj.priority,
-                                    categoryId: modObj.categoryId !== undefined ? modObj.categoryId : reminderObj.categoryId,
-                                    projectId: modObj.projectId !== undefined ? modObj.projectId : reminderObj.projectId
+                                    completed: !!stateObj.completed,
+                                    completedTime: stateObj.completed ? stateObj.completedTime : undefined,
+                                    note: stateObj.note !== undefined ? stateObj.note : reminderObj.note,
+                                    priority: stateObj.priority !== undefined ? stateObj.priority : reminderObj.priority,
+                                    categoryId: stateObj.categoryId !== undefined ? stateObj.categoryId : reminderObj.categoryId,
+                                    projectId: stateObj.projectId !== undefined ? stateObj.projectId : reminderObj.projectId
                                 };
 
                                 instances.push(constructed as any);
                             } catch (e) {
-                                console.warn('处理 instanceModifications 时出错', e);
+                                console.warn('处理 repeat.instances 时出错', e);
                             }
                         }
                     } catch (e) {
-                        console.warn('处理重复实例的 instanceModifications 时发生错误:', e);
+                        console.warn('处理重复实例的 repeat.instances 时发生错误:', e);
                     }
 
                     // 将生成的实例与原始 reminderObj 合并，确保实例包含 title、note、priority 等字段

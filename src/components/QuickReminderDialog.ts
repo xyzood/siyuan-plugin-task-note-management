@@ -8,7 +8,7 @@ import { i18n } from "../pluginInstance";
 import { RepeatSettingsDialog, RepeatConfig } from "./RepeatSettingsDialog";
 import { solarToLunar } from "../utils/lunarUtils";
 import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
-import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances } from "../utils/repeatUtils";
+import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
 import { CategoryManageDialog } from "./CategoryManageDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { SubtasksDialog } from "./SubtasksDialog";
@@ -688,17 +688,17 @@ export class QuickReminderDialog {
         }
 
         if (this.isInstanceEdit && this.reminder && this.instanceDate) {
-            const instanceMod = this.reminder.repeat?.instanceModifications?.[this.instanceDate] || {};
+            const instanceState = getRepeatInstanceState(this.reminder, this.instanceDate) || {};
             const originalId = this.reminder.originalId || this.reminder.id;
             const instanceId = this.reminder.isInstance ? this.reminder.id : `${originalId}_${this.instanceDate}`;
             this.reminder = {
                 ...this.reminder,
-                ...instanceMod,
+                ...instanceState,
                 id: instanceId,
                 originalId,
                 instanceDate: this.instanceDate,
                 isInstance: true,
-                title: instanceMod.title || this.reminder.title || '(无标题)'
+                title: instanceState.title || this.reminder.title || '(无标题)'
             };
             this.defaultStatus = this.reminder.kanbanStatus || this.defaultStatus;
         }
@@ -1987,16 +1987,16 @@ export class QuickReminderDialog {
             };
 
             const createGhostTask = (templateTask: any, renderedParentId: string) => {
-                const instanceMod = templateTask.repeat?.instanceModifications?.[instanceDate!] || {};
+                const instanceState = getRepeatInstanceState(templateTask, instanceDate!) || {};
                 return {
                     ...templateTask,
-                    ...instanceMod,
+                    ...instanceState,
                     id: `${templateTask.id}_${instanceDate}`,
                     parentId: renderedParentId,
                     isRepeatInstance: true,
                     originalId: templateTask.id,
-                    completed: templateTask.repeat?.completedInstances?.includes(instanceDate!) || false,
-                    title: instanceMod.title || templateTask.title || '(无标题)',
+                    completed: instanceState.completed || false,
+                    title: instanceState.title || templateTask.title || '(无标题)',
                 };
             };
 
@@ -6953,11 +6953,11 @@ export class QuickReminderDialog {
             optimisticReminder.tagIds = tagIds.length > 0 ? tagIds : undefined;
             optimisticReminder.reminderTimes = this.customTimes.length > 0 ? [...this.customTimes] : undefined;
             // 保存 repeat 信息：如果用户开启了重复（repeatConfig.enabled），使用新的配置；
-            // 否则保留原对象中用于记录历史/实例状态的元数据（completedInstances/completedTimes/instanceModifications/excludeDates），
+            // 否则保留原对象中用于记录历史/实例状态的元数据（instances/excludeDates），
             // 以避免编辑操作误删 ghost 子任务的已完成记录。
             {
                 const existingRepeat = this.reminder?.repeat || {};
-                const preservedKeys = ['completedInstances', 'completedTimes', 'instanceModifications', 'excludeDates'];
+                const preservedKeys = ['instances', 'excludeDates'];
                 const preserved: any = {};
                 if (this.repeatConfig && this.repeatConfig.enabled) {
                     optimisticReminder.repeat = { ...existingRepeat, ...this.repeatConfig };
@@ -7151,11 +7151,11 @@ export class QuickReminderDialog {
                         reminder.tagIds = tagIds.length > 0 ? tagIds : undefined;
                         // 不再使用旧的 `customReminderTime` 存储；所有自定义提醒统一保存到 `reminderTimes`
                         reminder.reminderTimes = this.customTimes.length > 0 ? [...this.customTimes] : undefined;
-                        // 在保存时，合并/保留可能存在的实例元数据（例如 ghost 子任务使用的 completedInstances/completedTimes 等），
+                        // 在保存时，合并/保留可能存在的实例元数据（例如 ghost 子任务使用的 instances 等），
                         // 防止“编辑全部实例”误清空这些历史数据。
                         {
                             const existingRepeat = this.reminder?.repeat || {};
-                            const preservedKeys = ['completedInstances', 'completedTimes', 'instanceModifications', 'excludeDates'];
+                            const preservedKeys = ['instances', 'excludeDates'];
                             const preserved: any = {};
 
                             if (this.repeatConfig && this.repeatConfig.enabled) {
@@ -7527,12 +7527,9 @@ export class QuickReminderDialog {
                             }
                         });
 
-                        // 如果有过去的实例，添加到completedInstances
-                        if (pastInstances.length > 0) {
-                            if (!reminder.repeat.completedInstances) {
-                                reminder.repeat.completedInstances = [];
-                            }
-                            reminder.repeat.completedInstances.push(...pastInstances);
+                        // 如果有过去的实例，标记为已完成
+                        for (const instanceDate of pastInstances) {
+                            setRepeatInstanceCompletion(reminder, instanceDate, true);
                         }
                     }
                 }
@@ -7637,52 +7634,55 @@ export class QuickReminderDialog {
                 throw new Error('原始事件不存在');
             }
 
-            // 确保 repeat 结构存在并初始化实例修改列表，避免访问未定义属性时报错
+            // 确保 repeat 结构存在并初始化统一实例状态表，避免访问未定义属性时报错
             if (!reminderData[originalId].repeat) {
                 reminderData[originalId].repeat = {};
             }
-            if (!reminderData[originalId].repeat.instanceModifications) {
-                reminderData[originalId].repeat.instanceModifications = {};
+            if (!reminderData[originalId].repeat.instances) {
+                reminderData[originalId].repeat.instances = {};
             }
 
-            const modifications = reminderData[originalId].repeat.instanceModifications;
+            const instances = reminderData[originalId].repeat.instances;
 
             // 如果修改了日期，需要清理可能存在的中间修改记录
             if (instanceData.date !== instanceDate) {
                 const keysToDelete: string[] = [];
-                for (const key in modifications) {
-                    if (key !== instanceDate && modifications[key]?.date === instanceData.date) {
+                for (const key in instances) {
+                    if (key !== instanceDate && instances[key]?.date === instanceData.date) {
                         keysToDelete.push(key);
                     }
                 }
-                keysToDelete.forEach(key => delete modifications[key]);
+                keysToDelete.forEach(key => delete instances[key]);
             }
 
             // 获取旧值以检测变更
-            const oldMod = modifications[instanceDate] || {};
+            const oldState = instances[instanceDate] || {};
             const originalTask = reminderData[originalId];
             const hasInstanceField = (field: string) => Object.prototype.hasOwnProperty.call(instanceData, field);
 
             // 确定是否需要级联更新
-            const oldStatus = oldMod.kanbanStatus !== undefined ? oldMod.kanbanStatus : originalTask.kanbanStatus;
+            const oldStatus = oldState.kanbanStatus !== undefined ? oldState.kanbanStatus : originalTask.kanbanStatus;
             const newStatus = instanceData.kanbanStatus;
 
-            const oldGroup = oldMod.customGroupId !== undefined ? oldMod.customGroupId : originalTask.customGroupId;
+            const oldGroup = oldState.customGroupId !== undefined ? oldState.customGroupId : originalTask.customGroupId;
             const newGroup = instanceData.customGroupId;
 
-            const oldProject = oldMod.projectId !== undefined ? oldMod.projectId : originalTask.projectId;
+            const oldProject = oldState.projectId !== undefined ? oldState.projectId : originalTask.projectId;
             const newProject = instanceData.projectId;
 
-            // 保存此实例的修改数据
-            modifications[instanceDate] = {
+            // 保存此实例的修改数据，保留原有完成状态和其他状态
+            const existingCompleted = oldState.completed;
+            const existingCompletedTime = oldState.completedTime;
+            instances[instanceDate] = {
+                ...oldState,
                 title: instanceData.title,
                 date: instanceData.date,
                 endDate: instanceData.endDate,
                 time: instanceData.time,
                 endTime: instanceData.endTime,
-                blockId: hasInstanceField('blockId') ? instanceData.blockId : oldMod.blockId,
-                docId: hasInstanceField('docId') ? instanceData.docId : oldMod.docId,
-                url: hasInstanceField('url') ? instanceData.url : oldMod.url,
+                blockId: hasInstanceField('blockId') ? instanceData.blockId : oldState.blockId,
+                docId: hasInstanceField('docId') ? instanceData.docId : oldState.docId,
+                url: hasInstanceField('url') ? instanceData.url : oldState.url,
                 note: instanceData.note,
                 priority: instanceData.priority,
                 notified: instanceData.notified,
@@ -7697,6 +7697,8 @@ export class QuickReminderDialog {
                 reminderSkipWeekendMode: instanceData.reminderSkipWeekendMode,
                 reminderSkipHolidays: instanceData.reminderSkipHolidays,
                 pinned: instanceData.pinned,
+                completed: existingCompleted,
+                completedTime: existingCompletedTime,
                 modifiedAt: new Date().toISOString().split('T')[0]
             };
 
@@ -7709,27 +7711,27 @@ export class QuickReminderDialog {
                     if (!desc.repeat) {
                         desc.repeat = { enabled: false };
                     }
-                    if (!desc.repeat.instanceModifications) {
-                        desc.repeat.instanceModifications = {};
+                    if (!desc.repeat.instances) {
+                        desc.repeat.instances = {};
                     }
 
-                    const descMod = desc.repeat.instanceModifications[instanceDate] || {};
+                    const descState = desc.repeat.instances[instanceDate] || {};
 
                     // 强制子任务跟随父任务的变更
                     if (newStatus !== undefined) {
-                        descMod.kanbanStatus = newStatus;
+                        descState.kanbanStatus = newStatus;
                     }
 
                     if (newGroup !== undefined) {
-                        descMod.customGroupId = newGroup;
+                        descState.customGroupId = newGroup;
                     }
 
                     if (newProject !== undefined) {
-                        descMod.projectId = newProject;
+                        descState.projectId = newProject;
                     }
 
-                    descMod.modifiedAt = new Date().toISOString().split('T')[0];
-                    desc.repeat.instanceModifications[instanceDate] = descMod;
+                    descState.modifiedAt = new Date().toISOString().split('T')[0];
+                    desc.repeat.instances[instanceDate] = descState;
                 });
             }
 
@@ -7946,11 +7948,11 @@ export class QuickReminderDialog {
                         if (originalTask) {
                             instanceDate = potentialDate;
                             // 构造虚拟的实例对象用于显示
-                            const instanceMod = originalTask.repeat?.instanceModifications?.[instanceDate] || {};
+                            const instanceState = getRepeatInstanceState(originalTask, instanceDate) || {};
                             parentTask = {
                                 ...originalTask,
-                                ...instanceMod,
-                                title: instanceMod.title || originalTask.title || '(无标题)',
+                                ...instanceState,
+                                title: instanceState.title || originalTask.title || '(无标题)',
                                 isInstance: true,
                                 instanceDate: instanceDate,
                                 originalId: originalId
@@ -8057,36 +8059,26 @@ export class QuickReminderDialog {
     }
 
     private getRepeatInstanceOriginalDateKey(instance: any): string {
-        if (instance?.instanceDate) return instance.instanceDate;
-        const instanceId = instance?.instanceId || instance?.id;
-        if (typeof instanceId === 'string') {
-            const lastUnderscoreIndex = instanceId.lastIndexOf('_');
-            if (lastUnderscoreIndex !== -1) {
-                const potentialDate = instanceId.substring(lastUnderscoreIndex + 1);
-                if (/^\d{4}-\d{2}-\d{2}$/.test(potentialDate)) {
-                    return potentialDate;
-                }
-            }
-        }
-        return instance?.date;
+        return getRepeatInstanceOriginalKey(instance);
     }
 
-    private createInstanceLikeFromModification(originalReminder: any, originalDateKey: string, modification: any): any | null {
-        if (modification && Object.prototype.hasOwnProperty.call(modification, 'date') && modification.date === null) {
+    private createInstanceLikeFromModification(originalReminder: any, originalDateKey: string, state: any): any | null {
+        if (state && Object.prototype.hasOwnProperty.call(state, 'date') && state.date === null) {
+            return null;
+        }
+        if (state?.deleted) {
             return null;
         }
 
-        const repeat = originalReminder.repeat || {};
-        const completedInstances = repeat.completedInstances || [];
-        const completedTimes = repeat.instanceCompletedTimes || repeat.completedTimes || {};
+        const instanceState = getRepeatInstanceState(originalReminder, originalDateKey);
         return {
             ...originalReminder,
-            ...(modification || {}),
-            date: modification?.date || originalDateKey,
+            ...(state || {}),
+            date: state?.date || originalDateKey,
             instanceId: `${originalReminder.id}_${originalDateKey}`,
             originalId: originalReminder.id,
-            completed: completedInstances.includes(originalDateKey),
-            completedTime: modification?.completedTime || completedTimes[originalDateKey]
+            completed: !!instanceState?.completed,
+            completedTime: state?.completedTime || instanceState?.completedTime
         };
     }
 
@@ -8120,8 +8112,7 @@ export class QuickReminderDialog {
     }
 
     private buildFrozenHistoryModification(originalReminder: any, instance: any, originalDateKey: string): any {
-        const repeat = originalReminder.repeat || {};
-        const completedTimes = repeat.instanceCompletedTimes || repeat.completedTimes || {};
+        const instanceState = getRepeatInstanceState(originalReminder, originalDateKey);
         const snapshot: any = {
             preservedFromSeriesEdit: true,
             title: instance.title || originalReminder.title || '(无标题)',
@@ -8165,33 +8156,32 @@ export class QuickReminderDialog {
             this.setSnapshotField(snapshot, field, instance[field]);
         });
 
-        const completedTime = instance.completedTime || completedTimes[originalDateKey];
+        const completedTime = instance.completedTime || instanceState?.completedTime;
         if (completedTime) {
             snapshot.completedTime = completedTime;
+        }
+        if (instanceState?.completed) {
+            snapshot.completed = true;
         }
 
         return snapshot;
     }
 
     private mergeRepeatHistoryMetadata(targetRepeat: any, sourceRepeat: any): void {
-        const mergeArray = (key: string) => {
-            if (!Array.isArray(sourceRepeat?.[key])) return;
-            const current = Array.isArray(targetRepeat[key]) ? targetRepeat[key] : [];
-            targetRepeat[key] = Array.from(new Set([...current, ...sourceRepeat[key]]));
-        };
+        if (!sourceRepeat?.instances || typeof sourceRepeat.instances !== 'object') return;
+        if (!targetRepeat.instances || typeof targetRepeat.instances !== 'object') {
+            targetRepeat.instances = {};
+        }
+        for (const [dateKey, state] of Object.entries(sourceRepeat.instances)) {
+            if (!state || typeof state !== 'object') continue;
+            const existing = targetRepeat.instances[dateKey] || {};
+            targetRepeat.instances[dateKey] = { ...existing, ...state };
+        }
 
-        const mergeRecord = (key: string) => {
-            if (!sourceRepeat?.[key] || typeof sourceRepeat[key] !== 'object') return;
-            targetRepeat[key] = {
-                ...(sourceRepeat[key] || {}),
-                ...(targetRepeat[key] || {})
-            };
-        };
-
-        mergeArray('completedInstances');
-        mergeArray('excludeDates');
-        mergeRecord('completedTimes');
-        mergeRecord('instanceCompletedTimes');
+        if (Array.isArray(sourceRepeat.excludeDates)) {
+            const current = Array.isArray(targetRepeat.excludeDates) ? targetRepeat.excludeDates : [];
+            targetRepeat.excludeDates = Array.from(new Set([...current, ...sourceRepeat.excludeDates]));
+        }
     }
 
     private applyCompletedInstanceSnapshots(_reminderData: any, updatedReminder: any): void {
@@ -8207,42 +8197,34 @@ export class QuickReminderDialog {
             return;
         }
 
-        const originalRepeat = originalReminder.repeat || {};
-        const completedInstances = Array.isArray(originalRepeat.completedInstances) ? originalRepeat.completedInstances : [];
-        const existingModifications = originalRepeat.instanceModifications || {};
+        const originalInstances = originalReminder.repeat?.instances || {};
         const candidateKeys = new Set<string>();
 
-        completedInstances.forEach((dateKey: string) => {
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-                candidateKeys.add(dateKey);
-            }
-        });
-
-        Object.entries(existingModifications).forEach(([dateKey, modification]: [string, any]) => {
-            if (modification?.preservedFromSeriesEdit) {
+        Object.entries(originalInstances).forEach(([dateKey, state]: [string, any]) => {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey) && (state?.completed || state?.preservedFromSeriesEdit)) {
                 candidateKeys.add(dateKey);
             }
         });
 
         if (candidateKeys.size === 0) {
-            this.mergeRepeatHistoryMetadata(updatedReminder.repeat, originalRepeat);
+            this.mergeRepeatHistoryMetadata(updatedReminder.repeat, originalReminder.repeat);
             return;
         }
 
-        if (!updatedReminder.repeat.instanceModifications) {
-            updatedReminder.repeat.instanceModifications = {};
+        if (!updatedReminder.repeat.instances) {
+            updatedReminder.repeat.instances = {};
         } else {
-            updatedReminder.repeat.instanceModifications = { ...updatedReminder.repeat.instanceModifications };
+            updatedReminder.repeat.instances = { ...updatedReminder.repeat.instances };
         }
 
-        this.mergeRepeatHistoryMetadata(updatedReminder.repeat, originalRepeat);
+        this.mergeRepeatHistoryMetadata(updatedReminder.repeat, originalReminder.repeat);
         const historicalInstances = this.getHistoricalInstancesByKey(originalReminder, candidateKeys);
 
         candidateKeys.forEach((dateKey) => {
             const instance = historicalInstances.get(dateKey) ||
-                this.createInstanceLikeFromModification(originalReminder, dateKey, existingModifications[dateKey]);
+                this.createInstanceLikeFromModification(originalReminder, dateKey, originalInstances[dateKey]);
             if (!instance) return;
-            updatedReminder.repeat.instanceModifications[dateKey] = this.buildFrozenHistoryModification(originalReminder, instance, dateKey);
+            updatedReminder.repeat.instances[dateKey] = this.buildFrozenHistoryModification(originalReminder, instance, dateKey);
         });
     }
 
@@ -8349,10 +8331,10 @@ export class QuickReminderDialog {
                             isInstanceEdit = true;
                             instanceDate = potentialDate;
                             // 构造虚拟的实例对象
-                            const instanceMod = originalTask.repeat?.instanceModifications?.[instanceDate] || {};
+                            const instanceState = getRepeatInstanceState(originalTask, instanceDate) || {};
                             parentTask = {
                                 ...originalTask,
-                                ...instanceMod,
+                                ...instanceState,
                                 id: parentId,
                                 isInstance: true,
                                 instanceDate: instanceDate,

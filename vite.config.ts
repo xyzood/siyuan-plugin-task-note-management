@@ -40,7 +40,6 @@ export default defineConfig({
                 { src: "./audios/*", dest: "./audios/" },
                 { src: "./assets/*", dest: "./assets/" },
                 { src: "./i18n/*", dest: "./i18n/" },
-                { src: "./skills.md", dest: "./" },
                 { src: "./skills/**/*", dest: "./skills/" },
             ],
         }),

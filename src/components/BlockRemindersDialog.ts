@@ -1,12 +1,12 @@
 import { Dialog, showMessage, confirm, Menu } from "siyuan";
 import { getBlockByID, updateBindBlockAtrrs, getBlockReminderIds, openBlock } from "../api";
-import { getLocaleTag, getLogicalDateString, getLocalDateString, compareDateStrings } from "../utils/dateUtils";
+import { getLocaleTag, getLogicalDateString } from "../utils/dateUtils";
 import { CategoryManager } from "../utils/categoryManager";
 import { ProjectManager } from "../utils/projectManager";
 import { i18n } from "../pluginInstance";
 import { TaskRenderer } from "./render/TaskRenderer";
 import { PomodoroRecordManager } from "../utils/pomodoroRecord";
-import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, generateRepeatInstances } from "../utils/repeatUtils";
+import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion } from "../utils/repeatUtils";
 
 /**
  * 块绑定任务查看对话框
@@ -157,71 +157,23 @@ export class BlockRemindersDialog {
                 const reminder = reminderData[id];
                 if (reminder.repeat?.enabled) {
                     const isLunarRepeat = reminder.repeat.type === 'lunar-monthly' || reminder.repeat.type === 'lunar-yearly';
-                    
-                    // We want to generate all instances from the series start date up to a future date
-                    // that guarantees at least one uncompleted future instance.
-                    let monthsToAdd = isLunarRepeat || reminder.repeat.type === 'yearly' ? 14 : 3;
+
                     let repeatInstances: any[] = [];
-                    let hasUncompletedFutureInstance = false;
-                    const maxAttempts = 5;
-                    let attempts = 0;
-                    
-                    const completedInstances = reminder.repeat.completedInstances || [];
-                    const completedTimes = reminder.repeat.completedTimes || reminder.repeat.instanceCompletedTimes || {};
-                    const originalStartDate = reminder.date || today;
-                    
-                    while (!hasUncompletedFutureInstance && attempts < maxAttempts) {
-                        const monthStart = new Date(originalStartDate + 'T00:00:00');
-                        // Go back 1 month to catch any recent occurrences or completed ones
-                        monthStart.setMonth(monthStart.getMonth() - 1);
-                        
-                        const monthEnd = new Date();
-                        monthEnd.setMonth(monthEnd.getMonth() + monthsToAdd);
-                        monthEnd.setDate(0);
-                        
-                        const genStart = getLocalDateString(monthStart);
-                        const genEnd = getLocalDateString(monthEnd);
-                        
-                        try {
-                            repeatInstances = generateRepeatInstances(reminder, genStart, genEnd);
-                        } catch (e) {
-                            console.error('Failed to generate repeat instances in BlockRemindersDialog:', e);
-                            repeatInstances = [];
-                        }
-                        
-                        hasUncompletedFutureInstance = repeatInstances.some(instance => {
-                            const instanceLogical = compareDateStrings(instance.date, today);
-                            if (instanceLogical <= 0) return false;
-                            
-                            const instanceIdStr = instance.instanceId || `${reminder.id}_${instance.date}`;
-                            const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                            return !completedInstances.includes(originalKey);
+                    try {
+                        repeatInstances = generateRepeatInstancesWithFutureGuarantee(reminder, today, {
+                            isLunarRepeat,
+                            startDate: reminder.date || today
                         });
-                        
-                        if (!hasUncompletedFutureInstance) {
-                            monthsToAdd += reminder.repeat.type === 'yearly' || isLunarRepeat ? 12 : 6;
-                            attempts++;
-                        }
+                    } catch (e) {
+                        console.error('Failed to generate repeat instances in BlockRemindersDialog:', e);
                     }
-                    
-                    // Now filter the repeatInstances:
-                    // 1. Completed instances
-                    // 2. The first (nearest) uncompleted instance
-                    const completedList = repeatInstances.filter(instance => {
-                        const instanceIdStr = instance.instanceId || `${reminder.id}_${instance.date}`;
-                        const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                        return completedInstances.includes(originalKey);
-                    });
-                    
-                    const uncompletedList = repeatInstances.filter(instance => {
-                        const instanceIdStr = instance.instanceId || `${reminder.id}_${instance.date}`;
-                        const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                        return !completedInstances.includes(originalKey);
-                    });
-                    
+
+                    const completedList = repeatInstances.filter(instance => instance.completed);
+                    const uncompletedList = repeatInstances.filter(instance => !instance.completed);
+
                     // Add all completed instances
                     completedList.forEach(instance => {
-                        const originalKey = (instance.instanceId || `${reminder.id}_${instance.date}`).split('_').pop() || instance.date;
+                        const originalKey = getRepeatInstanceOriginalKey(instance);
                         result.push({
                             ...reminder,
                             ...instance,
@@ -230,15 +182,15 @@ export class BlockRemindersDialog {
                             instanceDate: originalKey,
                             completed: true,
                             isRepeatInstance: true,
-                            completedAt: completedTimes[originalKey],
-                            completedTime: completedTimes[originalKey]
+                            completedAt: instance.completedTime,
+                            completedTime: instance.completedTime
                         });
                     });
-                    
+
                     // Add the nearest uncompleted instance
                     if (uncompletedList.length > 0) {
                         const nearestUncompleted = uncompletedList[0];
-                        const originalKey = (nearestUncompleted.instanceId || `${reminder.id}_${nearestUncompleted.date}`).split('_').pop() || nearestUncompleted.date;
+                        const originalKey = getRepeatInstanceOriginalKey(nearestUncompleted);
                         result.push({
                             ...reminder,
                             ...nearestUncompleted,
@@ -261,20 +213,19 @@ export class BlockRemindersDialog {
                     if (/^\d{4}-\d{2}-\d{2}$/.test(instanceDate)) {
                         const originalReminder = reminderData[originalId];
                         if (originalReminder) {
-                            const instanceMod = originalReminder.repeat?.instanceModifications?.[instanceDate];
-                            if (instanceMod && instanceMod.blockId === this.blockId) {
+                            const state = originalReminder.repeat?.instances?.[instanceDate];
+                            if (state && state.blockId === this.blockId && !state.deleted) {
                                 if (!(originalReminder.repeat?.excludeDates || []).includes(instanceDate)) {
-                                    const completedInstances = originalReminder.repeat?.completedInstances || [];
-                                    const completedTimes = originalReminder.repeat?.completedTimes || originalReminder.repeat?.instanceCompletedTimes || {};
-                                    const completed = completedInstances.includes(instanceDate);
+                                    const completed = isRepeatInstanceCompleted(originalReminder, instanceDate);
+                                    const completedTime = getRepeatInstanceCompletedTime(originalReminder, instanceDate);
 
-                                    const instanceDateVal = instanceMod.date !== undefined ? instanceMod.date : instanceDate;
+                                    const instanceDateVal = state.date !== undefined ? state.date : instanceDate;
                                     const defaultEndDate = originalReminder.endDate && originalReminder.date
                                         ? addDaysToDate(instanceDateVal, getDaysDifference(originalReminder.date, originalReminder.endDate))
                                         : undefined;
-                                    const instanceEndDate = instanceMod.endDate !== undefined ? instanceMod.endDate : defaultEndDate;
-                                    const reminderTimesSource = instanceMod.reminderTimes !== undefined ? instanceMod.reminderTimes : originalReminder.reminderTimes;
-                                    const reminderTimes = instanceMod.preservedFromSeriesEdit
+                                    const instanceEndDate = state.endDate !== undefined ? state.endDate : defaultEndDate;
+                                    const reminderTimesSource = state.reminderTimes !== undefined ? state.reminderTimes : originalReminder.reminderTimes;
+                                    const reminderTimes = state.preservedFromSeriesEdit
                                         ? reminderTimesSource || undefined
                                         : resolveRepeatReminderTimes(
                                             reminderTimesSource,
@@ -286,22 +237,22 @@ export class BlockRemindersDialog {
 
                                     result.push({
                                         ...originalReminder,
-                                        ...instanceMod,
+                                        ...state,
                                         id,
                                         originalId,
                                         instanceDate,
                                         isRepeatInstance: true,
                                         completed,
-                                        completedAt: completed ? completedTimes[instanceDate] : undefined,
-                                        completedTime: completed ? completedTimes[instanceDate] : undefined,
+                                        completedAt: completed ? completedTime : undefined,
+                                        completedTime: completed ? completedTime : undefined,
                                         date: instanceDateVal,
                                         endDate: instanceEndDate,
-                                        time: instanceMod.time !== undefined ? instanceMod.time : originalReminder.time,
-                                        endTime: instanceMod.endTime !== undefined ? instanceMod.endTime : originalReminder.endTime,
+                                        time: state.time !== undefined ? state.time : originalReminder.time,
+                                        endTime: state.endTime !== undefined ? state.endTime : originalReminder.endTime,
                                         reminderTimes,
-                                        projectId: instanceMod.projectId !== undefined ? instanceMod.projectId : originalReminder.projectId,
-                                        customGroupId: instanceMod.customGroupId !== undefined ? instanceMod.customGroupId : originalReminder.customGroupId,
-                                        customGroupName: instanceMod.customGroupName !== undefined ? instanceMod.customGroupName : originalReminder.customGroupName
+                                        projectId: state.projectId !== undefined ? state.projectId : originalReminder.projectId,
+                                        customGroupId: state.customGroupId !== undefined ? state.customGroupId : originalReminder.customGroupId,
+                                        customGroupName: state.customGroupName !== undefined ? state.customGroupName : originalReminder.customGroupName
                                     });
                                 }
                             }
@@ -515,19 +466,7 @@ export class BlockRemindersDialog {
             const reminderData = await this.plugin.loadReminderData();
             if (reminder.isRepeatInstance && reminder.originalId && reminder.instanceDate && reminderData[reminder.originalId]) {
                 const original = reminderData[reminder.originalId];
-                if (!original.repeat) original.repeat = {};
-                if (!original.repeat.completedInstances) original.repeat.completedInstances = [];
-                if (!original.repeat.completedTimes) original.repeat.completedTimes = {};
-
-                if (completed) {
-                    if (!original.repeat.completedInstances.includes(reminder.instanceDate)) {
-                        original.repeat.completedInstances.push(reminder.instanceDate);
-                    }
-                    original.repeat.completedTimes[reminder.instanceDate] = new Date().toISOString();
-                } else {
-                    original.repeat.completedInstances = original.repeat.completedInstances.filter((date: string) => date !== reminder.instanceDate);
-                    delete original.repeat.completedTimes[reminder.instanceDate];
-                }
+                setRepeatInstanceCompletion(original, reminder.instanceDate, completed);
 
                 await this.plugin.saveReminderData(reminderData);
                 await updateBindBlockAtrrs(this.blockId, this.plugin);

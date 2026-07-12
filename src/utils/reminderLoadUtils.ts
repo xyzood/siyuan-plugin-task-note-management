@@ -1,4 +1,5 @@
 import { getLogicalDateString } from "./dateUtils";
+import { RepeatInstanceState } from "../components/RepeatSettingsDialog";
 
 export function isSubscriptionEditable(subscription: any): boolean {
     if (!subscription || subscription.type !== 'caldav') return false;
@@ -204,7 +205,7 @@ export function cleanReminderItem(reminder: any): any {
     }
 
     if (reminder.repeat && !reminder.repeat.enabled) {
-        const hasHistory = ['completedInstances', 'completedTimes', 'instanceModifications', 'excludeDates'].some(
+        const hasHistory = ['instances', 'excludeDates'].some(
             k => reminder.repeat[k] && Object.keys(reminder.repeat[k]).length > 0
         );
         if (!hasHistory) {
@@ -212,21 +213,23 @@ export function cleanReminderItem(reminder: any): any {
         }
     }
 
-    if (reminder.repeat && reminder.repeat.instanceModifications) {
-        const modifications = reminder.repeat.instanceModifications;
-        for (const [instanceDate, mod] of Object.entries(modifications)) {
-            if (mod && typeof mod === 'object') {
-                cleanInstanceModification(mod, reminder, instanceDate);
-                const remainingKeys = Object.keys(mod).filter(
-                    k => k !== 'modifiedAt' && k !== 'preservedFromSeriesEdit'
-                );
-                if (remainingKeys.length === 0) {
-                    delete modifications[instanceDate];
-                }
+    if (reminder.repeat && reminder.repeat.instances) {
+        const instances = reminder.repeat.instances;
+        for (const [instanceDate, state] of Object.entries(instances)) {
+            if (!state || typeof state !== 'object') {
+                delete instances[instanceDate];
+                continue;
+            }
+            cleanInstanceState(state as RepeatInstanceState, reminder, instanceDate);
+            const remainingKeys = Object.keys(state).filter(
+                k => k !== 'modifiedAt' && k !== 'preservedFromSeriesEdit'
+            );
+            if (remainingKeys.length === 0) {
+                delete instances[instanceDate];
             }
         }
-        if (Object.keys(modifications).length === 0) {
-            delete reminder.repeat.instanceModifications;
+        if (Object.keys(instances).length === 0) {
+            delete reminder.repeat.instances;
         }
     }
 
@@ -234,20 +237,20 @@ export function cleanReminderItem(reminder: any): any {
 }
 
 /**
- * 清理单个重复事件实例修改对象，只保留与原始任务不同的属性以减少文件体积
+ * 清理单个重复事件实例状态对象，只保留与原始任务不同的属性以减少文件体积
  */
-export function cleanInstanceModification(mod: any, reminder: any, expectedDate: string): void {
-    if (!mod || typeof mod !== 'object') return;
+export function cleanInstanceState(state: RepeatInstanceState, reminder: any, expectedDate: string): void {
+    if (!state || typeof state !== 'object') return;
 
     // 1. 日期特殊处理
-    if (mod.date === expectedDate) {
-        delete mod.date;
+    if (state.date === expectedDate) {
+        delete state.date;
     }
 
     // 2. 提醒时间比较
-    if (mod.hasOwnProperty('reminderTimes')) {
+    if (Object.prototype.hasOwnProperty.call(state, 'reminderTimes')) {
         const defaultTimes = reminder.reminderTimes;
-        const newTimes = mod.reminderTimes;
+        const newTimes = state.reminderTimes;
         const timesDiffers = () => {
             if (!defaultTimes && !newTimes) return false;
             if (!defaultTimes || !newTimes) return true;
@@ -255,14 +258,14 @@ export function cleanInstanceModification(mod: any, reminder: any, expectedDate:
             return JSON.stringify(defaultTimes) !== JSON.stringify(newTimes);
         };
         if (!timesDiffers()) {
-            delete mod.reminderTimes;
+            delete state.reminderTimes;
         }
     }
 
     // 3. 标签比较
-    if (mod.hasOwnProperty('tagIds')) {
+    if (Object.prototype.hasOwnProperty.call(state, 'tagIds')) {
         const defaultTags = reminder.tagIds;
-        const newTags = mod.tagIds;
+        const newTags = state.tagIds;
         const tagsDiffers = () => {
             if (!defaultTags && !newTags) return false;
             if (!defaultTags || !newTags) return true;
@@ -270,7 +273,7 @@ export function cleanInstanceModification(mod: any, reminder: any, expectedDate:
             return JSON.stringify(defaultTags.slice().sort()) !== JSON.stringify(newTags.slice().sort());
         };
         if (!tagsDiffers()) {
-            delete mod.tagIds;
+            delete state.tagIds;
         }
     }
 
@@ -287,8 +290,8 @@ export function cleanInstanceModification(mod: any, reminder: any, expectedDate:
     ];
 
     for (const key of keys) {
-        if (mod.hasOwnProperty(key)) {
-            const val = mod[key];
+        if (Object.prototype.hasOwnProperty.call(state, key)) {
+            const val = (state as any)[key];
             const defaultVal = reminder[key];
 
             let isDifferent = false;
@@ -309,11 +312,11 @@ export function cleanInstanceModification(mod: any, reminder: any, expectedDate:
             }
 
             if (!isDifferent) {
-                delete mod[key];
+                delete (state as any)[key];
             }
         }
     }
 
     // 彻底清除历史遗留属性
-    delete mod.notifiedCustomTime;
+    delete (state as any).notifiedCustomTime;
 }

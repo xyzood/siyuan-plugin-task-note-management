@@ -34,6 +34,7 @@ import {
     shouldCheckInOnDate
 } from "../utils/habitUtils";
 import { syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../utils/habitMemoBlockSync";
+import { getRepeatInstanceCompletedTime } from "../utils/repeatUtils";
 
 interface HabitPomodoroStats {
     totalCount: number;
@@ -468,10 +469,7 @@ export class HabitPanel {
     }
 
     private getCompletedDateFromRepeatInstance(reminder: any, instanceDate: string): string {
-        const completedTimes = reminder?.repeat?.completedTimes;
-        const completedTime = typeof completedTimes?.[instanceDate] === 'string'
-            ? completedTimes[instanceDate]
-            : '';
+        const completedTime = getRepeatInstanceCompletedTime(reminder, instanceDate) || '';
 
         if (completedTime) {
             return this.getCompletedDateFromReminder({ completedTime });
@@ -576,9 +574,13 @@ export class HabitPanel {
             if (!habit) continue;
 
             if (reminder.repeat?.enabled) {
-                const completedInstances = (Array.isArray(reminder.repeat?.completedInstances)
-                    ? reminder.repeat.completedInstances
-                    : []).filter((instanceDate: any) => typeof instanceDate === 'string' && !!instanceDate);
+                const instances = reminder.repeat.instances || {};
+                const completedInstances: string[] = [];
+                for (const [instanceDate, state] of Object.entries(instances) as [string, any][]) {
+                    if (state?.completed && typeof instanceDate === 'string' && instanceDate) {
+                        completedInstances.push(instanceDate);
+                    }
+                }
 
                 const completedInstanceSet = new Set<string>(completedInstances);
                 const syncedInstanceMap = this.normalizeLinkedHabitInstanceSyncMap(reminder);
@@ -591,9 +593,7 @@ export class HabitPanel {
                 });
 
                 for (const instanceDate of completedInstances) {
-                    const instanceCompletedTime = typeof reminder.repeat?.completedTimes?.[instanceDate] === 'string'
-                        ? reminder.repeat.completedTimes[instanceDate]
-                        : '';
+                    const instanceCompletedTime = getRepeatInstanceCompletedTime(reminder, instanceDate) || '';
                     const syncMarker = instanceCompletedTime
                         ? `${instanceDate}:${instanceCompletedTime}`
                         : `${instanceDate}:completed`;

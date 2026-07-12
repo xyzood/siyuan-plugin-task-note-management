@@ -1,5 +1,6 @@
 import { setBlockAttrs } from "../api";
 import { normalizeReminderSkipWeekendMode } from "./reminderSkipDate";
+import { RepeatInstanceState } from "../components/RepeatSettingsDialog";
 
 interface AudioFileItemLike {
     path: string;
@@ -229,6 +230,10 @@ export async function performDataMigration(plugin: MigrationPlugin): Promise<voi
         }
         if (!settings.datatransfer?.pomodoroRecordTransfer) {
             await migratePomodoroRecords(plugin, settings);
+        }
+
+        if (!settings.datatransfer?.repeatInstanceStateTransfer) {
+            await migrateRepeatInstanceState(plugin, settings);
         }
     } catch (error) {
         console.error("数据迁移失败:", error);
@@ -471,5 +476,112 @@ async function migratePomodoroRecords(plugin: MigrationPlugin, settings: any): P
         console.log("Pomodoro records migration completed.");
     } catch (error) {
         console.error("Failed to migrate pomodoro records:", error);
+    }
+}
+
+/**
+ * 迁移重复实例状态：将 completedInstances、completedTimes、instanceCompletedTimes、instanceModifications
+ * 合并为统一的 repeat.instances 结构。
+ */
+async function migrateRepeatInstanceState(plugin: MigrationPlugin, settings: any): Promise<void> {
+    try {
+        console.log("开始迁移重复实例状态到统一的 instances 结构...");
+
+        const reminderData = await plugin.loadReminderData(true);
+        if (!reminderData || typeof reminderData !== "object") {
+            settings.datatransfer = settings.datatransfer || {};
+            settings.datatransfer.repeatInstanceStateTransfer = true;
+            await plugin.saveSettings(settings);
+            console.log("没有找到提醒数据，跳过重复实例状态迁移");
+            return;
+        }
+
+        let changed = false;
+        for (const item of Object.values(reminderData) as any[]) {
+            if (!item?.repeat || typeof item.repeat !== "object") continue;
+
+            const existingInstances: Record<string, RepeatInstanceState> =
+                item.repeat.instances && typeof item.repeat.instances === "object"
+                    ? item.repeat.instances
+                    : {};
+            const completedInstances = new Set<string>(
+                Array.isArray(item.repeat.completedInstances) ? item.repeat.completedInstances : []
+            );
+            const completedTimes: Record<string, string> = {
+                ...(item.repeat.completedTimes || {}),
+                ...(item.repeat.instanceCompletedTimes || {})
+            };
+            const mods: Record<string, any> = item.repeat.instanceModifications || {};
+
+            const keys = new Set<string>([
+                ...completedInstances,
+                ...Object.keys(completedTimes),
+                ...Object.keys(mods),
+                ...Object.keys(existingInstances)
+            ]);
+
+            const instances: Record<string, RepeatInstanceState> = {};
+
+            for (const key of keys) {
+                const legacyState: RepeatInstanceState = {};
+                const mod = mods[key];
+
+                if (completedInstances.has(key) || typeof completedTimes[key] === "string") {
+                    legacyState.completed = true;
+                }
+                if (typeof completedTimes[key] === "string") {
+                    legacyState.completedTime = completedTimes[key];
+                }
+
+                if (mod && typeof mod === "object") {
+                    for (const [field, value] of Object.entries(mod)) {
+                        if (field === "date" && value === null) {
+                            legacyState.deleted = true;
+                            continue;
+                        }
+                        if (field === "completed") {
+                            if (typeof value === "boolean") legacyState.completed = value;
+                            continue;
+                        }
+                        if (field === "completedTime") {
+                            if (typeof value === "string") legacyState.completedTime = value;
+                            continue;
+                        }
+                        (legacyState as any)[field] = value === null ? undefined : value;
+                    }
+                }
+
+                // 部分迁移时以新结构为准，只用旧字段补齐尚未迁移的数据。
+                const state: RepeatInstanceState = {
+                    ...legacyState,
+                    ...(existingInstances[key] || {})
+                };
+                if (Object.keys(state).length > 0) {
+                    instances[key] = state;
+                }
+            }
+
+            if (Object.keys(instances).length > 0) {
+                item.repeat.instances = instances;
+            } else {
+                delete item.repeat.instances;
+            }
+            delete item.repeat.completedInstances;
+            delete item.repeat.completedTimes;
+            delete item.repeat.instanceCompletedTimes;
+            delete item.repeat.instanceModifications;
+            changed = true;
+        }
+
+        if (changed) {
+            await plugin.saveReminderData(reminderData);
+        }
+
+        settings.datatransfer = settings.datatransfer || {};
+        settings.datatransfer.repeatInstanceStateTransfer = true;
+        await plugin.saveSettings(settings);
+        console.log("重复实例状态迁移完成");
+    } catch (error) {
+        console.error("重复实例状态迁移失败:", error);
     }
 }

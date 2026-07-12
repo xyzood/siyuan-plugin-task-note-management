@@ -13,7 +13,7 @@ import { i18n } from "../pluginInstance";
 import { TaskRenderer } from "./render/TaskRenderer";
 import { getLocalDateTimeString, getLocalDateString, compareDateStrings, getLogicalDateString, getLocaleTag } from "../utils/dateUtils";
 import { getSolarDateLunarString } from "../utils/lunarUtils";
-import { generateRepeatInstances, getRepeatDescription, generateSubtreeInstances } from "../utils/repeatUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, getRepeatInstanceState, getRepeatDescription, generateSubtreeInstances } from "../utils/repeatUtils";
 import { createPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
 import { shouldTreatStartDateOnlyAsOverdue } from "../utils/startDateOverdue";
 import { shouldSkipReminderOnDate, type HolidayData } from "../utils/reminderSkipDate";
@@ -339,10 +339,11 @@ export class EisenhowerMatrixView {
                 // 如果是周期事件，生成实例
                 if (reminder.repeat?.enabled) {
                     // 智能确定时间范围，确保至少能找到下一个未来实例
-                    const repeatInstances = this.generateInstancesWithFutureGuarantee(reminder, today, isLunarRepeat);
-
-                    // 过滤实例：保留过去未完成、今天的、未来第一个未完成，以及所有已完成的实例
-                    const completedInstances = reminder.repeat?.completedInstances || [];
+                    const repeatInstances = generateRepeatInstancesWithFutureGuarantee(
+                        reminder,
+                        today,
+                        { isLunarRepeat, settings: this.reminderSkipSettings || this.plugin?.settings, holidayData: this.reminderSkipHolidayData }
+                    );
 
                     // 将实例分类为：过去未完成、今天未完成、未来未完成、未来已完成、过去已完成
                     let pastIncompleteList: any[] = [];
@@ -352,18 +353,14 @@ export class EisenhowerMatrixView {
                     let pastCompletedList: any[] = [];
 
                     repeatInstances.forEach(instance => {
-                        const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                        const originalKey = instanceIdStr.split('_').pop() || instance.date;
+                        const originalKey = getRepeatInstanceOriginalKey(instance);
 
                         // 对于所有重复事件，只添加实例，不添加原始任务
-                        const isInstanceCompleted = completedInstances.includes(originalKey);
+                        const isInstanceCompleted = isRepeatInstanceCompleted(reminder, originalKey);
 
                         // Calculate cutoff time for subtask generation filtering
                         let cutoffTime: number | undefined;
-                        const instanceCompletedTimes = reminder.repeat?.instanceCompletedTimes || {};
-                        const completedTimesLegacy = reminder.repeat?.completedTimes || {};
-
-                        const realCompletedTimeStr = instance.completedTime || instanceCompletedTimes[originalKey] || completedTimesLegacy[originalKey];
+                        const realCompletedTimeStr = getRepeatInstanceCompletedTime(reminder, originalKey);
 
                         if (realCompletedTimeStr) {
                             cutoffTime = new Date(realCompletedTimeStr).getTime();
@@ -963,7 +960,7 @@ export class EisenhowerMatrixView {
                 }
 
                 // 同优先级内，按手动排序值排序（升序）
-                // 使用 task.sort，它已经在创建时从 instanceModifications 中读取了正确的值
+                // 使用 task.sort，它已经在创建时从 repeat.instances 中读取了正确的值
                 const sortA = a.sort || 0;
                 const sortB = b.sort || 0;
                 if (sortA !== sortB) {
@@ -1556,42 +1553,17 @@ export class EisenhowerMatrixView {
                 return;
             }
 
-            // 初始化完成实例列表
-            if (!originalReminder.repeat.completedInstances) {
-                originalReminder.repeat.completedInstances = [];
-            }
-
             const instanceDate = task.date;
-            const completedInstances = originalReminder.repeat.completedInstances;
-
             const completedTaskIds: string[] = [];
             if (completed) {
-                // 添加到完成列表（如果还没有的话）
-                if (!completedInstances.includes(instanceDate)) {
-                    completedInstances.push(instanceDate);
-                }
-
-                // 记录完成时间
-                if (!originalReminder.repeat.instanceCompletedTimes) {
-                    originalReminder.repeat.instanceCompletedTimes = {};
-                }
-                originalReminder.repeat.instanceCompletedTimes[instanceDate] = getLocalDateTimeString(new Date());
+                setRepeatInstanceCompletion(originalReminder, instanceDate, true, getLocalDateTimeString(new Date()));
 
                 // [NEW] 递归完成该实例下的所有子任务实例
                 this.getAllDescendantIds(task.originalId!, reminderData).forEach((id) => recurringOriginalIds.add(id));
                 const childIds = await this.completeAllChildInstances(task.originalId!, instanceDate, reminderData);
                 completedTaskIds.push(task.id, ...childIds);
             } else {
-                // 从完成列表中移除
-                const index = completedInstances.indexOf(instanceDate);
-                if (index > -1) {
-                    completedInstances.splice(index, 1);
-                }
-
-                // 移除完成时间记录
-                if (originalReminder.repeat.instanceCompletedTimes) {
-                    delete originalReminder.repeat.instanceCompletedTimes[instanceDate];
-                }
+                setRepeatInstanceCompletion(originalReminder, instanceDate, false);
             }
 
             await saveReminders(this.plugin, reminderData);
@@ -1614,7 +1586,7 @@ export class EisenhowerMatrixView {
                 localTask.completed = completed;
                 if (completed) {
                     localTask.extendedProps = localTask.extendedProps || {};
-                    localTask.extendedProps.completedTime = originalReminder.repeat.instanceCompletedTimes?.[instanceDate];
+                    localTask.extendedProps.completedTime = getRepeatInstanceCompletedTime(originalReminder, instanceDate);
                 } else {
                     if (localTask.extendedProps) delete localTask.extendedProps.completedTime;
                 }
@@ -1719,23 +1691,8 @@ export class EisenhowerMatrixView {
 
         for (const child of ghostChildren) {
             // [FIX] 无论子任务是否自身开启了重复，只要它是重复父任务的后代，
-            // 我们就应该在 completedInstances 中记录该日期的完成状态
-            if (!child.repeat) {
-                child.repeat = {};
-            }
-            if (!child.repeat.completedInstances) {
-                child.repeat.completedInstances = [];
-            }
-
-            if (!child.repeat.completedInstances.includes(date)) {
-                child.repeat.completedInstances.push(date);
-
-                // 记录完成时间
-                if (!child.repeat.instanceCompletedTimes) {
-                    child.repeat.instanceCompletedTimes = {};
-                }
-                child.repeat.instanceCompletedTimes[date] = getLocalDateTimeString(new Date());
-            }
+            // 我们都应该记录该日期的完成状态
+            setRepeatInstanceCompletion(child, date, true, getLocalDateTimeString(new Date()));
 
             // 递归处理孙子实例
             await this.completeAllChildInstances(child.id, date, reminderData);
@@ -3524,7 +3481,7 @@ export class EisenhowerMatrixView {
 
     /**
      * 处理重复任务实例的排序
-     * 重复实例的 sort 值存储在 instanceModifications 中
+     * 重复实例的 sort 值存储在 repeat.instances 中
      */
     private async handleInstanceReorder(
         reminderData: any,
@@ -3624,8 +3581,8 @@ export class EisenhowerMatrixView {
         event: DragEvent
     ) {
         // 获取被拖拽项和目标项的实例日期
-        const draggedInstanceDate = isDraggedInstance ? draggedTaskId.split('_').pop() : null;
-        const targetInstanceDate = isTargetInstance ? targetTaskId.split('_').pop() : null;
+        const draggedInstanceDate = isDraggedInstance ? getRepeatInstanceOriginalKey({ instanceId: draggedTaskId }) : null;
+        const targetInstanceDate = isTargetInstance ? getRepeatInstanceOriginalKey({ instanceId: targetTaskId }) : null;
 
         let oldPriority = draggedTask.priority || 'none';
         let newPriority = targetTask.priority || 'none';
@@ -3720,8 +3677,8 @@ export class EisenhowerMatrixView {
         projectId: string
     ) {
         // 提取实例日期
-        const draggedInstanceDate = isDraggedInstance ? draggedTaskId.split('_').pop() : null;
-        const targetInstanceDate = isTargetInstance ? targetTaskId.split('_').pop() : null;
+        const draggedInstanceDate = isDraggedInstance ? getRepeatInstanceOriginalKey({ instanceId: draggedTaskId }) : null;
+        const targetInstanceDate = isTargetInstance ? getRepeatInstanceOriginalKey({ instanceId: targetTaskId }) : null;
 
         if (!draggedInstanceDate) {
             console.error('无法获取实例日期');
@@ -3730,11 +3687,9 @@ export class EisenhowerMatrixView {
 
         // 1. 更新重复实例对应原始任务的优先级，并清理实例级优先级覆盖
         draggedTask.priority = newPriority;
-        if (draggedTask.repeat?.instanceModifications) {
-            Object.keys(draggedTask.repeat.instanceModifications).forEach((date) => {
-                if (draggedTask.repeat.instanceModifications[date]?.priority !== undefined) {
-                    delete draggedTask.repeat.instanceModifications[date].priority;
-                }
+        if (draggedTask.repeat?.instances) {
+            Object.keys(draggedTask.repeat.instances).forEach((date) => {
+                setRepeatInstanceOverride(draggedTask, date, 'priority', undefined);
             });
         }
 
@@ -4802,24 +4757,23 @@ export class EisenhowerMatrixView {
             }
 
             // 从 instanceId (格式: originalId_YYYY-MM-DD) 中提取原始生成日期
-            const originalInstanceDate = task.id ? task.id.split('_').pop() : task.date;
+            const originalInstanceDate = getRepeatInstanceOriginalKey(task);
 
             // 检查实例级别的修改（包括备注）
-            const instanceModifications = originalReminder.repeat?.instanceModifications || {};
-            const instanceMod = instanceModifications[originalInstanceDate];
+            const instanceState = getRepeatInstanceState(originalReminder, originalInstanceDate);
 
             // 创建实例数据，包含当前实例的特定信息
             const instanceData = {
                 ...originalReminder,
                 id: task.id,
-                title: instanceMod?.title !== undefined ? instanceMod.title : originalReminder.title,
+                title: instanceState?.title !== undefined ? instanceState.title : originalReminder.title,
                 date: task.date,
                 endDate: task.endDate,
                 time: task.time,
                 endTime: task.endTime,
-                note: instanceMod?.note !== undefined ? instanceMod.note : (originalReminder.note || ''),
-                priority: instanceMod?.priority !== undefined ? instanceMod.priority : (originalReminder.priority || 'none'),
-                treatStartDateAsDeadline: instanceMod?.treatStartDateAsDeadline !== undefined ? instanceMod.treatStartDateAsDeadline : originalReminder.treatStartDateAsDeadline,
+                note: instanceState?.note !== undefined ? instanceState.note : (originalReminder.note || ''),
+                priority: instanceState?.priority !== undefined ? instanceState.priority : (originalReminder.priority || 'none'),
+                treatStartDateAsDeadline: instanceState?.treatStartDateAsDeadline !== undefined ? instanceState.treatStartDateAsDeadline : originalReminder.treatStartDateAsDeadline,
                 isInstance: true,
                 originalId: task.originalId,
                 instanceDate: originalInstanceDate  // 使用原始生成日期而非当前显示日期
@@ -4903,73 +4857,6 @@ export class EisenhowerMatrixView {
             console.error('添加排除日期失败:', error);
             throw error;
         }
-    }
-
-    /**
-     * 智能生成重复任务实例，确保至少能找到下一个未来实例
-     * @param reminder 提醒任务对象
-     * @param today 今天的日期字符串
-     * @param isLunarRepeat 是否是农历重复
-     * @returns 生成的实例数组
-     */
-    private generateInstancesWithFutureGuarantee(reminder: any, today: string, isLunarRepeat: boolean): any[] {
-        // 根据重复类型确定初始范围
-        let monthsToAdd = 2; // 默认范围
-
-        if (isLunarRepeat) {
-            monthsToAdd = 14; // 农历重复需要更长范围
-        } else if (reminder.repeat.type === 'yearly') {
-            monthsToAdd = 14; // 年度重复初始范围为14个月
-        } else if (reminder.repeat.type === 'monthly') {
-            monthsToAdd = 3; // 月度重复使用3个月
-        }
-
-        let repeatInstances: any[] = [];
-        let hasUncompletedFutureInstance = false;
-        const maxAttempts = 5; // 最多尝试5次扩展
-        let attempts = 0;
-
-        // 获取已完成实例列表
-        const completedInstances = reminder.repeat?.completedInstances || [];
-
-        while (!hasUncompletedFutureInstance && attempts < maxAttempts) {
-            const monthStart = new Date();
-            monthStart.setDate(1);
-            monthStart.setMonth(monthStart.getMonth() - 1);
-
-            const monthEnd = new Date();
-            monthEnd.setMonth(monthEnd.getMonth() + monthsToAdd);
-            monthEnd.setDate(0);
-
-            const startDate = getLocalDateString(monthStart);
-            const endDate = getLocalDateString(monthEnd);
-
-            // 生成实例，使用足够大的 maxInstances 以确保生成所有实例
-            const maxInstances = monthsToAdd * 50; // 根据范围动态调整
-            repeatInstances = generateRepeatInstances(reminder, startDate, endDate, maxInstances)
-                .filter(instance => this.shouldDisplayRepeatInstance(instance, reminder));
-
-            // 检查是否有未完成的未来实例（关键修复：不仅要是未来的，还要是未完成的）
-            hasUncompletedFutureInstance = repeatInstances.some(instance => {
-                const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                return compareDateStrings(instance.date, today) > 0 && !completedInstances.includes(originalKey);
-            });
-
-            if (!hasUncompletedFutureInstance) {
-                // 如果没有找到未完成的未来实例，扩展范围
-                if (reminder.repeat.type === 'yearly') {
-                    monthsToAdd += 12; // 年度重复每次增加12个月
-                } else if (isLunarRepeat) {
-                    monthsToAdd += 12; // 农历重复每次增加12个月
-                } else {
-                    monthsToAdd += 6; // 其他类型每次增加6个月
-                }
-                attempts++;
-            }
-        }
-
-        return repeatInstances;
     }
 
     private async refreshTaskMobileNotification(reminder: any, reminderIdForFallback?: string): Promise<void> {

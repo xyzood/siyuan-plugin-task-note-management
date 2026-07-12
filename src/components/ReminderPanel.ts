@@ -10,7 +10,7 @@ import { CategoryManageDialog } from "./CategoryManageDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { i18n } from "../pluginInstance";
 import { TaskRenderer } from "./render/TaskRenderer";
-import { generateRepeatInstances, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances } from "../utils/repeatUtils";
+import { generateRepeatInstances, generateRepeatInstancesWithFutureGuarantee, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, removeRepeatInstance, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { getLastStatsMode } from "./stats/statsMode";
 import { showStatsDialog } from "./stats/ShowStatsDialog";
@@ -1183,7 +1183,7 @@ export class ReminderPanel {
         const editIcon = "✏️";
 
         const getOriginalInstanceDate = () => {
-            const parsedInstance = targetReminder.isRepeatInstance ? this.parseReminderInstanceId(targetReminder.id) : null;
+            const parsedInstance = targetReminder.isRepeatInstance ? parseReminderInstanceId(targetReminder.id) : null;
             return parsedInstance?.instanceDate || targetReminder.date;
         };
 
@@ -1306,7 +1306,7 @@ export class ReminderPanel {
             }
         }
 
-        // 普通任务或没有 instanceModifications 的实例
+        // 普通任务或没有实例级 sort 覆盖的实例
         return reminder.sort || 0;
     }
 
@@ -1905,13 +1905,7 @@ export class ReminderPanel {
         for (const child of ghostChildren) {
             if (instanceDate) {
                 // If it's a recurring instance completion, we mark the corresponding ghost subtask as complete
-                if (!child.repeat) child.repeat = {};
-                if (!child.repeat.completedInstances) child.repeat.completedInstances = [];
-                if (!child.repeat.completedTimes) child.repeat.completedTimes = {};
-
-                if (!child.repeat.completedInstances.includes(instanceDate)) {
-                    child.repeat.completedInstances.push(instanceDate);
-                    child.repeat.completedTimes[instanceDate] = getLocalDateTimeString(new Date());
+                if (setRepeatInstanceCompletion(child, instanceDate, true, getLocalDateTimeString(new Date()))) {
                     if (child.blockId) affectedBlockIds.add(child.blockId);
                 }
                 // Recurse to children's children (passing instanceDate to continue ghost chain)
@@ -2831,7 +2825,7 @@ export class ReminderPanel {
             canApplyTodayIgnore: (r: any, tod: string) => this.canApplyTodayIgnore(r, tod),
             hasTodayIgnoreMark: (r: any, tod: string) => this.hasTodayIgnoreMark(r, tod),
             isDailyDessertTaskForDate: (r: any, tod: string) => this.isDailyDessertTaskForDate(r, tod),
-            parseReminderInstanceId: (id: string) => this.parseReminderInstanceId(id),
+            parseReminderInstanceId: (id: string) => parseReminderInstanceId(id),
             isTaskCollapsed: (r: any, hasChildren: boolean) => this.isTaskCollapsed(r.id, hasChildren)
         };
 
@@ -2897,7 +2891,7 @@ export class ReminderPanel {
                         this.undoDailyDessertCompletion(r, true);
                     }
                 } else if (r.isRepeatInstance) {
-                    const originalInstanceDate = (r.id && r.id.includes('_')) ? r.id.split('_').pop() : r.date;
+                    const originalInstanceDate = getRepeatInstanceOriginalKey(r) || r.date;
                     this.toggleReminder(r.originalId, checked, true, originalInstanceDate, r.id);
                 } else {
                     const isSpanningTask = !!(r.date && r.endDate && r.endDate !== r.date) || r.isSpanningTodayCompletedInstance;
@@ -3014,7 +3008,7 @@ export class ReminderPanel {
                 const isRepeatInstance = r.isRepeatInstance;
                 const originalId = r.originalId;
                 const isInstanceEdit = isRepeatInstance && !!originalId;
-                const parsedInstance = isRepeatInstance ? this.parseReminderInstanceId(r.id) : null;
+                const parsedInstance = isRepeatInstance ? parseReminderInstanceId(r.id) : null;
                 const originalInstanceDate = parsedInstance?.instanceDate || r.date;
 
                 new QuickReminderDialog(
@@ -3459,26 +3453,17 @@ export class ReminderPanel {
                     allReminders.push(reminder);
                 }
             } else {
-                // 缓存原始提醒，供实例查询原始数据（如 completedTimes、dailyCompletions 等）使用
+                // 缓存原始提醒，供实例查询原始数据（如 dailyCompletions 等）使用
                 this.originalRemindersCache[reminder.id] = reminder;
 
                 // 生成实例（无论是否为农历重复，都只显示生成的实例）
-                const repeatInstances = this.generateInstancesWithFutureGuarantee(reminder, today, isLunarRepeat);
+                const repeatInstances = generateRepeatInstancesWithFutureGuarantee(reminder, today, { isLunarRepeat, settings: this.plugin?.settings, holidayData: this.reminderSkipHolidayData });
 
                 // 过滤实例：保留过去未完成、今天的、未来第一个未完成，以及所有已完成的实例
-                // 确保 repeat 对象存在
-                if (!reminder.repeat) {
-                    reminder.repeat = {};
-                }
-                if (!reminder.repeat.completedInstances) {
-                    reminder.repeat.completedInstances = [];
-                }
-                const completedInstances = reminder.repeat.completedInstances;
-
                 // 预先判断该系列在今天是否有未完成实例，用于决定是否显示未来的首个 uncompleted 实例
                 const hasTodayIncomplete = repeatInstances.some(instance => {
-                    const originalDate = instance.instanceId.split('_').pop() || instance.date;
-                    const isCompleted = completedInstances.includes(originalDate);
+                    const originalKey = getRepeatInstanceOriginalKey(instance);
+                    const isCompleted = isRepeatInstanceCompleted(reminder, originalKey);
                     const logicalDate = this.getReminderLogicalDate(instance.date, instance.time);
                     return compareDateStrings(logicalDate, today) === 0 && !isCompleted;
                 });
@@ -3486,8 +3471,8 @@ export class ReminderPanel {
                 let firstFutureIncompleteId: string | null = null;
                 if (!hasTodayIncomplete) {
                     const nextFuture = repeatInstances.find(instance => {
-                        const originalDate = instance.instanceId.split('_').pop() || instance.date;
-                        const isCompleted = completedInstances.includes(originalDate);
+                        const originalKey = getRepeatInstanceOriginalKey(instance);
+                        const isCompleted = isRepeatInstanceCompleted(reminder, originalKey);
                         const logicalDate = this.getReminderLogicalDate(instance.date, instance.time);
                         return compareDateStrings(logicalDate, today) > 0 && !isCompleted;
                     });
@@ -3495,8 +3480,8 @@ export class ReminderPanel {
                 }
 
                 repeatInstances.forEach(instance => {
-                    const originalInstanceDate = instance.instanceId.split('_').pop() || instance.date;
-                    let isInstanceCompleted = completedInstances.includes(originalInstanceDate);
+                    const originalInstanceDate = getRepeatInstanceOriginalKey(instance);
+                    let isInstanceCompleted = isRepeatInstanceCompleted(reminder, originalInstanceDate);
 
                     // 对于订阅任务的重复实例，检查是否过期并自动标记为已完成
                     if (reminder.isSubscribed && !isInstanceCompleted) {
@@ -3509,8 +3494,7 @@ export class ReminderPanel {
                         });
                         if (instanceIsPast) {
                             isInstanceCompleted = true;
-                            if (!completedInstances.includes(originalInstanceDate)) {
-                                completedInstances.push(originalInstanceDate);
+                            if (setRepeatInstanceCompletion(reminder, originalInstanceDate, true, getLocalDateTimeString(new Date()))) {
                                 reminder._needsSave = true;
                             }
                         }
@@ -3539,7 +3523,7 @@ export class ReminderPanel {
                             id: instance.instanceId,
                             isRepeatInstance: true,
                             completed: isInstanceCompleted,
-                            completedTime: isInstanceCompleted ? (instance.completedTime || reminder.repeat?.completedTimes?.[originalInstanceDate] || getLocalDateTimeString(new Date(instance.date))) : undefined
+                            completedTime: isInstanceCompleted ? (instance.completedTime || getRepeatInstanceCompletedTime(reminder, originalInstanceDate) || getLocalDateTimeString(new Date(instance.date))) : undefined
                         };
 
                         allReminders.push(instanceTask);
@@ -3547,7 +3531,7 @@ export class ReminderPanel {
                         // Calculate cutoff time for subtask generation (prevent new subtasks in completed instances)
                         let cutoffTime: number | undefined;
                         // Use the exact completion time if available
-                        const realCompletedTimeStr = instance.completedTime || reminder.repeat?.completedTimes?.[originalInstanceDate];
+                        const realCompletedTimeStr = instance.completedTime || getRepeatInstanceCompletedTime(reminder, originalInstanceDate);
 
                         // If explicit time exists, use it
                         if (realCompletedTimeStr) {
@@ -4812,8 +4796,9 @@ export class ReminderPanel {
                 return originalReminder.dailyCompletionsTimes[today];
             }
 
-            if (originalReminder && originalReminder.repeat?.completedTimes) {
-                return originalReminder.repeat.completedTimes[reminder.date] || null;
+            const completedTime = getRepeatInstanceCompletedTime(originalReminder, reminder.date);
+            if (completedTime) {
+                return completedTime;
             }
         } else {
             // 普通事件的完成时间
@@ -5095,31 +5080,18 @@ export class ReminderPanel {
                 const original = reminderData[originalId];
                 if (!original) return;
 
-                // 初始化结构
-                if (!original.repeat) original.repeat = {};
-                if (!original.repeat.completedInstances) original.repeat.completedInstances = [];
-                if (!original.repeat.completedTimes) original.repeat.completedTimes = {};
-
-                const completedInstances = original.repeat.completedInstances;
-                const completedTimes = original.repeat.completedTimes;
-
                 const affectedBlockIds = new Set<string>();
-                const instanceMod = original.repeat?.instanceModifications?.[instanceDate] || {};
-                const instanceBlockId = instanceMod.blockId !== undefined ? instanceMod.blockId : original.blockId;
+                const instanceState = getRepeatInstanceState(original, instanceDate);
+                const instanceBlockId = getInstanceField(instanceState, 'blockId', original.blockId);
                 if (instanceBlockId) affectedBlockIds.add(instanceBlockId);
 
                 const completedTaskIds: string[] = [];
-                if (completed) {
-                    if (!completedInstances.includes(instanceDate)) completedInstances.push(instanceDate);
-                    completedTimes[instanceDate] = optimisticCompletedTime || getLocalDateTimeString(new Date());
+                setRepeatInstanceCompletion(original, instanceDate, completed, completed ? (optimisticCompletedTime || getLocalDateTimeString(new Date())) : undefined);
 
+                if (completed) {
                     // 如果需要，自动完成子任务（收集受影响的块ID和任务ID）
                     const childIds = await this.completeAllChildTasks(originalId, reminderData, affectedBlockIds, instanceDate);
                     completedTaskIds.push(...childIds);
-                } else {
-                    const idx = completedInstances.indexOf(instanceDate);
-                    if (idx > -1) completedInstances.splice(idx, 1);
-                    delete completedTimes[instanceDate];
                 }
 
                 await saveReminders(this.plugin, reminderData);
@@ -6739,8 +6711,8 @@ export class ReminderPanel {
                 return;
             }
 
-            const draggedParsed = this.parseReminderInstanceId(draggedReminder?.id);
-            const targetParsed = this.parseReminderInstanceId(targetReminder?.id);
+            const draggedParsed = parseReminderInstanceId(draggedReminder?.id);
+            const targetParsed = parseReminderInstanceId(targetReminder?.id);
 
             // 判断是否为重复实例
             // 仅在明确标记为实例，或可从 id 解析出实例日期时，才按实例处理。
@@ -6810,11 +6782,9 @@ export class ReminderPanel {
                         originalTask.priority = newPriority;
                         draggedReminder.priority = newPriority;
 
-                        if (originalTask.repeat?.instanceModifications) {
-                            Object.keys(originalTask.repeat.instanceModifications).forEach(date => {
-                                if (originalTask.repeat.instanceModifications[date]?.priority !== undefined) {
-                                    delete originalTask.repeat.instanceModifications[date].priority;
-                                }
+                        if (originalTask.repeat?.instances) {
+                            Object.keys(originalTask.repeat.instances).forEach(date => {
+                                setRepeatInstanceOverride(originalTask, date, 'priority', undefined);
                             });
                         }
                     }
@@ -6943,20 +6913,7 @@ export class ReminderPanel {
         });
     }
 
-    // 解析重复实例 ID，格式: <originalId>_<YYYY-MM-DD>
-    // 普通任务 ID 可能含有下划线，因此仅从最后一个下划线切分并校验日期段。
-    private parseReminderInstanceId(reminderId?: string): { originalId: string; instanceDate: string } | null {
-        if (!reminderId || typeof reminderId !== 'string') return null;
 
-        const splitIndex = reminderId.lastIndexOf('_');
-        if (splitIndex <= 0 || splitIndex >= reminderId.length - 1) return null;
-
-        const originalId = reminderId.substring(0, splitIndex);
-        const instanceDate = reminderId.substring(splitIndex + 1);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(instanceDate)) return null;
-
-        return { originalId, instanceDate };
-    }
 
     /**
      * 对指定优先级分组进行排序（支持重复实例）
@@ -7145,7 +7102,7 @@ export class ReminderPanel {
                 current: currentStatus === s.id,
                 click: () => {
                     if (reminder.isRepeatInstance) {
-                        const originalInstanceDate = (reminder.id && reminder.id.includes('_')) ? reminder.id.split('_').pop()! : reminder.date;
+                        const originalInstanceDate = getRepeatInstanceOriginalKey(reminder) || reminder.date;
                         this.setReminderKanbanStatus(reminder.originalId, s.id, true, originalInstanceDate);
                     } else {
                         this.setReminderKanbanStatus(reminder.id, s.id, false);
@@ -7249,7 +7206,7 @@ export class ReminderPanel {
                 label: reminder.completed ? (i18n("markAsUncompleted") || "取消完成") : (i18n("markAsCompleted") || "完成任务"),
                 click: () => {
                     if (reminder.isRepeatInstance) {
-                        const originalInstanceDate = (reminder.id && reminder.id.includes('_')) ? reminder.id.split('_').pop() : reminder.date;
+                        const originalInstanceDate = getRepeatInstanceOriginalKey(reminder) || reminder.date;
                         this.toggleReminder(reminder.originalId, !reminder.completed, true, originalInstanceDate, reminder.id);
                     } else if (reminder.isSpanningTodayCompletedInstance) {
                         this.unmarkSpanningEventTodayCompleted(reminder);
@@ -7425,7 +7382,7 @@ export class ReminderPanel {
                     click: () => {
                         if (reminder.isRepeatInstance && onlyThisInstance) {
                             // 只修改此实例，使用原始实例日期作为键
-                            const originalInstanceDate = (reminder.id && reminder.id.includes('_')) ? reminder.id.split('_').pop()! : reminder.date;
+                            const originalInstanceDate = getRepeatInstanceOriginalKey(reminder) || reminder.date;
                             this.setInstancePriority(reminder.originalId, originalInstanceDate, priority.key);
                         } else {
                             // 修改原始事件（影响所有实例）
@@ -7453,7 +7410,7 @@ export class ReminderPanel {
                 click: () => {
                     if (reminder.isRepeatInstance && onlyThisInstance) {
                         // 只修改此实例；使用原始实例日期作为键
-                        const originalInstanceDate = (reminder.id && reminder.id.includes('_')) ? reminder.id.split('_').pop()! : reminder.date;
+                        const originalInstanceDate = getRepeatInstanceOriginalKey(reminder) || reminder.date;
                         this.setInstanceCategory(reminder.originalId, originalInstanceDate, null);
                     } else {
                         // 修改原始事件（影响所有实例）
@@ -7472,7 +7429,7 @@ export class ReminderPanel {
                     click: () => {
                         if (reminder.isRepeatInstance && onlyThisInstance) {
                             // 只修改此实例；使用原始实例日期作为键
-                            const originalInstanceDate = (reminder.id && reminder.id.includes('_')) ? reminder.id.split('_').pop()! : reminder.date;
+                            const originalInstanceDate = getRepeatInstanceOriginalKey(reminder) || reminder.date;
                             this.setInstanceCategory(reminder.originalId, originalInstanceDate, category.id);
                         } else {
                             // 修改原始事件（影响所有实例）
@@ -7500,7 +7457,7 @@ export class ReminderPanel {
                 try {
                     if (targetReminder.isRepeatInstance && onlyThisInstance) {
                         // 使用原始实例日期作为键（如果实例曾被移动，reminder.date 可能已改变，应该使用 id 中的原始生成日期）
-                        const originalInstanceDate = (targetReminder.id && targetReminder.id.includes('_')) ? targetReminder.id.split('_').pop()! : targetReminder.date;
+                        const originalInstanceDate = getRepeatInstanceOriginalKey(targetReminder) || targetReminder.date;
                         await this.setInstanceDate(targetReminder.originalId, originalInstanceDate, newDate);
                     } else {
                         const targetId = targetReminder.isRepeatInstance ? targetReminder.originalId : targetReminder.id;
@@ -7520,7 +7477,7 @@ export class ReminderPanel {
             items.push({
                 iconHTML: "✏️", label: i18n("editDate") || "编辑日期", click: () => {
                     const isInstanceEdit = targetReminder.isRepeatInstance && onlyThisInstance;
-                    const parsedInstance = targetReminder.isRepeatInstance ? this.parseReminderInstanceId(targetReminder.id) : null;
+                    const parsedInstance = targetReminder.isRepeatInstance ? parseReminderInstanceId(targetReminder.id) : null;
                     const originalInstanceDate = parsedInstance?.instanceDate || targetReminder.date;
                     const dlg = new QuickReminderDialog(
                         undefined, undefined, undefined, undefined,
@@ -7905,7 +7862,7 @@ export class ReminderPanel {
     }
 
     /**
-     * 设置重复事件的某个实例日期（通过 instanceModifications）。
+     * 设置重复事件的某个实例日期（通过实例级状态覆盖）。
      * 同时根据原始事件的跨度设置实例的 endDate 修改。
      */
     private async setInstanceDate(originalId: string, instanceDate: string, newDate: string | null) {
@@ -7917,26 +7874,19 @@ export class ReminderPanel {
         }
 
         try {
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
             // 设置新的日期（如果为 null，表示用户选择清除该实例）
             if (newDate === null) {
                 // 将 date 显式设为 null 表示该实例被移除/清空（generateRepeatInstances 会对此做特殊处理）
-                originalReminder.repeat.instanceModifications[instanceDate].date = null;
+                setRepeatInstanceOverride(originalReminder, instanceDate, 'date', null);
                 // 同时移除 endDate 修改
-                delete originalReminder.repeat.instanceModifications[instanceDate].endDate;
+                setRepeatInstanceOverride(originalReminder, instanceDate, 'endDate', undefined);
             } else {
-                originalReminder.repeat.instanceModifications[instanceDate].date = newDate;
+                setRepeatInstanceOverride(originalReminder, instanceDate, 'date', newDate);
 
                 // 若原始为跨天，保持跨度
                 if (originalReminder.endDate && originalReminder.date) {
                     const span = getDaysDifference(originalReminder.date, originalReminder.endDate);
-                    originalReminder.repeat.instanceModifications[instanceDate].endDate = addDaysToDate(newDate, span);
+                    setRepeatInstanceOverride(originalReminder, instanceDate, 'endDate', addDaysToDate(newDate, span));
                 }
             }
 
@@ -7961,20 +7911,14 @@ export class ReminderPanel {
         }
 
         try {
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
-            const modifiedDate = originalReminder.repeat.instanceModifications[instanceDate].date;
+            const instanceState = getRepeatInstanceState(originalReminder, instanceDate);
+            const modifiedDate = getInstanceField(instanceState, 'date', instanceDate);
             const startDate = modifiedDate !== undefined && modifiedDate !== null ? modifiedDate : instanceDate;
             if (startDate && compareDateStrings(newDate, startDate) < 0) {
-                originalReminder.repeat.instanceModifications[instanceDate].endDate = startDate;
+                setRepeatInstanceOverride(originalReminder, instanceDate, 'endDate', startDate);
                 showMessage(i18n('endDateAdjusted') || '结束日期已自动调整为开始日期');
             } else {
-                originalReminder.repeat.instanceModifications[instanceDate].endDate = newDate;
+                setRepeatInstanceOverride(originalReminder, instanceDate, 'endDate', newDate);
             }
 
             await saveReminders(this.plugin, reminderData);
@@ -8836,12 +8780,9 @@ export class ReminderPanel {
                 reminderData[reminderId].priority = priority;
 
                 // 如果是重复事件，清除所有实例的优先级覆盖
-                if (isRecurringEvent && reminderData[reminderId].repeat?.instanceModifications) {
-                    const modifications = reminderData[reminderId].repeat.instanceModifications;
-                    Object.keys(modifications).forEach(date => {
-                        if (modifications[date].priority !== undefined) {
-                            delete modifications[date].priority;
-                        }
+                if (isRecurringEvent && reminderData[reminderId].repeat?.instances) {
+                    Object.keys(reminderData[reminderId].repeat.instances).forEach(date => {
+                        setRepeatInstanceOverride(reminderData[reminderId], date, 'priority', undefined);
                     });
                 }
 
@@ -8902,12 +8843,9 @@ export class ReminderPanel {
                 reminderData[reminderId].categoryId = categoryId;
 
                 // 如果是重复事件，清除所有实例的分类覆盖
-                if (isRecurringEvent && reminderData[reminderId].repeat?.instanceModifications) {
-                    const modifications = reminderData[reminderId].repeat.instanceModifications;
-                    Object.keys(modifications).forEach(date => {
-                        if (modifications[date].categoryId !== undefined) {
-                            delete modifications[date].categoryId;
-                        }
+                if (isRecurringEvent && reminderData[reminderId].repeat?.instances) {
+                    Object.keys(reminderData[reminderId].repeat.instances).forEach(date => {
+                        setRepeatInstanceOverride(reminderData[reminderId], date, 'categoryId', undefined);
                     });
                 }
 
@@ -9010,19 +8948,8 @@ export class ReminderPanel {
                 return;
             }
 
-            // 初始化实例修改结构
-            if (!originalReminder.repeat) {
-                originalReminder.repeat = {};
-            }
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
             // 设置实例的优先级
-            originalReminder.repeat.instanceModifications[instanceDate].priority = priority;
+            setRepeatInstanceOverride(originalReminder, instanceDate, 'priority', priority);
 
             await saveReminders(this.plugin, reminderData);
 
@@ -9053,19 +8980,8 @@ export class ReminderPanel {
                 return;
             }
 
-            // 初始化实例修改结构
-            if (!originalReminder.repeat) {
-                originalReminder.repeat = {};
-            }
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
             // 设置实例的分类
-            originalReminder.repeat.instanceModifications[instanceDate].categoryId = categoryId;
+            setRepeatInstanceOverride(originalReminder, instanceDate, 'categoryId', categoryId);
 
             await saveReminders(this.plugin, reminderData);
 
@@ -9131,21 +9047,14 @@ export class ReminderPanel {
                 const descIds = this.getAllDescendantIds(actualTaskId, new Map(Object.entries(reminderData)));
                 descIds.forEach(id => recurringOriginalIds.add(id));
 
-                const instanceMod = original.repeat?.instanceModifications?.[instanceDate] || {};
-                const instanceBlockId = instanceMod.blockId !== undefined ? instanceMod.blockId : original.blockId;
+                const instanceState = getRepeatInstanceState(original, instanceDate);
+                const instanceBlockId = getInstanceField(instanceState, 'blockId', original.blockId);
                 if (instanceBlockId) affectedBlockIds.add(instanceBlockId);
 
                 const completedTaskIds: string[] = [];
 
                 if (newStatus === 'completed') {
-                    if (!original.repeat) original.repeat = {};
-                    if (!original.repeat.completedInstances) original.repeat.completedInstances = [];
-                    if (!original.repeat.completedTimes) original.repeat.completedTimes = {};
-
-                    if (!original.repeat.completedInstances.includes(instanceDate)) {
-                        original.repeat.completedInstances.push(instanceDate);
-                    }
-                    original.repeat.completedTimes[instanceDate] = getLocalDateTimeString(new Date());
+                    setRepeatInstanceCompletion(original, instanceDate, true, getLocalDateTimeString(new Date()));
 
                     const childIds = await this.completeAllChildTasks(actualTaskId, reminderData, affectedBlockIds, instanceDate);
                     completedTaskIds.push(actualTaskId, ...childIds);
@@ -9160,36 +9069,21 @@ export class ReminderPanel {
                         }
                     }
                 } else {
-                    if (!original.repeat) original.repeat = {};
-                    if (!original.repeat.instanceModifications) original.repeat.instanceModifications = {};
-                    if (!original.repeat.instanceModifications[instanceDate]) {
-                        original.repeat.instanceModifications[instanceDate] = {};
-                    }
-                    original.repeat.instanceModifications[instanceDate].kanbanStatus = newStatus;
-
-                    if (original.repeat?.completedInstances) {
-                        const idx = original.repeat.completedInstances.indexOf(instanceDate);
-                        if (idx > -1) original.repeat.completedInstances.splice(idx, 1);
-                    }
-                    if (original.repeat?.completedTimes && original.repeat.completedTimes[instanceDate]) {
-                        delete original.repeat.completedTimes[instanceDate];
-                    }
-                    if (original.repeat?.instanceCompletedTimes && original.repeat.instanceCompletedTimes[instanceDate]) {
-                        delete original.repeat.instanceCompletedTimes[instanceDate];
-                    }
+                    setRepeatInstanceOverride(original, instanceDate, 'kanbanStatus', newStatus);
+                    setRepeatInstanceCompletion(original, instanceDate, false);
 
                     // For repeat instances, propagate new status to instance modifications of ghost descendant subtasks
                     const parentTask = reminderData[actualTaskId];
                     let originalParentStatus = '';
                     if (parentTask) {
-                        const parentInstMod = parentTask.repeat?.instanceModifications?.[instanceDate];
+                        const parentInstState = getRepeatInstanceState(parentTask, instanceDate);
                         const tempParentInst = {
                             ...parentTask,
                             isRepeatInstance: true,
                             originalId: parentTask.id,
                             date: instanceDate,
-                            kanbanStatus: parentInstMod?.kanbanStatus,
-                            completed: parentInstMod?.completed
+                            kanbanStatus: getInstanceField(parentInstState, 'kanbanStatus', undefined),
+                            completed: getInstanceField(parentInstState, 'completed', false)
                         };
                         originalParentStatus = this.getReminderKanbanStatusId(tempParentInst);
                     }
@@ -9198,25 +9092,20 @@ export class ReminderPanel {
                         const originalTask = reminderData[oid];
                         if (!originalTask) continue;
 
-                        const subInstMod = originalTask.repeat?.instanceModifications?.[instanceDate];
-                        const isCompleted = !!(originalTask.repeat?.completedInstances?.includes(instanceDate));
+                        const subInstState = getRepeatInstanceState(originalTask, instanceDate);
+                        const isCompleted = isRepeatInstanceCompleted(originalTask, instanceDate);
                         const tempSubInst = {
                             ...originalTask,
                             isRepeatInstance: true,
                             originalId: originalTask.id,
                             date: instanceDate,
-                            kanbanStatus: subInstMod?.kanbanStatus,
+                            kanbanStatus: getInstanceField(subInstState, 'kanbanStatus', undefined),
                             completed: isCompleted
                         };
                         const originalItemStatus = this.getReminderKanbanStatusId(tempSubInst);
 
                         if (originalItemStatus === originalParentStatus && !isCompleted) {
-                            if (!originalTask.repeat) originalTask.repeat = {};
-                            if (!originalTask.repeat.instanceModifications) originalTask.repeat.instanceModifications = {};
-                            if (!originalTask.repeat.instanceModifications[instanceDate]) {
-                                originalTask.repeat.instanceModifications[instanceDate] = {};
-                            }
-                            originalTask.repeat.instanceModifications[instanceDate].kanbanStatus = newStatus;
+                            setRepeatInstanceOverride(originalTask, instanceDate, 'kanbanStatus', newStatus);
 
                             if (originalTask.blockId) affectedBlockIds.add(originalTask.blockId);
                         }
@@ -9385,36 +9274,35 @@ export class ReminderPanel {
                     }
 
                     // 从 ID 中提取原始生成日期
-                    const parsedInstance = this.parseReminderInstanceId(reminder.id);
+                    const parsedInstance = parseReminderInstanceId(reminder.id);
                     const originalInstanceDate = parsedInstance?.instanceDate || reminder.date;
 
                     // 检查实例级别的修改
-                    const instanceModifications = originalReminder.repeat?.instanceModifications || {};
-                    const instanceMod = instanceModifications[originalInstanceDate];
+                    const instanceState = getRepeatInstanceState(originalReminder, originalInstanceDate);
 
                     // 创建实例数据
                     reminderToEdit = {
                         ...originalReminder,
                         id: reminder.id,
-                        title: instanceMod?.title !== undefined ? instanceMod.title : (originalReminder.title || ''),
+                        title: getInstanceField(instanceState, 'title', originalReminder.title || ''),
                         date: reminder.date,
                         endDate: reminder.endDate,
                         time: reminder.time,
                         endTime: reminder.endTime,
-                        blockId: instanceMod?.blockId !== undefined ? instanceMod.blockId : originalReminder.blockId,
-                        docId: instanceMod?.docId !== undefined ? instanceMod.docId : originalReminder.docId,
-                        url: instanceMod?.url !== undefined ? instanceMod.url : originalReminder.url,
-                        note: instanceMod?.note !== undefined ? instanceMod.note : (originalReminder.note || ''),
-                        priority: instanceMod?.priority !== undefined ? instanceMod.priority : (originalReminder.priority || 'none'),
-                        categoryId: instanceMod?.categoryId !== undefined ? instanceMod.categoryId : originalReminder.categoryId,
-                        projectId: instanceMod?.projectId !== undefined ? instanceMod.projectId : originalReminder.projectId,
-                        customGroupId: instanceMod?.customGroupId !== undefined ? instanceMod.customGroupId : originalReminder.customGroupId,
-                        milestoneId: instanceMod?.milestoneId !== undefined ? instanceMod.milestoneId : originalReminder.milestoneId,
-                        kanbanStatus: instanceMod?.kanbanStatus !== undefined ? instanceMod.kanbanStatus : originalReminder.kanbanStatus,
-                        reminderTimes: instanceMod?.reminderTimes !== undefined ? instanceMod.reminderTimes : originalReminder.reminderTimes,
-                        customReminderPreset: instanceMod?.customReminderPreset !== undefined ? instanceMod.customReminderPreset : originalReminder.customReminderPreset,
-                        estimatedPomodoroDuration: instanceMod?.estimatedPomodoroDuration !== undefined ? instanceMod.estimatedPomodoroDuration : originalReminder.estimatedPomodoroDuration,
-                        treatStartDateAsDeadline: instanceMod?.treatStartDateAsDeadline !== undefined ? instanceMod.treatStartDateAsDeadline : originalReminder.treatStartDateAsDeadline,
+                        blockId: getInstanceField(instanceState, 'blockId', originalReminder.blockId),
+                        docId: getInstanceField(instanceState, 'docId', originalReminder.docId),
+                        url: getInstanceField(instanceState, 'url', originalReminder.url),
+                        note: getInstanceField(instanceState, 'note', originalReminder.note || ''),
+                        priority: getInstanceField(instanceState, 'priority', originalReminder.priority || 'none'),
+                        categoryId: getInstanceField(instanceState, 'categoryId', originalReminder.categoryId),
+                        projectId: getInstanceField(instanceState, 'projectId', originalReminder.projectId),
+                        customGroupId: getInstanceField(instanceState, 'customGroupId', originalReminder.customGroupId),
+                        milestoneId: getInstanceField(instanceState, 'milestoneId', originalReminder.milestoneId),
+                        kanbanStatus: getInstanceField(instanceState, 'kanbanStatus', originalReminder.kanbanStatus),
+                        reminderTimes: getInstanceField(instanceState, 'reminderTimes', originalReminder.reminderTimes),
+                        customReminderPreset: getInstanceField(instanceState, 'customReminderPreset', originalReminder.customReminderPreset),
+                        estimatedPomodoroDuration: getInstanceField(instanceState, 'estimatedPomodoroDuration', originalReminder.estimatedPomodoroDuration),
+                        treatStartDateAsDeadline: getInstanceField(instanceState, 'treatStartDateAsDeadline', originalReminder.treatStartDateAsDeadline),
                         isInstance: true,
                         originalId: reminder.originalId,
                         instanceDate: originalInstanceDate
@@ -9907,22 +9795,12 @@ export class ReminderPanel {
                 const docId = block.root_id || (block.type === 'd' ? block.id : blockId);
 
                 if (reminder.isRepeatInstance) {
-                    const parsedInstance = this.parseReminderInstanceId(reminder.id);
+                    const parsedInstance = parseReminderInstanceId(reminder.id);
                     const instanceDate = parsedInstance?.instanceDate || reminder.date;
                     if (!instanceDate) {
                         throw new Error('无法识别重复实例日期');
                     }
-                    if (!reminderData[reminderId].repeat) {
-                        reminderData[reminderId].repeat = {};
-                    }
-                    if (!reminderData[reminderId].repeat.instanceModifications) {
-                        reminderData[reminderId].repeat.instanceModifications = {};
-                    }
-                    const mod = reminderData[reminderId].repeat.instanceModifications[instanceDate] || {};
-                    mod.blockId = blockId;
-                    mod.docId = docId;
-                    mod.modifiedAt = new Date().toISOString().split('T')[0];
-                    reminderData[reminderId].repeat.instanceModifications[instanceDate] = mod;
+                    patchRepeatInstanceState(reminderData[reminderId], instanceDate, { blockId, docId });
                 } else {
                     // 更新提醒数据
                     reminderData[reminderId].blockId = blockId;
@@ -9932,9 +9810,9 @@ export class ReminderPanel {
                 await saveReminders(this.plugin, reminderData);
 
                 // 将绑定的块添加项目ID属性 custom-task-projectId
-                const instanceDate = reminder.isRepeatInstance ? (this.parseReminderInstanceId(reminder.id)?.instanceDate || reminder.date) : undefined;
-                const instanceMod = instanceDate ? reminderData[reminderId].repeat?.instanceModifications?.[instanceDate] : undefined;
-                const projectId = instanceMod?.projectId !== undefined ? instanceMod.projectId : reminderData[reminderId].projectId;
+                const instanceDate = reminder.isRepeatInstance ? (parseReminderInstanceId(reminder.id)?.instanceDate || reminder.date) : undefined;
+                const instanceState = instanceDate ? getRepeatInstanceState(reminderData[reminderId], instanceDate) : undefined;
+                const projectId = getInstanceField(instanceState, 'projectId', reminderData[reminderId].projectId);
                 if (projectId) {
                     const { addBlockProjectId } = await import('../api');
                     await addBlockProjectId(blockId, projectId);
@@ -10543,85 +10421,6 @@ export class ReminderPanel {
 
 
 
-    /**
-     * 智能生成重复任务实例，确保至少能找到下一个未来实例
-     * @param reminder 提醒任务对象
-     * @param today 今天的日期字符串
-     * @param isLunarRepeat 是否是农历重复
-     * @returns 生成的实例数组
-     */
-    private generateInstancesWithFutureGuarantee(reminder: any, today: string, isLunarRepeat: boolean): any[] {
-        // 根据重复类型确定初始范围
-        let monthsToAdd = 2; // 默认范围
-
-        if (isLunarRepeat) {
-            monthsToAdd = 14; // 农历重复需要更长范围
-        } else if (reminder.repeat.type === 'yearly') {
-            monthsToAdd = 14; // 年度重复初始范围为14个月
-        } else if (reminder.repeat.type === 'monthly') {
-            monthsToAdd = 3; // 月度重复使用3个月
-        }
-
-        let repeatInstances: any[] = [];
-        let hasUncompletedFutureInstance = false;
-        const maxAttempts = 5; // 最多尝试5次扩展
-        let attempts = 0;
-
-        // 获取已完成实例列表
-        const completedInstances = reminder.repeat?.completedInstances || [];
-
-        while (!hasUncompletedFutureInstance && attempts < maxAttempts) {
-            const monthStart = new Date();
-            monthStart.setDate(1);
-            monthStart.setMonth(monthStart.getMonth() - 1);
-
-            const monthEnd = new Date();
-            monthEnd.setMonth(monthEnd.getMonth() + monthsToAdd);
-            monthEnd.setDate(0);
-
-            const startDate = getLocalDateString(monthStart);
-            const endDate = getLocalDateString(monthEnd);
-
-            // 生成实例，使用足够大的 maxInstances 以确保生成所有实例
-            const maxInstances = monthsToAdd * 50; // 根据范围动态调整
-            repeatInstances = this.filterSkippedRepeatInstances(
-                generateRepeatInstances(reminder, startDate, endDate, maxInstances)
-            );
-
-            // 检查是否有未完成的未来实例（关键修复：不仅要是未来的，还要是未完成的）
-            hasUncompletedFutureInstance = repeatInstances.some(instance => {
-                const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                const originalKey = instanceIdStr.split('_').pop() || instance.date;
-                return compareDateStrings(instance.date, today) > 0 && !completedInstances.includes(originalKey);
-            });
-
-            if (!hasUncompletedFutureInstance) {
-                // 如果没有找到未完成的未来实例，扩展范围
-                if (reminder.repeat.type === 'yearly') {
-                    monthsToAdd += 12; // 年度重复每次增加12个月
-                } else if (isLunarRepeat) {
-                    monthsToAdd += 12; // 农历重复每次增加12个月
-                } else {
-                    monthsToAdd += 6; // 其他类型每次增加6个月
-                }
-                attempts++;
-            }
-        }
-
-        return repeatInstances;
-    }
-
-    private filterSkippedRepeatInstances(instances: any[]): any[] {
-        return instances.filter(instance => {
-            const logicalDate = this.getReminderLogicalDate(instance.date, instance.time);
-            return this.canReminderShowOnDate(instance, logicalDate || instance.date);
-        });
-    }
-
-
-
-
-
 
     private async showCategorySelectDialog() {
         const categories = await this.categoryManager.loadCategories();
@@ -10899,23 +10698,16 @@ export class ReminderPanel {
             for (const reminder of selectedReminders) {
                 if (reminder.isRepeatInstance) {
                     const originalId = reminder.originalId;
-                    const originalInstanceDate = (reminder.id && reminder.id.includes('_')) ? reminder.id.split('_').pop() : reminder.date;
+                    const originalInstanceDate = getRepeatInstanceOriginalKey(reminder) || reminder.date;
                     if (!originalId || !originalInstanceDate) continue;
 
                     const original = reminderData[originalId];
                     if (!original) continue;
 
-                    if (!original.repeat) original.repeat = {};
-                    if (!original.repeat.completedInstances) original.repeat.completedInstances = [];
-                    if (!original.repeat.completedTimes) original.repeat.completedTimes = {};
-
-                    if (!original.repeat.completedInstances.includes(originalInstanceDate)) {
-                        original.repeat.completedInstances.push(originalInstanceDate);
+                    if (setRepeatInstanceCompletion(original, originalInstanceDate, true, completedTime)) {
                         changedCount++;
                     }
-                    original.repeat.completedTimes[originalInstanceDate] = completedTime;
-                    const instanceMod = original.repeat?.instanceModifications?.[originalInstanceDate] || {};
-                    const instanceBlockId = instanceMod.blockId !== undefined ? instanceMod.blockId : original.blockId;
+                    const instanceBlockId = getInstanceField(getRepeatInstanceState(original, originalInstanceDate), 'blockId', original.blockId);
                     if (instanceBlockId) affectedBlockIds.add(instanceBlockId);
                     recurringOriginalIds.add(originalId);
 
@@ -11237,12 +11029,9 @@ export class ReminderPanel {
 
                 const isRecurringEvent = reminder.repeat?.enabled;
                 reminder.priority = priority;
-                if (isRecurringEvent && reminder.repeat?.instanceModifications) {
-                    const modifications = reminder.repeat.instanceModifications;
-                    Object.keys(modifications).forEach(date => {
-                        if (modifications[date].priority !== undefined) {
-                            delete modifications[date].priority;
-                        }
+                if (isRecurringEvent && reminder.repeat?.instances) {
+                    Object.keys(reminder.repeat.instances).forEach(date => {
+                        setRepeatInstanceOverride(reminder, date, 'priority', undefined);
                     });
                 }
                 changedReminders.push({ ...reminder });
@@ -11283,12 +11072,9 @@ export class ReminderPanel {
 
                 const isRecurringEvent = reminder.repeat?.enabled;
                 reminder.categoryId = categoryId;
-                if (isRecurringEvent && reminder.repeat?.instanceModifications) {
-                    const modifications = reminder.repeat.instanceModifications;
-                    Object.keys(modifications).forEach(date => {
-                        if (modifications[date].categoryId !== undefined) {
-                            delete modifications[date].categoryId;
-                        }
+                if (isRecurringEvent && reminder.repeat?.instances) {
+                    Object.keys(reminder.repeat.instances).forEach(date => {
+                        setRepeatInstanceOverride(reminder, date, 'categoryId', undefined);
                     });
                 }
                 changedReminders.push({ ...reminder });

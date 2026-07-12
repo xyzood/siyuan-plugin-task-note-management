@@ -19,7 +19,7 @@ import { CategoryManageDialog } from "./CategoryManageDialog";
 import { ProjectColorDialog } from "./ProjectColorDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { i18n } from "../pluginInstance";
-import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate, getMonthlyWeekRules } from "../utils/repeatUtils";
+import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate, getMonthlyWeekRules, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
 import { getAllReminders, saveReminders, loadHolidays, loadSubscriptions } from "../utils/icsSubscription";
 import { CalendarConfigManager, CALENDAR_CONFIG_UPDATED_EVENT } from "../utils/calendarConfigManager";
 import { showStatsDialog } from "./stats/ShowStatsDialog";
@@ -3155,14 +3155,16 @@ export class CalendarView {
                     throw new Error('重复任务原始数据不存在');
                 }
 
-                const instanceDate = sourceEventId.split('_').pop() || info.event.extendedProps.date;
+                const parsedSource = parseReminderInstanceId(sourceEventId);
+                const instanceDate = parsedSource?.instanceDate || info.event.extendedProps.date;
                 if (!instanceDate) {
                     throw new Error('重复任务实例日期不存在');
                 }
 
-                const existingModification = originalReminder.repeat?.instanceModifications?.[instanceDate] || {};
+                const existingState = getRepeatInstanceState(originalReminder, instanceDate);
+                const reminderTimesSource = getInstanceField(existingState, 'reminderTimes', originalReminder.reminderTimes);
                 const resolvedReminderTimes = resolveRepeatReminderTimes(
-                    existingModification.reminderTimes !== undefined ? existingModification.reminderTimes : originalReminder.reminderTimes,
+                    reminderTimesSource,
                     info.event.extendedProps.date || instanceDate,
                     info.event.extendedProps.endDate || undefined,
                     originalReminder.date,
@@ -3179,18 +3181,7 @@ export class CalendarView {
                     endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
                 };
 
-                if (!originalReminder.repeat) {
-                    originalReminder.repeat = {};
-                }
-                if (!originalReminder.repeat.instanceModifications) {
-                    originalReminder.repeat.instanceModifications = {};
-                }
-
-                originalReminder.repeat.instanceModifications[instanceDate] = {
-                    ...existingModification,
-                    reminderTimes: resolvedReminderTimes,
-                    modifiedAt: getLocalDateString(new Date())
-                };
+                patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: resolvedReminderTimes });
 
                 await saveReminders(this.plugin, reminderData);
                 if (this.plugin?.updateMobileNotification) {
@@ -3258,14 +3249,16 @@ export class CalendarView {
                             throw new Error('重复任务原始数据不存在');
                         }
 
-                        const instanceDate = sourceEventId.split('_').pop() || calendarEvent.extendedProps.date;
+                        const parsedSource = parseReminderInstanceId(sourceEventId);
+                        const instanceDate = parsedSource?.instanceDate || calendarEvent.extendedProps.date;
                         if (!instanceDate) {
                             throw new Error('重复任务实例日期不存在');
                         }
 
-                        const existingModification = originalReminder.repeat?.instanceModifications?.[instanceDate] || {};
+                        const existingState = getRepeatInstanceState(originalReminder, instanceDate);
+                        const reminderTimesSource = getInstanceField(existingState, 'reminderTimes', originalReminder.reminderTimes);
                         const resolvedReminderTimes = resolveRepeatReminderTimes(
-                            existingModification.reminderTimes !== undefined ? existingModification.reminderTimes : originalReminder.reminderTimes,
+                            reminderTimesSource,
                             calendarEvent.extendedProps.date || instanceDate,
                             calendarEvent.extendedProps.endDate || undefined,
                             originalReminder.date,
@@ -3274,18 +3267,7 @@ export class CalendarView {
 
                         resolvedReminderTimes.splice(reminderIndex, 1);
 
-                        if (!originalReminder.repeat) {
-                            originalReminder.repeat = {};
-                        }
-                        if (!originalReminder.repeat.instanceModifications) {
-                            originalReminder.repeat.instanceModifications = {};
-                        }
-
-                        originalReminder.repeat.instanceModifications[instanceDate] = {
-                            ...existingModification,
-                            reminderTimes: resolvedReminderTimes,
-                            modifiedAt: getLocalDateString(new Date())
-                        };
+                        patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: resolvedReminderTimes });
 
                         await saveReminders(this.plugin, reminderData);
                         if (this.plugin?.updateMobileNotification) {
@@ -3979,19 +3961,6 @@ export class CalendarView {
         });
     }
 
-    private parseReminderInstanceId(reminderId?: string): { originalId: string; instanceDate: string } | null {
-        if (!reminderId || typeof reminderId !== 'string') return null;
-
-        const splitIndex = reminderId.lastIndexOf('_');
-        if (splitIndex <= 0 || splitIndex >= reminderId.length - 1) return null;
-
-        const originalId = reminderId.substring(0, splitIndex);
-        const instanceDate = reminderId.substring(splitIndex + 1);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(instanceDate)) return null;
-
-        return { originalId, instanceDate };
-    }
-
     private async setReminderBaseDate(reminderId: string, newDate: string | null) {
         const reminderData = await getAllReminders(this.plugin);
         const reminder = reminderData[reminderId];
@@ -4072,23 +4041,15 @@ export class CalendarView {
         }
 
         try {
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
             if (newDate === null) {
-                originalReminder.repeat.instanceModifications[instanceDate].date = null;
-                delete originalReminder.repeat.instanceModifications[instanceDate].endDate;
+                const state = patchRepeatInstanceState(originalReminder, instanceDate, { date: null });
+                delete state.endDate;
             } else {
-                originalReminder.repeat.instanceModifications[instanceDate].date = newDate;
-
+                const patch: any = { date: newDate };
                 if (originalReminder.endDate && originalReminder.date) {
-                    const span = getDaysDifference(originalReminder.date, originalReminder.endDate);
-                    originalReminder.repeat.instanceModifications[instanceDate].endDate = addDaysToDate(newDate, span);
+                    patch.endDate = addDaysToDate(newDate, getDaysDifference(originalReminder.date, originalReminder.endDate));
                 }
+                patchRepeatInstanceState(originalReminder, instanceDate, patch);
             }
 
             await saveReminders(this.plugin, reminderData);
@@ -4111,20 +4072,14 @@ export class CalendarView {
         }
 
         try {
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
-            const modifiedDate = originalReminder.repeat.instanceModifications[instanceDate].date;
-            const startDate = modifiedDate !== undefined && modifiedDate !== null ? modifiedDate : instanceDate;
+            const state = getRepeatInstanceState(originalReminder, instanceDate);
+            const modifiedDate = getInstanceField(state, 'date', undefined);
+            const startDate = modifiedDate ?? instanceDate;
             if (startDate && compareDateStrings(newDate, startDate) < 0) {
-                originalReminder.repeat.instanceModifications[instanceDate].endDate = startDate;
+                patchRepeatInstanceState(originalReminder, instanceDate, { endDate: startDate });
                 showMessage(i18n('endDateAdjusted') || '结束日期已自动调整为开始日期');
             } else {
-                originalReminder.repeat.instanceModifications[instanceDate].endDate = newDate;
+                patchRepeatInstanceState(originalReminder, instanceDate, { endDate: newDate });
             }
 
             await saveReminders(this.plugin, reminderData);
@@ -4153,7 +4108,7 @@ export class CalendarView {
         const editIcon = "✏️";
 
         const getOriginalInstanceDate = () => {
-            const parsedInstance = props.isRepeated ? this.parseReminderInstanceId(calendarEvent.id) : null;
+            const parsedInstance = props.isRepeated ? parseReminderInstanceId(calendarEvent.id) : null;
             return parsedInstance?.instanceDate || startDateStr;
         };
 
@@ -4748,10 +4703,8 @@ export class CalendarView {
         // 为重复事件实例显示编辑对话框
         const originalId = calendarEvent.extendedProps.originalId;
         // 事件 id 使用格式: <reminder.id>_<originalKey>
-        // 以 id 的最后一段作为实例的原始键，用于查找 instanceModifications
-        const instanceIdStr = calendarEvent.id || '';
-        const idx = instanceIdStr.lastIndexOf('_');
-        const instanceDate = idx !== -1 ? instanceIdStr.slice(idx + 1) : calendarEvent.extendedProps.date;
+        const parsedInstance = parseReminderInstanceId(calendarEvent.id);
+        const instanceDate = parsedInstance?.instanceDate || calendarEvent.extendedProps.date;
 
         try {
             const reminderData = await getAllReminders(this.plugin);
@@ -4763,8 +4716,8 @@ export class CalendarView {
             }
 
             // 检查实例级别的修改（包括备注）
-            const instanceModifications = originalReminder.repeat?.instanceModifications || {};
-            const instanceMod = instanceModifications[instanceDate];
+            const instanceState = getRepeatInstanceState(originalReminder, instanceDate);
+            const instanceNote = getInstanceField(instanceState, 'note', originalReminder.note || '');
 
             // 创建实例数据，包含当前实例的特定信息
             const instanceData = {
@@ -4775,7 +4728,7 @@ export class CalendarView {
                 time: calendarEvent.extendedProps.time,
                 endTime: calendarEvent.extendedProps.endTime,
                 // 修改备注逻辑：复用原始事件的备注，如果实例有明确的备注则优先使用
-                note: instanceMod?.note || originalReminder.note || '',  // 优先使用实例备注，其次使用原始事件备注
+                note: instanceNote,
                 isInstance: true,
                 originalId: originalId,
                 instanceDate: instanceDate
@@ -4813,8 +4766,8 @@ export class CalendarView {
                 try {
                     const originalId = calendarEvent.extendedProps.originalId;
                     // 从 event.id 提取原始实例键，优先使用它作为排除键
-                    const instanceIdStr = calendarEvent.id || '';
-                    const instanceDate = instanceIdStr.split('_').pop() || calendarEvent.extendedProps.date;
+                    const parsedInstance = parseReminderInstanceId(calendarEvent.id);
+                    const instanceDate = parsedInstance?.instanceDate || calendarEvent.extendedProps.date;
 
                     // 立即从 UI 中移除原事件和关联的已完成任务时间事件
                     const targetId = calendarEvent.id;
@@ -5035,9 +4988,8 @@ export class CalendarView {
             // 对于重复事件实例，优先修改单个实例的优先级
             if (calendarEvent.extendedProps.isRepeated) {
                 // 从 ID 中提取原始实例日期键（格式为 <id>_<date>）
-                const originalInstanceDate = (calendarEvent.id) ?
-                    (calendarEvent.id.slice(calendarEvent.id.lastIndexOf('_') + 1) || calendarEvent.extendedProps.date) :
-                    calendarEvent.extendedProps.date;
+                const parsedInstance = parseReminderInstanceId(calendarEvent.id);
+                const originalInstanceDate = parsedInstance?.instanceDate || calendarEvent.extendedProps.date;
                 await this.setInstancePriority(calendarEvent.extendedProps.originalId, originalInstanceDate, priority);
                 return;
             }
@@ -5082,19 +5034,7 @@ export class CalendarView {
                 return;
             }
 
-            // 初始化实例修改结构
-            if (!originalReminder.repeat) {
-                originalReminder.repeat = {};
-            }
-            if (!originalReminder.repeat.instanceModifications) {
-                originalReminder.repeat.instanceModifications = {};
-            }
-            if (!originalReminder.repeat.instanceModifications[instanceDate]) {
-                originalReminder.repeat.instanceModifications[instanceDate] = {};
-            }
-
-            // 设置实例的优先级
-            originalReminder.repeat.instanceModifications[instanceDate].priority = priority;
+            setRepeatInstanceOverride(originalReminder, instanceDate, 'priority', priority);
 
             await saveReminders(this.plugin, reminderData);
 
@@ -5593,38 +5533,13 @@ export class CalendarView {
             if (event.extendedProps.isRepeated) {
                 // 处理重复事件实例
                 const originalId = event.extendedProps.originalId;
-                const instanceIdStr = event.id || '';
-                const instanceDate = instanceIdStr.split('_').pop() || event.extendedProps.date;
+                const parsedInstance = parseReminderInstanceId(event.id);
+                const instanceDate = parsedInstance?.instanceDate || event.extendedProps.date;
 
                 if (reminderData[originalId]) {
-                    // 初始化已完成实例列表
-                    if (!reminderData[originalId].repeat) {
-                        reminderData[originalId].repeat = {};
-                    }
-                    if (!reminderData[originalId].repeat.completedInstances) {
-                        reminderData[originalId].repeat.completedInstances = [];
-                    }
-                    // 初始化完成时间记录
-                    if (!reminderData[originalId].repeat.completedTimes) {
-                        reminderData[originalId].repeat.completedTimes = {};
-                    }
-
-                    const completedInstances = reminderData[originalId].repeat.completedInstances;
-                    const completedTimes = reminderData[originalId].repeat.completedTimes;
-                    const isInstanceCompleted = completedInstances.includes(instanceDate);
-
-                    if (isInstanceCompleted) {
-                        // 从已完成列表中移除并删除完成时间
-                        const index = completedInstances.indexOf(instanceDate);
-                        if (index > -1) {
-                            completedInstances.splice(index, 1);
-                        }
-                        delete completedTimes[instanceDate];
-                    } else {
-                        // 添加到已完成列表并记录完成时间
-                        completedInstances.push(instanceDate);
-                        completedTimes[instanceDate] = getLocalDateTimeString(new Date());
-                    }
+                    const originalReminder = reminderData[originalId];
+                    const isInstanceCompleted = isRepeatInstanceCompleted(originalReminder, instanceDate);
+                    setRepeatInstanceCompletion(originalReminder, instanceDate, !isInstanceCompleted);
 
                     await saveReminders(this.plugin, reminderData);
                     await this.refreshRecurringMobileNotifications(reminderData, [originalId]);
@@ -6079,20 +5994,14 @@ export class CalendarView {
 
                 // 判断是否为此日期的实例
                 if (event.extendedProps?.isRepeated) {
-                    const instanceDate = event.id.split('_').pop();
+                    const instanceDate = getRepeatInstanceOriginalKey({ id: event.id });
                     if (instanceDate) {
-                        if (!reminder.repeat) reminder.repeat = {};
-                        if (!reminder.repeat.instanceModifications) reminder.repeat.instanceModifications = {};
-                        if (!reminder.repeat.instanceModifications[instanceDate]) {
-                            reminder.repeat.instanceModifications[instanceDate] = {};
-                        }
-                        const mod = reminder.repeat.instanceModifications[instanceDate];
-                        mod.sort = newSortValue;
+                        setRepeatInstanceOverride(reminder, instanceDate, 'sort', newSortValue);
 
                         // 如果是被拖拽的任务，仅更新排序和优先级。
                         // 实际日期由 eventDrop / updateSingleInstance 统一保存。
                         if (event.id === draggedId) {
-                            mod.priority = priority;
+                            setRepeatInstanceOverride(reminder, instanceDate, 'priority', priority);
                         }
                     }
                 } else {
@@ -6221,14 +6130,12 @@ export class CalendarView {
         // 如果是重复事件实例
         if (originalReminder.isRepeated) {
             const originalId = originalReminder.originalId;
-            // 修正：从 ID 中提取原始实例日期键（格式为 <id>_<date>）
-            const instanceDate = (info.event.id) ?
-                (info.event.id.slice(info.event.id.lastIndexOf('_') + 1) || originalReminder.date) :
-                originalReminder.date;
+            const parsedInstance = parseReminderInstanceId(info.event.id);
+            const instanceDate = parsedInstance?.instanceDate || originalReminder.date;
 
             const reminderData = await getAllReminders(this.plugin);
             const originalEvent = reminderData[originalId];
-            const isAlreadyModified = originalEvent?.repeat?.instanceModifications?.[instanceDate];
+            const isAlreadyModified = !!getRepeatInstanceState(originalEvent, instanceDate);
 
             // 如果实例已经被修改过,直接更新该实例,不再询问
             if (isAlreadyModified) {
@@ -6289,14 +6196,12 @@ export class CalendarView {
         // 如果是重复事件实例
         if (originalReminder.isRepeated) {
             const originalId = originalReminder.originalId;
-            // 修正：从 ID 中提取原始实例日期键（格式为 <id>_<date>）
-            const instanceDate = (info.event.id) ?
-                (info.event.id.slice(info.event.id.lastIndexOf('_') + 1) || originalReminder.date) :
-                originalReminder.date;
+            const parsedInstance = parseReminderInstanceId(info.event.id);
+            const instanceDate = parsedInstance?.instanceDate || originalReminder.date;
 
             const reminderData = await getAllReminders(this.plugin);
             const originalEvent = reminderData[originalId];
-            const isAlreadyModified = originalEvent?.repeat?.instanceModifications?.[instanceDate];
+            const isAlreadyModified = !!getRepeatInstanceState(originalEvent, instanceDate);
 
             // 如果实例已经被修改过,直接更新该实例,不再询问
             if (isAlreadyModified) {
@@ -6529,8 +6434,7 @@ export class CalendarView {
             }
             // 同时清除旧系列的实例特定数据。
             delete newReminder.repeat.excludeDates;
-            delete newReminder.repeat.instanceModifications;
-            delete newReminder.repeat.completedInstances;
+            delete newReminder.repeat.instances;
 
             // 使用生成新的提醒ID
             const newId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -6659,7 +6563,8 @@ export class CalendarView {
         try {
             const originalId = info.event.extendedProps.originalId;
             // 从 instanceId 提取原始日期（格式：originalId_YYYY-MM-DD）
-            const originalInstanceDate = info.event.id ? info.event.id.split('_').pop() : info.event.extendedProps.date;
+            const parsedInstance = parseReminderInstanceId(info.event.id);
+            const originalInstanceDate = parsedInstance?.instanceDate || info.event.extendedProps.date;
             let newStartDate = info.event.start;
             let newEndDate = info.event.end;
 
@@ -7028,9 +6933,7 @@ export class CalendarView {
             const newCompletedTime = getLocalDateTimeString(newCompletedDate);
 
             if (props.isRepeated && props.completedInstanceDate) {
-                if (!reminder.repeat) reminder.repeat = {};
-                if (!reminder.repeat.completedTimes) reminder.repeat.completedTimes = {};
-                reminder.repeat.completedTimes[props.completedInstanceDate] = newCompletedTime;
+                setRepeatInstanceCompletion(reminder, props.completedInstanceDate, true, newCompletedTime);
             } else {
                 reminder.completedTime = newCompletedTime;
             }
@@ -7078,39 +6981,28 @@ export class CalendarView {
             const instanceDate = instanceData.instanceDate;
 
             const reminderData = await getAllReminders(this.plugin);
+            const originalReminder = reminderData[originalId];
 
-            if (!reminderData[originalId]) {
+            if (!originalReminder) {
                 throw new Error('原始事件不存在');
             }
-
-            // 初始化实例修改列表
-            if (!reminderData[originalId].repeat.instanceModifications) {
-                reminderData[originalId].repeat.instanceModifications = {};
-            }
-
-            const modifications = reminderData[originalId].repeat.instanceModifications;
-            const existingModification = modifications[instanceDate] || {};
 
             // 如果修改了日期，需要清理可能存在的中间修改记录
             // 例如：原始日期 12-01 改为 12-03，再改为 12-06
             // 应该只保留 12-01 的修改记录，删除 12-03 的记录
             if (instanceData.date !== instanceDate) {
-                // 查找所有可能的中间修改记录
-                const keysToDelete: string[] = [];
-                for (const key in modifications) {
-                    // 如果某个修改记录的日期指向当前实例的新日期，且该键不是原始实例日期
-                    // 说明这是之前修改产生的中间记录，需要删除
-                    if (key !== instanceDate && modifications[key]?.date === instanceData.date) {
-                        keysToDelete.push(key);
+                const instances = originalReminder.repeat?.instances;
+                if (instances) {
+                    for (const key in instances) {
+                        if (key !== instanceDate && getInstanceField(instances[key], 'date', key) === instanceData.date) {
+                            deleteRepeatInstanceState(originalReminder, key);
+                        }
                     }
                 }
-                // 删除中间修改记录
-                keysToDelete.forEach(key => delete modifications[key]);
             }
 
             // 保存此实例的修改数据（始终使用原始实例日期作为键）
-            modifications[instanceDate] = {
-                ...existingModification,
+            patchRepeatInstanceState(originalReminder, instanceDate, {
                 title: instanceData.title,
                 date: instanceData.date,
                 endDate: instanceData.endDate,
@@ -7118,9 +7010,8 @@ export class CalendarView {
                 endTime: instanceData.endTime,
                 note: instanceData.note,
                 priority: instanceData.priority,
-                notified: instanceData.notified, // 添加通知状态
-                modifiedAt: getLocalDateString(new Date())
-            };
+                notified: instanceData.notified // 添加通知状态
+            } as any);
 
             await saveReminders(this.plugin, reminderData);
 
@@ -7835,8 +7726,6 @@ export class CalendarView {
                     let repeatInstances = generateRepeatInstances(reminder, startDate, endDate)
                         .filter(instance => this.shouldDisplayRepeatInstance(instance, reminder));
 
-                    const completedInstances = reminder.repeat?.completedInstances || [];
-                    const instanceModifications = reminder.repeat?.instanceModifications || {};
                     const isOriginalAbandoned = this.isAbandonedReminder(reminder);
 
                     // Used to track processed instances (using original date key)
@@ -7845,16 +7734,12 @@ export class CalendarView {
 
                     // 批量处理实例，减少重复计算
                     for (const instance of repeatInstances) {
-                        // 使用 instance.instanceId（由 generateRepeatInstances 生成，格式为 <reminder.id>_YYYY-MM-DD）
-                        // 从中提取原始实例日期键 originalKey，用于查找完成状态和 instanceModifications。
-                        const instanceIdStr = (instance as any).instanceId || `${reminder.id}_${instance.date}`;
-                        const originalKey = instanceIdStr.split('_').pop() || instance.date;
+                        const originalKey = getRepeatInstanceOriginalKey(instance);
 
                         // 标记此实例已处理
                         processedInstances.add(originalKey);
 
-                        // completedInstances 和 instanceModifications 都以原始实例日期键为索引
-                        const isInstanceCompleted = completedInstances.includes(originalKey);
+                        const isInstanceCompleted = !!instance.completed;
 
                         // Apply instance quantity limit to incomplete instances
                         if (!isInstanceCompleted) {
@@ -7866,8 +7751,7 @@ export class CalendarView {
 
                         const instanceReminder = {
                             ...reminder,
-                            ...instance,
-                            completed: isInstanceCompleted
+                            ...instance
                         };
 
                         const isInstanceAbandoned = this.isAbandonedReminder(instanceReminder);
@@ -7891,7 +7775,7 @@ export class CalendarView {
                             }
                         }
 
-                        // 事件 id 应使用原始实例键，以便后续的拖拽/保存逻辑能够基于原始实例键进行修改，避免产生重复的 instanceModifications 条目
+                        // 事件 id 应使用原始实例键，以便后续的拖拽/保存逻辑能够基于原始实例键进行修改，避免产生重复的实例状态条目
                         const uniqueInstanceId = `${reminder.id}_${originalKey}`;
                         this.addEventToList(events, instanceReminder, uniqueInstanceId, true, instance.originalId);
                         this.addReminderTimeEventsToList(events, instanceReminder, uniqueInstanceId, true, instance.originalId);
@@ -7899,17 +7783,15 @@ export class CalendarView {
 
                     // 处理被移动到当前视图范围内但原始日期不在范围内的实例
                     // 这些实例不会被 generateRepeatInstances 返回，因为它只检查符合重复规则的日期
-                    for (const [originalDateKey, modification] of Object.entries(instanceModifications)) {
-                        // 如果此实例已经被处理过，跳过
-                        if (processedInstances.has(originalDateKey)) {
+                    for (const originalDateKey of Object.keys(reminder.repeat?.instances || {})) {
+                        const state = getRepeatInstanceState(reminder, originalDateKey);
+                        // 如果此实例已经被处理过，或是已删除状态，跳过
+                        if (processedInstances.has(originalDateKey) || state?.deleted) {
                             continue;
                         }
 
-                        // 类型断言：modification 是实例修改对象
-                        const mod = modification as any;
-
                         // 检查修改后的日期是否在当前视图范围内
-                        const modifiedDate = mod.date || originalDateKey;
+                        const modifiedDate = getInstanceField(state, 'date', originalDateKey);
                         if (compareDateStrings(modifiedDate, startDate) >= 0 &&
                             compareDateStrings(modifiedDate, endDate) <= 0) {
 
@@ -7920,7 +7802,7 @@ export class CalendarView {
                             }
 
                             // 检查此实例是否已完成
-                            const isInstanceCompleted = completedInstances.includes(originalDateKey);
+                            const isInstanceCompleted = isRepeatInstanceCompleted(reminder, originalDateKey);
 
                             // Apply instance quantity limit to incomplete instances
                             if (!isInstanceCompleted) {
@@ -7931,7 +7813,8 @@ export class CalendarView {
                             }
 
                             // 计算结束日期（如果有）
-                            let modifiedEndDate = mod.endDate;
+                            const stateEndDate = getInstanceField(state, 'endDate', undefined);
+                            let modifiedEndDate = stateEndDate;
                             if (!modifiedEndDate && reminder.endDate && reminder.date) {
                                 const daysDiff = getDaysDifference(reminder.date, reminder.endDate);
                                 modifiedEndDate = addDaysToDate(modifiedDate, daysDiff);
@@ -7941,33 +7824,33 @@ export class CalendarView {
                                 ...reminder,
                                 date: modifiedDate,
                                 endDate: modifiedEndDate || reminder.endDate,
-                                time: mod.time || reminder.time,
-                                endTime: mod.endTime || reminder.endTime,
+                                time: getInstanceField(state, 'time', reminder.time),
+                                endTime: getInstanceField(state, 'endTime', reminder.endTime),
                                 reminderTimes: resolveRepeatReminderTimes(
-                                    mod.reminderTimes !== undefined ? mod.reminderTimes : reminder.reminderTimes,
+                                    getInstanceField(state, 'reminderTimes', reminder.reminderTimes),
                                     modifiedDate,
                                     modifiedEndDate || reminder.endDate,
                                     reminder.date,
                                     reminder.endDate
                                 ),
                                 completed: isInstanceCompleted,
-                                title: mod.title !== undefined ? mod.title : reminder.title,
-                                note: mod.note !== undefined ? mod.note : (reminder.note || ''),
-                                priority: mod.priority !== undefined ? mod.priority : (reminder.priority || 'none'),
-                                categoryId: mod.categoryId !== undefined ? mod.categoryId : reminder.categoryId,
-                                projectId: mod.projectId !== undefined ? mod.projectId : reminder.projectId,
-                                customGroupId: mod.customGroupId !== undefined ? mod.customGroupId : reminder.customGroupId,
-                                kanbanStatus: mod.kanbanStatus !== undefined ? mod.kanbanStatus : reminder.kanbanStatus,
-                                tagIds: mod.tagIds !== undefined ? mod.tagIds : reminder.tagIds,
-                                milestoneId: mod.milestoneId !== undefined ? mod.milestoneId : reminder.milestoneId,
-                                reminderSkipWeekendMode: normalizeReminderSkipWeekendMode(mod.reminderSkipWeekendMode) ||
-                                    normalizeReminderSkipWeekendMode(mod.reminderSkipWeekends) ||
+                                title: getInstanceField(state, 'title', reminder.title),
+                                note: getInstanceField(state, 'note', reminder.note || ''),
+                                priority: getInstanceField(state, 'priority', reminder.priority || 'none'),
+                                categoryId: getInstanceField(state, 'categoryId', reminder.categoryId),
+                                projectId: getInstanceField(state, 'projectId', reminder.projectId),
+                                customGroupId: getInstanceField(state, 'customGroupId', reminder.customGroupId),
+                                kanbanStatus: getInstanceField(state, 'kanbanStatus', reminder.kanbanStatus),
+                                tagIds: getInstanceField(state, 'tagIds', reminder.tagIds),
+                                milestoneId: getInstanceField(state, 'milestoneId', reminder.milestoneId),
+                                reminderSkipWeekendMode: normalizeReminderSkipWeekendMode(getInstanceField(state, 'reminderSkipWeekendMode', undefined)) ||
+                                    normalizeReminderSkipWeekendMode(getInstanceField(state, 'reminderSkipWeekends', undefined)) ||
                                     normalizeReminderSkipWeekendMode(reminder.reminderSkipWeekendMode) ||
                                     normalizeReminderSkipWeekendMode(reminder.reminderSkipWeekends) ||
                                     normalizeReminderSkipWeekendMode(reminder.repeat?.reminderSkipWeekendMode) ||
                                     normalizeReminderSkipWeekendMode(reminder.repeat?.reminderSkipWeekends),
-                                reminderSkipHolidays: mod.reminderSkipHolidays !== undefined ? mod.reminderSkipHolidays : (reminder.reminderSkipHolidays !== undefined ? reminder.reminderSkipHolidays : reminder.repeat?.reminderSkipHolidays),
-                                sort: (mod && typeof mod.sort === 'number') ? mod.sort : (reminder.sort || 0)
+                                reminderSkipHolidays: getInstanceField(state, 'reminderSkipHolidays', reminder.reminderSkipHolidays !== undefined ? reminder.reminderSkipHolidays : reminder.repeat?.reminderSkipHolidays),
+                                sort: getInstanceField(state, 'sort', reminder.sort || 0)
                             };
 
                             if (!this.shouldDisplayRepeatInstance(instanceReminder, reminder)) {
@@ -8505,12 +8388,10 @@ export class CalendarView {
             }
 
             // 处理重复任务的已完成实例
-            if (reminder.repeat?.enabled && reminder.repeat.completedInstances) {
-                const completedInstances = reminder.repeat.completedInstances;
-                const completedTimes = reminder.repeat.completedTimes || {};
-
-                for (const instanceDate of completedInstances) {
-                    const completedTimeStr = completedTimes[instanceDate];
+            if (reminder.repeat?.enabled && reminder.repeat.instances) {
+                for (const instanceDate of Object.keys(reminder.repeat.instances)) {
+                    if (!isRepeatInstanceCompleted(reminder, instanceDate)) continue;
+                    const completedTimeStr = getRepeatInstanceCompletedTime(reminder, instanceDate);
                     if (!completedTimeStr) continue;
 
                     const completedDateStr = completedTimeStr.substring(0, 10); // YYYY-MM-DD
@@ -9684,12 +9565,12 @@ export class CalendarView {
                 const excludeDates = child.repeat?.excludeDates || [];
                 if (excludeDates.includes(instanceDate)) return;
 
-                const instanceMod = child.repeat?.instanceModifications?.[instanceDate];
+                const instanceState = getRepeatInstanceState(child, instanceDate);
                 candidates.push({
                     id: `${child.id}_${instanceDate}`,
-                    title: instanceMod?.title !== undefined ? instanceMod.title : (child.title || i18n("unnamedTask") || "未命名任务"),
-                    completed: (child.repeat?.completedInstances || []).includes(instanceDate),
-                    sort: typeof instanceMod?.sort === 'number' ? instanceMod.sort : (child.sort || 0),
+                    title: getInstanceField(instanceState, 'title', child.title || i18n("unnamedTask") || "未命名任务"),
+                    completed: isRepeatInstanceCompleted(child, instanceDate),
+                    sort: getInstanceField(instanceState, 'sort', child.sort || 0),
                     depth,
                     nextParentId: `${child.id}_${instanceDate}`,
                     nextOriginalParentId: child.id
@@ -10087,8 +9968,8 @@ export class CalendarView {
                     if (reminder.isRepeated) {
                         // 重复事件实例的完成时间
                         const originalReminder = reminderData[reminder.originalId];
-                        if (originalReminder?.repeat?.completedTimes) {
-                            completedTime = originalReminder.repeat.completedTimes[reminder.date];
+                        if (originalReminder) {
+                            completedTime = getRepeatInstanceCompletedTime(originalReminder, reminder.date);
                         }
                     } else {
                         // 普通事件的完成时间
@@ -10543,8 +10424,7 @@ export class CalendarView {
                 delete newReminder.repeat.endDate;
             }
             delete newReminder.repeat.excludeDates;
-            delete newReminder.repeat.instanceModifications;
-            delete newReminder.repeat.completedInstances;
+            delete newReminder.repeat.instances;
 
             // 生成新的提醒ID
             const blockId = originalReminder.blockId || originalReminder.id;
@@ -10631,16 +10511,7 @@ export class CalendarView {
                     }
 
                     // 清理可能存在的首次发生相关的历史数据
-                    if (originalReminder.repeat.completedInstances) {
-                        const firstOccurrenceIndex = originalReminder.repeat.completedInstances.indexOf(reminder.date);
-                        if (firstOccurrenceIndex > -1) {
-                            originalReminder.repeat.completedInstances.splice(firstOccurrenceIndex, 1);
-                        }
-                    }
-
-                    if (originalReminder.repeat.instanceModifications && originalReminder.repeat.instanceModifications[reminder.date]) {
-                        delete originalReminder.repeat.instanceModifications[reminder.date];
-                    }
+                    deleteRepeatInstanceState(originalReminder, reminder.date);
 
                     if (originalReminder.repeat.excludeDates) {
                         const firstOccurrenceIndex = originalReminder.repeat.excludeDates.indexOf(reminder.date);
