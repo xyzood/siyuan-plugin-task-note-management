@@ -189,18 +189,22 @@ export class CalendarView {
         const settings = await this.plugin.loadSettings();
         this.reminderSkipSettings = settings || {};
         this.showCategoryAndProject = settings.calendarShowCategoryAndProject !== false;
-        this.showTasks = this.calendarConfigManager.getShowTasks();
-        this.showHabits = this.calendarConfigManager.getShowHabits();
-        if (this.openedFromHabitPanel) {
-            this.showTasks = false;
-            this.showHabits = true;
-        }
         this.showLunar = settings.calendarShowLunar !== false;
         this.showHoliday = settings.calendarShowHoliday !== false;
         this.showPomodoro = settings.calendarShowPomodoro;
 
         if (this.calendarConfigManager) {
             await this.calendarConfigManager.initialize();
+
+            // 在配置初始化完成后再读取显示任务/习惯的开关，确保值最新
+            this.showTasks = this.calendarConfigManager.getShowTasks();
+            this.showHabits = this.calendarConfigManager.getShowHabits();
+            // 习惯日历强制只显示习惯、不显示任务
+            if (this.openedFromHabitPanel) {
+                this.showTasks = false;
+                this.showHabits = true;
+            }
+
             this.colorBy = this.calendarConfigManager.getColorBy();
             this.showCrossDayTasks = this.calendarConfigManager.getShowCrossDayTasks();
             this.crossDayThreshold = this.calendarConfigManager.getCrossDayThreshold();
@@ -220,8 +224,6 @@ export class CalendarView {
             this.completedTaskTimeUseTaskColor = this.calendarConfigManager.getCompletedTaskTimeUseTaskColor();
             this.calendarOpacityLight = this.calendarConfigManager.getCalendarOpacityLight();
             this.calendarOpacityDark = this.calendarConfigManager.getCalendarOpacityDark();
-            this.showTasks = this.calendarConfigManager.getShowTasks();
-            this.showHabits = this.calendarConfigManager.getShowHabits();
 
             if (this.lightOpacitySlider && this.lightOpacityValueEl) {
                 this.lightOpacitySlider.value = this.calendarOpacityLight.toString();

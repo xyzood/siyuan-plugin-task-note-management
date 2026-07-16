@@ -95,6 +95,7 @@ export { exportIcsFile };
 
 
 const TAB_TYPE = "TN_reminder_calendar_tab";
+const HABIT_TAB_TYPE = "TN_reminder_habit_calendar_tab";
 const EISENHOWER_TAB_TYPE = "TN_reminder_eisenhower_tab";
 export const PROJECT_KANBAN_TAB_TYPE = "TN_project_kanban_tab";
 const POMODORO_TAB_TYPE = "TN_pomodoro_timer_tab";
@@ -2457,6 +2458,16 @@ export default class ReminderPlugin extends Plugin {
             type: TAB_TYPE,
             init: ((tab) => {
                 const calendarView = new CalendarView(tab.element, this, tab.data);
+                // 保存实例引用用于清理
+                this.tabViews.set(tab.id, calendarView);
+            }) as any
+        });
+
+        // 注册习惯日历标签页（使用独立类型，避免与任务日历标签页复用）
+        this.addTab({
+            type: HABIT_TAB_TYPE,
+            init: ((tab) => {
+                const calendarView = new CalendarView(tab.element, this, { ...tab.data, showHabitsOnly: true });
                 // 保存实例引用用于清理
                 this.tabViews.set(tab.id, calendarView);
             }) as any
@@ -5411,13 +5422,15 @@ export default class ReminderPlugin extends Plugin {
             }
         } else {
             // 桌面端：使用Tab打开日历视图
+            // 习惯日历使用独立的 tab 类型/ID，避免与已打开的任务日历标签页复用
+            const tabType = data?.showHabitsOnly ? HABIT_TAB_TYPE : TAB_TYPE;
             openTab({
                 app: this.app,
                 custom:
                 {
                     title: calendarTitle,
                     icon: 'iconTNCalendar',
-                    id: this.name + TAB_TYPE,
+                    id: this.name + tabType,
                     data: data || {}
                 }
             });
