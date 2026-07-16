@@ -104,6 +104,8 @@ export class ReminderPanel {
     private projectKanbanStatusCache: Map<string, Map<string, KanbanStatus>> = new Map();
     private defaultKanbanStatusCache: Map<string, KanbanStatus> = new Map();
     private isMobileClient: boolean = false;
+    // 删除操作进行中标志，防止重复提交
+    private isDeleting: boolean = false;
 
     // 分页相关状态
     private currentPage: number = 1;
@@ -5417,6 +5419,9 @@ export class ReminderPanel {
     }
 
     private async deleteRemindersByBlockId(blockId: string) {
+        if (this.isDeleting) return;
+        this.isDeleting = true;
+
         try {
             const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
             let deletedCount = 0;
@@ -5427,61 +5432,47 @@ export class ReminderPanel {
                 const reminder = reminderData[reminderId];
                 if (reminder && (reminder.blockId === blockId || reminder.id === blockId)) {
                     delete reminderData[reminderId];
-                    // 取消移动端通知
-                    await this.plugin.cancelMobileNotification(reminderId);
                     deletedIds.push(reminderId);
                     deletedCount++;
                 }
-            };
+            }
 
             if (deletedCount > 0) {
                 await saveReminders(this.plugin, reminderData);
 
+                // 批量取消移动端通知
+                if (this.plugin.cancelMobileNotification) {
+                    await Promise.all(deletedIds.map(id =>
+                        this.plugin.cancelMobileNotification(id).catch((e: any) => {
+                            console.warn('取消移动端通知失败:', id, e);
+                        })
+                    ));
+                }
+
                 // 更新块的书签状态（应该会移除书签，因为没有提醒了）
-                await updateBindBlockAtrrs(blockId, this.plugin);
-
-                // 手动移除DOM中的相关元素，避免刷新整个面板
-                deletedIds.forEach(reminderId => {
-                    const el = this.remindersContainer.querySelector(`[data-reminder-id="${reminderId}"]`) as HTMLElement | null;
-                    if (el) {
-                        el.remove();
-                    }
-
-                    // 从缓存中移除
-                    const cacheIndex = this.currentRemindersCache.findIndex(r => r.id === reminderId);
-                    if (cacheIndex > -1) {
-                        this.currentRemindersCache.splice(cacheIndex, 1);
-                    }
+                await updateBindBlockAtrrs(blockId, this.plugin).catch((e: any) => {
+                    console.warn('更新块书签失败:', blockId, e);
                 });
 
-                // 更新任务总数
-                this.totalItems = Math.max(0, this.totalItems - deletedCount);
-
-                // 检查是否需要显示空状态
-                if (this.totalItems === 0) {
-                    this.remindersContainer.innerHTML = `<div class="reminder-empty">${i18n("noReminders")}</div>`;
-                    const paginationEl = this.container.querySelector('.reminder-pagination-controls');
-                    if (paginationEl) {
-                        paginationEl.remove();
-                    }
-                } else if (this.isPaginationEnabled) {
-                    // 重新计算分页
-                    this.totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
-                    if (this.currentPage > this.totalPages) {
-                        this.currentPage = this.totalPages;
-                    }
-                    this.renderPaginationControls(0);
+                // 局部移除DOM、缓存、分页
+                if (deletedIds.length > 0) {
+                    this.removeReminderFromDOM(deletedIds[0], deletedIds);
                 }
 
                 showMessage(i18n("deletedRelatedReminders", { count: deletedCount.toString() }));
-                // 全量刷新以确保分页、父子关系与异步数据都正确更新
-                await this.loadReminders(true);
+
+                // 触发其他组件更新
+                window.dispatchEvent(new CustomEvent('reminderUpdated', {
+                    detail: { source: this.panelId }
+                }));
             } else {
                 showMessage(i18n("noRelatedReminders"));
             }
         } catch (error) {
             console.error('删除相关提醒失败:', error);
             showMessage(i18n("deleteRelatedRemindersFailed"));
+        } finally {
+            this.isDeleting = false;
         }
     }
 
@@ -8506,41 +8497,23 @@ export class ReminderPanel {
     }
 
     private async deleteReminder(reminder: any) {
+        const targetId = reminder.isSpanningTodayCompletedInstance ? reminder.originalId : reminder.id;
         try {
-            const targetId = reminder.isSpanningTodayCompletedInstance ? reminder.originalId : reminder.id;
+            if (this.isDeleting) return;
             const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
-            let hasDescendants = false;
-            if (reminderData) {
-                // 快速判断是否存在子任务（深度优先）
-                const reminderMap = new Map<string, any>();
-                Object.values(reminderData).forEach((r: any) => { if (r && r.id) reminderMap.set(r.id, r); });
-                const stack = [targetId];
-                const visited = new Set<string>();
-                visited.add(targetId);
-                while (stack.length > 0) {
-                    const cur = stack.pop()!;
-                    for (const r of reminderMap.values()) {
-                        if (r.parentId === cur && !visited.has(r.id)) {
-                            hasDescendants = true;
-                            stack.length = 0; // break outer loop
-                            break;
-                        }
-                    }
-                }
-            }
-
+            const childrenIndex = this.buildChildrenIndex(reminderData);
+            const hasDescendants = this.hasDescendantsUsingIndex(targetId, childrenIndex);
             const extra = hasDescendants ? '（包括子任务）' : '';
 
             await confirm(
                 i18n("deleteReminder"),
                 `${i18n("confirmDelete", { title: reminder.title })}${extra}`,
                 () => {
-                    this.performDeleteReminder(targetId);
+                    this.performDeleteReminder(targetId, reminderData, childrenIndex);
                 }
             );
         } catch (error) {
             // 回退到默认提示
-            const targetId = reminder.isSpanningTodayCompletedInstance ? reminder.originalId : reminder.id;
             await confirm(
                 i18n("deleteReminder"),
                 i18n("confirmDelete", { title: reminder.title }),
@@ -8551,9 +8524,73 @@ export class ReminderPanel {
         }
     }
 
-    private async performDeleteReminder(reminderId: string) {
+    /**
+     * 构建 parentId -> childIds[] 索引，用于 O(n) 后代遍历
+     */
+    private buildChildrenIndex(reminderData: any): Map<string, string[]> {
+        const index = new Map<string, string[]>();
+        if (!reminderData || typeof reminderData !== 'object') return index;
+        for (const key of Object.keys(reminderData)) {
+            const r = reminderData[key];
+            if (!r || !r.id) continue;
+            if (r.parentId) {
+                const siblings = index.get(r.parentId) || [];
+                siblings.push(r.id);
+                index.set(r.parentId, siblings);
+            }
+        }
+        return index;
+    }
+
+    /**
+     * 使用 childrenIndex 判断指定 id 是否有后代
+     */
+    private hasDescendantsUsingIndex(targetId: string, childrenIndex: Map<string, string[]>): boolean {
+        const children = childrenIndex.get(targetId);
+        return !!children && children.length > 0;
+    }
+
+    /**
+     * 使用 childrenIndex 收集所有后代 id（不包含自身）
+     */
+    private collectDescendantIds(targetId: string, childrenIndex: Map<string, string[]>): string[] {
+        const descendantIds: string[] = [];
+        const queue: string[] = [targetId];
+        const visited = new Set<string>([targetId]);
+        while (queue.length > 0) {
+            const cur = queue.shift()!;
+            const children = childrenIndex.get(cur);
+            if (!children) continue;
+            for (const childId of children) {
+                if (!visited.has(childId)) {
+                    visited.add(childId);
+                    descendantIds.push(childId);
+                    queue.push(childId);
+                }
+            }
+        }
+        return descendantIds;
+    }
+
+    private buildInstanceKeysIndex(reminderData: any): Map<string, string[]> {
+        const index = new Map<string, string[]>();
+        if (!reminderData || typeof reminderData !== 'object') return index;
+        for (const key of Object.keys(reminderData)) {
+            const parsed = parseReminderInstanceId(key);
+            if (!parsed) continue;
+            const instanceKeys = index.get(parsed.originalId) || [];
+            instanceKeys.push(key);
+            index.set(parsed.originalId, instanceKeys);
+        }
+        return index;
+    }
+
+    private async performDeleteReminder(reminderId: string, preloadedReminderData?: any, preloadedChildrenIndex?: Map<string, string[]>) {
+        if (this.isDeleting) return;
+        this.isDeleting = true;
+
         try {
-            const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
+            const reminderData = preloadedReminderData || await getAllReminders(this.plugin, undefined, false, 'sidebar');
 
             if (!reminderData[reminderId]) {
                 showMessage(i18n("reminderNotExist"));
@@ -8570,21 +8607,9 @@ export class ReminderPanel {
                 if (r && r.id) reminderMap.set(r.id, r);
             });
 
-            // 获取所有后代 id（递归）
-            const descendantIds: string[] = [];
-            const stack = [reminderId];
-            const visited = new Set<string>();
-            visited.add(reminderId);
-            while (stack.length > 0) {
-                const cur = stack.pop()!;
-                for (const r of reminderMap.values()) {
-                    if (r.parentId === cur && !visited.has(r.id)) {
-                        descendantIds.push(r.id);
-                        stack.push(r.id);
-                        visited.add(r.id);
-                    }
-                }
-            }
+            // 使用 parent->children 索引收集所有后代 id
+            const childrenIndex = preloadedChildrenIndex || this.buildChildrenIndex(reminderData);
+            const descendantIds = this.collectDescendantIds(reminderId, childrenIndex);
 
             // 收集要删除的 id（包括自身）
             const toDelete = new Set<string>([reminderId, ...descendantIds]);
@@ -8592,38 +8617,42 @@ export class ReminderPanel {
             // 收集受影响的 blockId 以便之后更新书签
             const affectedBlockIds = new Set<string>();
 
-            // 如果存在重复实例/原始提醒的特殊处理：删除时也应删除实例或原始记录（这里统一按 id 匹配）
+            // 预收集实例键，避免嵌套循环
+            const instanceKeysByBaseId = this.buildInstanceKeysIndex(reminderData);
+
+            // 收集批量异步任务
+            const notificationIds: string[] = [];
+            const caldavDeletions: { id: string; rem: any }[] = [];
+
+            // 删除主任务及其后代
             let deletedCount = 0;
             for (const id of Array.from(toDelete)) {
                 const rem = reminderData[id];
                 if (rem) {
                     if (rem.blockId) affectedBlockIds.add(rem.blockId);
-                    // 取消移动端通知
-                    await this.plugin.cancelMobileNotification(id);
+                    notificationIds.push(id);
                     if (rem.isSubscribed && rem.subscriptionType === 'caldav') {
-                        const { deleteSubscriptionReminderTask } = await import('../utils/icsSubscription');
-                        await deleteSubscriptionReminderTask(this.plugin, rem);
+                        caldavDeletions.push({ id, rem });
                     }
                     delete reminderData[id];
                     deletedCount++;
                 }
-                // 还要删除可能是重复实例（形式为 `${originalId}_${date}`）的条目
-                // 例如：如果删除原始提醒，则删除其实例; 如果删除实例则删除对应实例条目
-                // 遍历所有 keys 查找以 id 开头的实例形式
-                for (const key of Object.keys(reminderData)) {
-                    if (toDelete.has(key)) continue; // 已处理
-                    // 匹配 instance id pattern: startsWith(`${id}_`)
-                    if (key.startsWith(id + '_')) {
+
+                // 删除可能是重复实例（形式为 `${originalId}_${date}`）的条目
+                const instanceKeys = instanceKeysByBaseId.get(id);
+                if (instanceKeys) {
+                    for (const key of instanceKeys) {
+                        if (toDelete.has(key)) continue;
                         const inst = reminderData[key];
-                        if (inst && inst.blockId) affectedBlockIds.add(inst.blockId);
-                        // 取消移动端通知
-                        await this.plugin.cancelMobileNotification(key);
-                        if (inst?.isSubscribed && inst.subscriptionType === 'caldav') {
-                            const { deleteSubscriptionReminderTask } = await import('../utils/icsSubscription');
-                            await deleteSubscriptionReminderTask(this.plugin, inst);
+                        if (inst) {
+                            if (inst.blockId) affectedBlockIds.add(inst.blockId);
+                            notificationIds.push(key);
+                            if (inst.isSubscribed && inst.subscriptionType === 'caldav') {
+                                caldavDeletions.push({ id: key, rem: inst });
+                            }
+                            delete reminderData[key];
+                            deletedCount++;
                         }
-                        delete reminderData[key];
-                        deletedCount++;
                     }
                 }
             }
@@ -8631,25 +8660,40 @@ export class ReminderPanel {
             if (deletedCount > 0) {
                 await saveReminders(this.plugin, reminderData);
 
-                // 更新受影响的块的书签状态
-                for (const bId of affectedBlockIds) {
-                    try {
-                        await updateBindBlockAtrrs(bId, this.plugin);
-                    } catch (e) {
-                        console.warn('更新块书签失败:', bId, e);
-                    }
+                // 批量取消移动端通知
+                if (this.plugin.cancelMobileNotification) {
+                    await Promise.all(notificationIds.map(id =>
+                        this.plugin.cancelMobileNotification(id).catch((e: any) => {
+                            console.warn('取消移动端通知失败:', id, e);
+                        })
+                    ));
                 }
+
+                // 批量 CalDAV 删除
+                if (caldavDeletions.length > 0) {
+                    const { deleteSubscriptionReminderTask } = await import('../utils/icsSubscription');
+                    await Promise.all(caldavDeletions.map(({ rem }) =>
+                        deleteSubscriptionReminderTask(this.plugin, rem).catch((e: any) => {
+                            console.warn('删除 CalDAV 订阅任务失败:', rem?.id, e);
+                        })
+                    ));
+                }
+
+                // 批量更新受影响的块的书签状态
+                await Promise.all(Array.from(affectedBlockIds).map(bId =>
+                    updateBindBlockAtrrs(bId, this.plugin).catch((e: any) => {
+                        console.warn('更新块书签失败:', bId, e);
+                    })
+                ));
 
                 // 局部更新DOM：移除被删除的任务及其子任务
                 this.removeReminderFromDOM(reminderId, Array.from(toDelete));
 
-                // 如果有父任务，更新父任务的进度条
+                // 如果有父任务且在当前视图中，局部更新父任务进度条
                 if (parentId) {
-                    // 父任务进度将在下次刷新时自动更新
+                    this.updateParentProgressBar(parentId);
                 }
 
-                // 全量刷新面板，保证父任务进度、分页和异步数据都能够正确更新
-                await this.loadReminders();
                 showMessage(i18n("reminderDeleted"));
 
                 // 触发其他组件更新
@@ -8662,6 +8706,38 @@ export class ReminderPanel {
         } catch (error) {
             console.error('删除提醒失败:', error);
             showMessage(i18n("deleteReminderFailed"));
+        } finally {
+            this.isDeleting = false;
+        }
+    }
+
+    /**
+     * 局部更新指定父任务的进度条
+     */
+    private updateParentProgressBar(parentId: string) {
+        try {
+            const parentEl = this.remindersContainer.querySelector(`[data-reminder-id="${parentId}"]`) as HTMLElement | null;
+            if (!parentEl) return;
+            const parent = this.allRemindersMap.get(parentId) || this.currentRemindersCache.find(r => r.id === parentId);
+            if (!parent) return;
+            const infoEl = parentEl.querySelector('.reminder-item__info') as HTMLElement | null;
+            if (!infoEl) return;
+
+            // 移除旧进度条
+            const oldProgress = infoEl.querySelector('.reminder-item__progress-container');
+            if (oldProgress) {
+                oldProgress.remove();
+            }
+
+            // 使用完整缓存（已移除删除项）重新计算，避免分页或筛选漏掉子任务
+            const context: any = {
+                plugin: this.plugin,
+                today: getLogicalDateString(),
+                allTasks: Array.from(this.allRemindersMap.values()),
+            };
+            TaskRenderer.renderProgressBar(parent, context, infoEl);
+        } catch (e) {
+            console.warn('局部更新父任务进度条失败:', parentId, e);
         }
     }
 
@@ -8673,9 +8749,32 @@ export class ReminderPanel {
     private removeReminderFromDOM(reminderId: string, allIdsToRemove: string[]) {
         try {
             let removedCount = 0;
+            const idsToRemove = new Set(allIdsToRemove);
+
+            // 重复实例是运行时生成的，不一定存在于持久化数据中。
+            // 删除原始任务时，同时纳入所有由它生成的当前实例。
+            this.allRemindersMap.forEach(reminder => {
+                if (reminder?.originalId && idsToRemove.has(reminder.originalId)) {
+                    idsToRemove.add(reminder.id);
+                }
+            });
+
+            const resolvedIdsToRemove = Array.from(idsToRemove);
+            const removedVisibleCount = this.currentRemindersCache.reduce(
+                (count, reminder) => count + (idsToRemove.has(reminder.id) ? 1 : 0),
+                0
+            );
+            const visibleIds = new Set(this.currentRemindersCache.map(reminder => reminder.id));
+            const removedRootCount = this.currentRemindersCache.reduce((count, reminder) => {
+                if (!idsToRemove.has(reminder.id)) return count;
+                return count + (!reminder.parentId || !visibleIds.has(reminder.parentId) ? 1 : 0);
+            }, 0);
 
             // 移除所有相关的DOM元素
-            allIdsToRemove.forEach(id => {
+            resolvedIdsToRemove.forEach(id => {
+                // 从 allRemindersMap 中移除，保持缓存一致
+                this.allRemindersMap.delete(id);
+
                 const el = this.remindersContainer.querySelector(`[data-reminder-id="${id}"]`) as HTMLElement | null;
                 if (el) {
                     el.remove();
@@ -8691,7 +8790,8 @@ export class ReminderPanel {
 
             // 更新任务总数
             if (removedCount > 0) {
-                this.totalItems = Math.max(0, this.totalItems - removedCount);
+                const countDelta = this.isPaginationEnabled ? removedRootCount : removedVisibleCount;
+                this.totalItems = Math.max(0, this.totalItems - countDelta);
 
                 // 重新计算分页信息
                 if (this.isPaginationEnabled && this.totalItems > 0) {
@@ -8713,7 +8813,7 @@ export class ReminderPanel {
             }
 
             // 从折叠状态集合中移除
-            allIdsToRemove.forEach(id => {
+            resolvedIdsToRemove.forEach(id => {
                 this.collapsedTasks.delete(id);
                 this.userExpandedTasks.delete(id);
             });
@@ -9193,6 +9293,7 @@ export class ReminderPanel {
 
     // 新增：删除单个重复事件实例
     private async deleteInstanceOnly(reminder: any) {
+        if (this.isDeleting) return;
         await confirm(
             i18n("deleteThisInstance"),
             i18n("confirmDeleteInstance"),
@@ -9203,8 +9304,12 @@ export class ReminderPanel {
 
                     await this.addExcludedDate(originalId, instanceDate);
 
+                    // 局部移除该实例的DOM，避免全量刷新
+                    this.removeReminderFromDOM(reminder.id, [reminder.id]);
+
                     showMessage(i18n("instanceDeleted"));
-                    this.loadReminders();
+
+                    // 触发其他组件更新
                     window.dispatchEvent(new CustomEvent('reminderUpdated', {
                         detail: { source: this.panelId }
                     }));
@@ -9341,15 +9446,27 @@ export class ReminderPanel {
     }
 
     private async deleteOriginalReminder(originalId: string) {
+        if (this.isDeleting) return;
         try {
             const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
             const originalReminder = reminderData[originalId];
 
-            if (originalReminder) {
-                this.deleteReminder(originalReminder);
-            } else {
+            if (!originalReminder) {
                 showMessage(i18n("reminderDataNotExist"));
+                return;
             }
+
+            const childrenIndex = this.buildChildrenIndex(reminderData);
+            const hasDescendants = this.hasDescendantsUsingIndex(originalId, childrenIndex);
+            const extra = hasDescendants ? '（包括子任务）' : '';
+
+            await confirm(
+                i18n("deleteReminder"),
+                `${i18n("confirmDelete", { title: originalReminder.title })}${extra}`,
+                () => {
+                    this.performDeleteReminder(originalId, reminderData, childrenIndex);
+                }
+            );
         } catch (error) {
             console.error('获取原始提醒失败:', error);
             showMessage(i18n("deleteReminderFailed"));
@@ -11098,10 +11215,12 @@ export class ReminderPanel {
     private panelBatchDelete(): void {
         const ids = Array.from(this.selectedReminderIds);
         if (ids.length === 0) return;
+        if (this.isDeleting) return;
         confirm(
             i18n('confirmBatchDelete') || '确认批量删除',
             i18n('confirmBatchDeleteMessage', { count: String(ids.length) }) || `确定要删除选中的 ${ids.length} 个任务吗？此操作不可恢复。`,
             async () => {
+                this.isDeleting = true;
                 try {
                     const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
                     const allValues = Object.values(reminderData) as any[];
@@ -11124,59 +11243,56 @@ export class ReminderPanel {
                         });
                     }
 
-                    // 同步删除实例形态记录（${id}_${date}）
-                    const allKeys = Object.keys(reminderData);
+                    // 同步删除实例形态记录（${id}_${date}），使用一次遍历预分组
+                    const instanceKeysByBaseId = this.buildInstanceKeysIndex(reminderData);
                     const expandQueue = Array.from(toDelete);
                     while (expandQueue.length > 0) {
                         const baseId = expandQueue.pop()!;
-                        for (const key of allKeys) {
+                        const instanceKeys = instanceKeysByBaseId.get(baseId);
+                        if (!instanceKeys) continue;
+                        for (const key of instanceKeys) {
                             if (toDelete.has(key)) continue;
-                            if (key.startsWith(baseId + '_')) {
-                                toDelete.add(key);
-                                expandQueue.push(key);
-                            }
+                            toDelete.add(key);
+                            expandQueue.push(key);
                         }
                     }
 
                     const affectedBlockIds = new Set<string>();
-                    const notificationIds = new Set<string>();
+                    const notificationIds: string[] = [];
                     for (const id of toDelete) {
                         const rem = reminderData[id];
                         if (!rem) continue;
                         if (rem.blockId) affectedBlockIds.add(rem.blockId);
-                        notificationIds.add(id);
+                        notificationIds.push(id);
                     }
 
                     // 乐观更新：立即移除 DOM，避免等待写盘导致列表跳动
                     const allIds = Array.from(toDelete);
                     if (allIds.length > 0) {
                         this.removeReminderFromDOM(ids[0], allIds);
-                        allIds.forEach(id => this.allRemindersMap.delete(id));
                     }
 
                     allIds.forEach(id => {
                         delete reminderData[id];
                     });
 
-                    if (this.plugin?.cancelMobileNotification) {
-                        for (const taskId of notificationIds) {
-                            try {
-                                await this.plugin.cancelMobileNotification(taskId);
-                            } catch (e) {
-                                console.warn('批量删除取消通知失败:', taskId, e);
-                            }
-                        }
-                    }
-
                     await saveReminders(this.plugin, reminderData);
 
-                    for (const bId of affectedBlockIds) {
-                        try {
-                            await updateBindBlockAtrrs(bId, this.plugin);
-                        } catch (e) {
-                            console.warn('批量删除更新块书签失败:', bId, e);
-                        }
+                    // 批量取消移动端通知
+                    if (this.plugin?.cancelMobileNotification) {
+                        await Promise.all(notificationIds.map(taskId =>
+                            this.plugin.cancelMobileNotification(taskId).catch((e: any) => {
+                                console.warn('批量删除取消通知失败:', taskId, e);
+                            })
+                        ));
                     }
+
+                    // 批量更新受影响的块的书签状态
+                    await Promise.all(Array.from(affectedBlockIds).map(bId =>
+                        updateBindBlockAtrrs(bId, this.plugin).catch((e: any) => {
+                            console.warn('批量删除更新块书签失败:', bId, e);
+                        })
+                    ));
 
                     window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
                     showMessage(i18n('batchDeleteSuccess', { count: String(allIds.length) }) || `成功删除 ${allIds.length} 个任务`);
@@ -11185,6 +11301,8 @@ export class ReminderPanel {
                     console.error('批量删除失败:', e);
                     showMessage(i18n('batchDeleteFailed') || '批量删除失败');
                     await this.loadReminders(true);
+                } finally {
+                    this.isDeleting = false;
                 }
             }
         );

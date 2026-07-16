@@ -520,7 +520,7 @@ export class TaskRenderer {
     /**
      * 计算并渲染进度条
      */
-    private static renderProgressBar(task: any, context: TaskRenderContext, infoEl: HTMLElement): void {
+    public static renderProgressBar(task: any, context: TaskRenderContext, infoEl: HTMLElement): void {
         let percent = 0;
         let shouldShow = false;
 
