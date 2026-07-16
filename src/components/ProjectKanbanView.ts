@@ -3005,6 +3005,9 @@ export class ProjectKanbanView {
             const tag = projectTags.find(t => t.id === tagId);
             const tagName = tag?.name || tagId;
 
+            // 如果当前处于标签筛选状态，变更后需要重新过滤，因此仍走全量刷新
+            const filterActive = this.isFilterActive && this.selectedFilterTags.size > 0;
+
             // 支持重复实例：如果是实例，写入原始提醒的 repeat.instanceModifications[date]
             if (task.isRepeatInstance && task.originalId) {
                 const instanceDate = task.date;
@@ -3018,6 +3021,8 @@ export class ProjectKanbanView {
                 const origFirstState = getRepeatInstanceState(origFirst, instanceDate);
                 const instanceTags = getInstanceField(origFirstState, 'tagIds', origFirst?.tagIds || []);
                 const isAdding = instanceTags.indexOf(tagId) === -1;
+
+                const newTagIdsByOriginal = new Map<string, string[]>();
 
                 for (const oid of originalIds) {
                     const orig = reminderData[oid];
@@ -3039,6 +3044,7 @@ export class ProjectKanbanView {
                     if (newTagIds !== currentTagIds) {
                         setRepeatInstanceOverride(orig, instanceDate, 'tagIds', newTagIds);
                     }
+                    newTagIdsByOriginal.set(oid, newTagIds);
                 }
 
                 if (updatedCount === 0) {
@@ -3048,13 +3054,30 @@ export class ProjectKanbanView {
 
                 await saveReminders(this.plugin, reminderData);
                 this.dispatchReminderUpdate(true);
+
+                // 直接更新本地视图任务及 DOM，避免整板重绘导致滚动丢失/卡顿
+                for (const oid of originalIds) {
+                    const viewId = oid === originalId ? task.id : `${oid}_${instanceDate}`;
+                    const newTagIds = newTagIdsByOriginal.get(oid) || [];
+                    const localViewTask = this.tasks.find(t => t.id === viewId);
+                    if (localViewTask) {
+                        localViewTask.tagIds = newTagIds;
+                        this.updateTaskElementDOM(viewId, { tagIds: newTagIds });
+                    } else if (oid === originalId) {
+                        task.tagIds = newTagIds;
+                        this.updateTaskElementDOM(task.id, { tagIds: newTagIds });
+                    }
+                }
+
                 if (isAdding) {
                     showMessage(`已为 ${updatedCount} 个任务实例添加标签"${tagName}"`);
                 } else {
                     showMessage(`已从 ${updatedCount} 个任务实例移除标签"${tagName}"`);
                 }
 
-                await this.queueLoadTasks();
+                if (filterActive) {
+                    this.queueLoadTasks();
+                }
                 return;
             }
 
@@ -3068,26 +3091,37 @@ export class ProjectKanbanView {
             const isAdding = tagIndex === -1;
 
             for (const taskId of toUpdateIds) {
-                if (reminderData[taskId]) {
-                    if (!reminderData[taskId].tagIds) {
-                        reminderData[taskId].tagIds = [];
+                if (!reminderData[taskId]) {
+                    continue;
+                }
+                if (!reminderData[taskId].tagIds) {
+                    reminderData[taskId].tagIds = [];
+                }
+
+                const tags = reminderData[taskId].tagIds;
+                const idx = tags.indexOf(tagId);
+                let changed = false;
+
+                if (isAdding) {
+                    // 添加标签
+                    if (idx === -1) {
+                        tags.push(tagId);
+                        changed = true;
                     }
+                } else {
+                    // 移除标签
+                    if (idx > -1) {
+                        tags.splice(idx, 1);
+                        changed = true;
+                    }
+                }
 
-                    const tags = reminderData[taskId].tagIds;
-                    const idx = tags.indexOf(tagId);
-
-                    if (isAdding) {
-                        // 添加标签
-                        if (idx === -1) {
-                            tags.push(tagId);
-                            updatedCount++;
-                        }
-                    } else {
-                        // 移除标签
-                        if (idx > -1) {
-                            tags.splice(idx, 1);
-                            updatedCount++;
-                        }
+                if (changed) {
+                    updatedCount++;
+                    const localTask = this.tasks.find(t => t.id === taskId);
+                    if (localTask) {
+                        localTask.tagIds = [...tags];
+                        this.updateTaskElementDOM(taskId, { tagIds: localTask.tagIds });
                     }
                 }
             }
@@ -3104,11 +3138,14 @@ export class ProjectKanbanView {
                 showMessage(`已从 ${updatedCount} 个任务移除标签"${tagName}"`);
             }
 
-            // 重新加载任务以更新显示（使用防抖队列）
-            await this.queueLoadTasks();
+            // 标签筛选状态下重新应用过滤，否则直接更新 DOM 即可
+            if (filterActive) {
+                this.queueLoadTasks();
+            }
         } catch (error) {
             console.error('切换任务标签失败:', error);
             showMessage("设置任务标签失败");
+            this.queueLoadTasks();
         }
     }
 
@@ -14004,6 +14041,60 @@ export class ProjectKanbanView {
             const checkbox = taskEl.querySelector('.kanban-task-checkbox, .reminder-task-checkbox') as HTMLInputElement;
             const displayStyle = TaskRenderer.getPriorityDisplayStyle({ plugin: this.plugin });
             TaskRenderer.applyPriorityDisplayStyle(taskEl, checkbox, task.priority, displayStyle);
+        }
+
+        if ('tagIds' in updates) {
+            const newTagIds = task.tagIds || [];
+            const tagContainer = taskEl.querySelector('.reminder-item__project-tags') as HTMLElement | null;
+
+            if (tagContainer) {
+                if (newTagIds.length === 0) {
+                    tagContainer.style.display = 'none';
+                    tagContainer.innerHTML = '';
+                } else {
+                    (async () => {
+                        try {
+                            const projectId = task.projectId || this.projectId;
+                            const projectTags = await this.projectManager.getProjectTags(projectId);
+                            const tagMap = new Map(projectTags.map((t: any) => [t.id, t]));
+                            const validTagIds = newTagIds.filter((id: string) => tagMap.has(id));
+
+                            tagContainer.innerHTML = '';
+                            tagContainer.style.display = 'flex';
+                            for (const tagId of validTagIds) {
+                                const tag = tagMap.get(tagId);
+                                if (!tag) continue;
+                                const tagEl = document.createElement('span');
+                                tagEl.className = 'reminder-item__tag';
+                                tagEl.style.cssText = `
+                                    display: inline-flex;
+                                    align-items: center;
+                                    padding: 2px 8px;
+                                    font-size: 11px;
+                                    border-radius: 12px;
+                                    background: ${tag.color}20;
+                                    border: 1px solid ${tag.color};
+                                    color: ${tag.color};
+                                    font-weight: 500;
+                                `;
+                                tagEl.textContent = `#${tag.name}`;
+                                tagEl.classList.add('ariaLabel');
+                                tagEl.setAttribute('aria-label', tag.name);
+                                tagContainer.appendChild(tagEl);
+                            }
+                            if (tagContainer.children.length === 0) {
+                                tagContainer.style.display = 'none';
+                            }
+                        } catch (error) {
+                            console.error('更新任务标签DOM失败:', error);
+                            this.refreshTaskElement(taskId);
+                        }
+                    })();
+                }
+            } else if (newTagIds.length > 0) {
+                // 没有专用标签容器但新增了标签，回退到重绘当前卡片
+                this.refreshTaskElement(taskId);
+            }
         }
 
         // 如果状态改变，智能移动任务卡片到新列

@@ -1536,7 +1536,7 @@ export class TaskRenderer {
         // 项目标签显示
         if (task.projectId && task.tagIds && Array.isArray(task.tagIds) && task.tagIds.length > 0) {
             const tagsContainer = document.createElement('div');
-            tagsContainer.className = 'reminder-item__tags';
+            tagsContainer.className = 'reminder-item__tags reminder-item__project-tags';
             tagsContainer.style.cssText = `
                 display: flex;
                 flex-wrap: wrap;
