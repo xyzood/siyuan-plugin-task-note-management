@@ -1,4 +1,4 @@
-import { appendBlock, deleteBlock, setBlockAttrs, updateBlock } from "../api";
+import { appendBlock, deleteBlock, getBlockByID, insertBlock, setBlockAttrs, updateBlock } from "../api";
 import { getPluginInstance } from "../pluginInstance";
 import { normalizeHabitMemoTimestamp, renderHabitMemoSyncTemplate } from "./habitMemoTemplate";
 import type { Habit, HabitCheckInEntry, HabitEmojiConfig } from "./habitUtils";
@@ -25,6 +25,13 @@ type SyncHabitMemoBlockOptions = {
 
 function getCleanText(value: unknown): string {
     return typeof value === "string" ? value.trim() : "";
+}
+
+function isLeafBlockType(type: string | undefined): boolean {
+    // 思源中不能拥有子块的 leaf block（如标题、段落等），appendBlock 传 parentID 会报错，
+    // 需要改用 insertBlock + previousID 放到该块下方
+    const containerTypes = new Set(["d", "l", "i", "b", "s"]);
+    return !containerTypes.has(type || "");
 }
 
 function createMemoSyncKey(habit: Habit, entry: HabitMemoCheckInEntry): string {
@@ -95,7 +102,19 @@ export async function syncHabitMemoBlock(options: SyncHabitMemoBlockOptions): Pr
             return;
         }
 
-        const response = await appendBlock("markdown", markdown, targetBlockId);
+        let response;
+        try {
+            const targetBlock = await getBlockByID(targetBlockId);
+            if (targetBlock && isLeafBlockType(targetBlock.type)) {
+                // heading / paragraph 等 leaf block 不能作为 parentID，需要放到该块下方
+                response = await insertBlock("markdown", markdown, undefined, targetBlockId);
+            } else {
+                response = await appendBlock("markdown", markdown, targetBlockId);
+            }
+        } catch (error) {
+            console.warn("获取同步目标块类型失败，尝试直接 appendBlock:", error);
+            response = await appendBlock("markdown", markdown, targetBlockId);
+        }
         const createdBlockId = response?.[0]?.doOperations?.[0]?.id;
         if (!createdBlockId) return;
 
