@@ -77,6 +77,31 @@ export interface TaskRenderCallbacks {
 }
 
 export class TaskRenderer {
+    // 缓存插件资源图片的 blob URL，避免每次渲染都重新异步加载导致闪烁
+    private static assetBlobCache = new Map<string, string>();
+
+    public static async preloadNoteImages(note: string): Promise<void> {
+        if (!note) return;
+        const assetPattern = /(\/data\/storage\/petal\/siyuan-plugin-task-note-management\/assets\/[^\s)"']+)/g;
+        const matches = Array.from(new Set(note.match(assetPattern) || []));
+        await Promise.all(matches.map(async src => {
+            if (this.assetBlobCache.has(src)) return;
+            try {
+                const { getFileBlob } = await import('../../api');
+                const blob = await getFileBlob(src);
+                if (blob) {
+                    this.assetBlobCache.set(src, URL.createObjectURL(blob));
+                }
+            } catch (e) {
+                console.warn('预加载备注图片失败:', src, e);
+            }
+        }));
+    }
+
+    private static getAssetBlobUrl(src: string): string | undefined {
+        return this.assetBlobCache.get(src);
+    }
+
     public static getPriorityColors(priority: string): { backgroundColor: string; borderColor: string } {
         switch (priority) {
             case 'high':
@@ -1176,15 +1201,26 @@ export class TaskRenderer {
                     img.style.setProperty('border', '1px solid var(--b3-border-color)', 'important');
                     img.style.setProperty('background-color', 'var(--b3-theme-surface)', 'important');
 
+                    // 对屏幕外的图片使用懒加载，减少首次渲染压力
+                    img.loading = 'lazy';
+                    img.decoding = 'async';
+
                     const src = img.getAttribute('src');
                     if (src && src.startsWith('/data/storage/petal/siyuan-plugin-task-note-management/assets/')) {
-                        import('../../api').then(({ getFileBlob }) => {
-                            getFileBlob(src).then(blob => {
-                                if (blob) {
-                                    img.src = URL.createObjectURL(blob);
-                                }
+                        const cachedUrl = TaskRenderer.getAssetBlobUrl(src);
+                        if (cachedUrl) {
+                            img.src = cachedUrl;
+                        } else {
+                            import('../../api').then(({ getFileBlob }) => {
+                                getFileBlob(src).then(blob => {
+                                    if (blob) {
+                                        const url = URL.createObjectURL(blob);
+                                        TaskRenderer.assetBlobCache.set(src, url);
+                                        img.src = url;
+                                    }
+                                });
                             });
-                        });
+                        }
                     }
                 });
             } else {

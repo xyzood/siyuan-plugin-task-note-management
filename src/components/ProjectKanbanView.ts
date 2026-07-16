@@ -10938,6 +10938,8 @@ export class ProjectKanbanView {
                         }
 
                         if (savedTaskParentId) {
+                            // 预加载备注图片，避免子任务插入父树时图片先空白再显示
+                            await TaskRenderer.preloadNoteImages(savedTaskForView.note || '');
                             if (!hadSiblingBefore) {
                                 this.collapsedTasks.delete(savedTaskParentId);
                             }
@@ -10950,7 +10952,7 @@ export class ProjectKanbanView {
                         }
 
                         // 2. 优先只插入单张任务卡片，避免整列重绘导致滚动抖动
-                        const inserted = this.insertCreatedTaskCard(savedTaskForView);
+                        const inserted = await this.insertCreatedTaskCard(savedTaskForView);
                         if (!inserted) {
                             // 回退：无法局部插入时再做整列增量渲染
                             this.captureScrollState();
@@ -14314,9 +14316,12 @@ export class ProjectKanbanView {
     /**
      * 新建任务后优先做局部插入，避免整列重绘造成滚动抖动
      */
-    private insertCreatedTaskCard(task: any): boolean {
+    private async insertCreatedTaskCard(task: any): Promise<boolean> {
         try {
             if (!task || task.parentId) return false;
+
+            // 预加载备注中的插件资源图片，避免新卡片插入后图片先空白再显示
+            await TaskRenderer.preloadNoteImages(task.note || '');
 
             const status = this.getTaskStatus(task);
 
