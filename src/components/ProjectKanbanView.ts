@@ -9517,15 +9517,22 @@ export class ProjectKanbanView {
             }
 
             // 子任务在父任务树内完成时，应重绘当前父子树，而不是把子任务移动到“已完成”列。
-            const refreshedParentTree = optimisticTask.parentId && this.isTaskRenderedInParentTree(optimisticTask.id)
-                ? this.refreshTaskTreeAround(optimisticTask.id)
-                : false;
+            const isRenderedChild = optimisticTask.parentId && this.isTaskRenderedInParentTree(optimisticTask.id);
+            // 当不显示已完成子任务时，先保留勾选态展示完成动画，再延迟刷新父子树让其消失
+            const useDelayedRefresh = completed && isRenderedChild && !this.showCompletedSubtasks;
+
+            let refreshedParentTree = false;
+            if (isRenderedChild && !useDelayedRefresh) {
+                refreshedParentTree = this.refreshTaskTreeAround(optimisticTask.id);
+            }
+
             if (!refreshedParentTree) {
                 // 仅更新当前任务的 DOM，避免整页重渲染引发滚动条跳动
                 this.updateTaskElementDOM(task.id, {
                     completed,
                     completedTime: optimisticTask.completedTime,
-                    __deferStatusMoveMs: completed ? 300 : 0
+                    __deferStatusMoveMs: completed && !useDelayedRefresh ? 300 : 0,
+                    __skipStatusMove: useDelayedRefresh
                 });
                 // 同时更新所有子任务的 DOM，避免界面显示不同步
                 if (completed && childIds.length > 0) {
@@ -9533,10 +9540,17 @@ export class ProjectKanbanView {
                         this.updateTaskElementDOM(childId, {
                             completed: true,
                             completedTime: optimisticTask.completedTime,
-                            __deferStatusMoveMs: 300
+                            __deferStatusMoveMs: useDelayedRefresh ? 0 : 300,
+                            __skipStatusMove: useDelayedRefresh
                         });
                     });
                 }
+            }
+
+            if (useDelayedRefresh) {
+                window.setTimeout(() => {
+                    this.refreshTaskTreeAround(optimisticTask.id);
+                }, 300);
             }
         }
 
@@ -9572,7 +9586,12 @@ export class ProjectKanbanView {
                                 localChild.completedTime = reminderData[childId].completedTime;
                             });
                             if (task.parentId && childIds.length > 0) {
-                                this.refreshTaskTreeAround(task.id);
+                                if (!this.showCompletedSubtasks) {
+                                    // 不显示已完成子任务时，与乐观更新的延迟刷新保持一致，避免打断勾选动画
+                                    window.setTimeout(() => this.refreshTaskTreeAround(task.id), 300);
+                                } else {
+                                    this.refreshTaskTreeAround(task.id);
+                                }
                             }
                         } else {
                             delete reminderData[task.id].completedTime;
@@ -9607,7 +9626,12 @@ export class ProjectKanbanView {
                         // 但如果是父任务完成（有子任务被级联完成），必须刷新以保持子任务DOM和层级结构一致
                         // 取消完成时仍保留兜底刷新，确保状态回退一致
                         if (!completed || (completed && childIds.length > 0) || task.parentId) {
-                            this.queueLoadTasks();
+                            if (completed && task.parentId && !this.showCompletedSubtasks) {
+                                // 不显示已完成子任务时，等勾选动画播放完再触发整页刷新，避免子任务提前消失
+                                window.setTimeout(() => this.queueLoadTasks(), 300);
+                            } else {
+                                this.queueLoadTasks();
+                            }
                         }
                     }
                 }
@@ -14102,6 +14126,7 @@ export class ProjectKanbanView {
         }
 
         // 如果状态改变，智能移动任务卡片到新列
+        const skipStatusMove = !!(updates as any).__skipStatusMove;
         if ('kanbanStatus' in updates || 'completed' in updates || 'date' in updates) {
             const deferStatusMoveMs = (typeof (updates as any).__deferStatusMoveMs === 'number')
                 ? Math.max(0, Number((updates as any).__deferStatusMoveMs))
@@ -14111,7 +14136,7 @@ export class ProjectKanbanView {
             const statusAncestor = taskEl.closest('[data-status]') as HTMLElement | null;
             const currentStatus = statusAncestor?.dataset.status || null;
 
-            if (currentStatus !== newStatus) {
+            if (currentStatus !== newStatus && !skipStatusMove) {
                 if (deferStatusMoveMs > 0 && newStatus === 'completed') {
                     // 勾选完成时，先保留完成态视觉反馈，再延迟移入已完成列
                     this.scheduleDelayedMoveToStatusColumn(taskId, deferStatusMoveMs);
@@ -14132,7 +14157,12 @@ export class ProjectKanbanView {
         // 乐观更新完成状态/自定义进度后，局部重绘当前任务及祖先任务，
         // 确保进度条（含父任务聚合进度）立即与最新数据一致
         if ('completed' in updates || 'customProgress' in updates) {
-            this.refreshTaskAndAncestorProgress(taskId);
+            if (skipStatusMove) {
+                // 子任务完成动画期间不刷新自身，避免替换 DOM 导致勾选动画被打断，只刷新祖先进度
+                this.refreshAncestorProgress(taskId);
+            } else {
+                this.refreshTaskAndAncestorProgress(taskId);
+            }
         }
     }
 
@@ -14150,6 +14180,13 @@ export class ProjectKanbanView {
         }
 
         return ancestorIds;
+    }
+
+    private refreshAncestorProgress(taskId: string): void {
+        this.getAncestorTaskIds(taskId).forEach(id => {
+            const el = this.container.querySelector(`[data-task-id="${id}"]`) as HTMLElement | null;
+            if (el) this.refreshTaskElement(id);
+        });
     }
 
     private refreshTaskAndAncestorProgress(taskId: string): void {
