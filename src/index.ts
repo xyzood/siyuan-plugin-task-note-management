@@ -1494,7 +1494,7 @@ export default class ReminderPlugin extends Plugin {
                     } else if (normalizedPath === 'project_folders.json') {
                         await ProjectFolderManager.getInstance(this).loadFolders();
                         window.dispatchEvent(new CustomEvent('projectUpdated'));
-                    } else if (normalizedPath === 'project_status.json') {
+                    } else if (normalizedPath === STATUSES_DATA_FILE) {
                         await StatusManager.getInstance(this).loadStatuses();
                         window.dispatchEvent(new CustomEvent('projectUpdated'));
                     } else if (normalizedPath === 'reminder.json') {

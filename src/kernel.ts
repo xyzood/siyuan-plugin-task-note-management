@@ -11,6 +11,7 @@ import { HabitManager } from "./utils/habitManager";
 import { PomodoroManager } from "./utils/pomodoroRecord";
 import { SummaryManager } from "./utils/summaryManager";
 import { createMcpRegistry, type ToolDefinition } from "./kernel/tools";
+import { STATUSES_DATA_FILE } from "./kernel/constants";
 
 class KernelPluginBridge {
     private storage: KernelStorage;
@@ -51,11 +52,11 @@ class KernelPluginBridge {
     }
 
     async loadProjectStatus(): Promise<any> {
-        return this.loadData("project_status.json");
+        return this.loadData(STATUSES_DATA_FILE);
     }
 
     async saveProjectStatus(data: any): Promise<void> {
-        await this.saveData("project_status.json", data);
+        await this.saveData(STATUSES_DATA_FILE, data);
     }
 
     async loadHabitGroupData(): Promise<any> {
