@@ -6670,7 +6670,7 @@ export class CalendarView {
 
             if (reminderData[actualReminderId]) {
                 const targetReminder = reminderData[actualReminderId];
-                const originalProps = info.event.extendedProps;
+                const originalProps = info.event.extendedProps || {};
 
                 if (originalProps.isSplitBlock) {
                     const splitIndex = originalProps.splitIndex ?? 0;
@@ -6907,7 +6907,7 @@ export class CalendarView {
         } catch (error) {
             console.error(isResize ? '调整事件大小失败:' : '更新事件时间失败:', error);
             showMessage(i18n("operationFailed"));
-            info.revert();
+            if (info?.revert) info.revert();
         }
     }
 
