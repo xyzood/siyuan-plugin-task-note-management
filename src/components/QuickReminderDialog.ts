@@ -7013,6 +7013,16 @@ export class QuickReminderDialog {
             optimisticReminder.customProgress = customProgress;
             // 看板状态直接使用kanbanStatus
             optimisticReminder.kanbanStatus = kanbanStatus;
+
+            // 根据看板状态同步完成标记与完成时间，确保乐观更新后的 UI 立即显示最新完成时间
+            if (kanbanStatus === 'completed') {
+                optimisticReminder.completed = true;
+                optimisticReminder.completedTime = this.getCompletedTimeInputValue();
+            } else {
+                optimisticReminder.completed = false;
+                delete optimisticReminder.completedTime;
+            }
+
             optimisticReminder.isAvailableToday = isAvailableToday;
             optimisticReminder.availableStartDate = availableStartDate;
             optimisticReminder.hideInCalendar = hideInCalendar;
@@ -7121,6 +7131,9 @@ export class QuickReminderDialog {
                             customGroupId: customGroupId,
                             milestoneId: milestoneId,
                             kanbanStatus: kanbanStatus,
+                            // 同步完成状态与完成时间，支持在实例上编辑完成时间
+                            completed: kanbanStatus === 'completed',
+                            completedTime: kanbanStatus === 'completed' ? this.getCompletedTimeInputValue() : undefined,
                             // 提醒时间相关字段
                             reminderTimes: this.customTimes.length > 0 ? [...this.customTimes] : undefined,
                             estimatedPomodoroDuration: estimatedPomodoroDuration,
@@ -7711,9 +7724,9 @@ export class QuickReminderDialog {
             const oldProject = oldState.projectId !== undefined ? oldState.projectId : originalTask.projectId;
             const newProject = instanceData.projectId;
 
-            // 保存此实例的修改数据，保留原有完成状态和其他状态
-            const existingCompleted = oldState.completed;
-            const existingCompletedTime = oldState.completedTime;
+            // 保存此实例的修改数据；如果调用方显式传入了完成状态/完成时间则使用传入值，否则保留旧值
+            const newCompleted = hasInstanceField('completed') ? instanceData.completed : oldState.completed;
+            const newCompletedTime = hasInstanceField('completedTime') ? instanceData.completedTime : oldState.completedTime;
             instances[instanceDate] = {
                 ...oldState,
                 title: instanceData.title,
@@ -7738,8 +7751,8 @@ export class QuickReminderDialog {
                 reminderSkipWeekendMode: instanceData.reminderSkipWeekendMode,
                 reminderSkipHolidays: instanceData.reminderSkipHolidays,
                 pinned: instanceData.pinned,
-                completed: existingCompleted,
-                completedTime: existingCompletedTime,
+                completed: newCompleted,
+                completedTime: newCompletedTime,
                 modifiedAt: new Date().toISOString().split('T')[0]
             };
 
