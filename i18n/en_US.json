@@ -1765,6 +1765,7 @@
     "durationLabel": "Duration: ",
     "endLabel": "End: ",
     "daysUnit": " days",
+    "totalSpannedDays": " (Total: ${days} days)",
     "pleaseEnterReminderTime": "Please enter reminder time",
     "setDateTimeFirst": "Set date and time for the task first, then use presets.",
     "blockSelected": "✓ Block selected",

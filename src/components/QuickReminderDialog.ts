@@ -40,6 +40,8 @@ import {
     shouldShowReminderSkipWeekendsControl,
     type HolidayData,
     type ReminderSkipWeekendMode,
+    isWeekendSkippedDate,
+    isHolidayDate,
 } from "../utils/reminderSkipDate";
 
 type CustomReminderTimeItem = {
@@ -997,6 +999,93 @@ export class QuickReminderDialog {
         return diffDays + 1;
     }
 
+    private calculateWorkingDays(
+        startDate: string,
+        endDate: string,
+        weekendMode: ReminderSkipWeekendMode,
+        skipHolidays: boolean
+    ): number {
+        if (!startDate || !endDate) return 1;
+        let count = 0;
+        let currentDateStr = startDate;
+        while (currentDateStr <= endDate) {
+            const isWeekend = isWeekendSkippedDate(currentDateStr, weekendMode);
+            const isHoliday = skipHolidays && isHolidayDate(currentDateStr, this.reminderSkipHolidayData);
+            if (!isWeekend && !isHoliday) {
+                count++;
+            }
+            currentDateStr = this.addDaysToDate(currentDateStr, 1);
+        }
+        return count;
+    }
+
+    private calculateEndDateFromWorkingDays(
+        startDate: string,
+        workingDays: number,
+        weekendMode: ReminderSkipWeekendMode,
+        skipHolidays: boolean
+    ): string {
+        if (workingDays < 1) workingDays = 1;
+        let endDate = startDate;
+        for (let i = 0; i < 1000; i++) {
+            const currentWorkingDays = this.calculateWorkingDays(startDate, endDate, weekendMode, skipHolidays);
+            if (currentWorkingDays === workingDays) {
+                return endDate;
+            }
+            if (currentWorkingDays > workingDays) {
+                return endDate;
+            }
+            endDate = this.addDaysToDate(endDate, 1);
+        }
+        return endDate;
+    }
+
+    private updateDurationAndSpannedDays() {
+        const startDateInput = this.dialog?.element?.querySelector('#quickReminderDate') as HTMLInputElement | null;
+        const endDateInput = this.dialog?.element?.querySelector('#quickReminderEndDate') as HTMLInputElement | null;
+        const durationInput = this.dialog?.element?.querySelector('#quickDurationDays') as HTMLInputElement | null;
+        const spannedLabel = this.dialog?.element?.querySelector('#quickSpannedDaysLabel') as HTMLElement | null;
+        const weekendModeSelect = this.dialog?.element?.querySelector('#quickReminderSkipWeekendMode') as HTMLSelectElement | null;
+        const holidaysInput = this.dialog?.element?.querySelector('#quickReminderSkipHolidays') as HTMLInputElement | null;
+
+        if (!durationInput) return;
+
+        const startDate = startDateInput?.value;
+        const endDate = endDateInput?.value;
+
+        if (!startDate || !endDate || startDate >= endDate) {
+            if (spannedLabel) {
+                spannedLabel.style.display = 'none';
+                spannedLabel.textContent = '';
+            }
+            if (!this.durationManuallyChanged) {
+                durationInput.value = '1';
+            }
+            return;
+        }
+
+        const weekendMode = weekendModeSelect ? (weekendModeSelect.value as ReminderSkipWeekendMode) : 'none';
+        const skipHolidays = holidaysInput ? holidaysInput.checked : false;
+
+        const totalDays = this.getDurationInclusive(startDate, endDate);
+
+        if (weekendMode !== 'none' || skipHolidays) {
+            const workingDays = this.calculateWorkingDays(startDate, endDate, weekendMode, skipHolidays);
+            durationInput.value = String(Math.max(1, workingDays));
+            if (spannedLabel) {
+                const template = i18n("totalSpannedDays") || "（总天数：${days}天）";
+                spannedLabel.textContent = template.replace("${days}", String(totalDays));
+                spannedLabel.style.display = 'inline';
+            }
+        } else {
+            durationInput.value = String(totalDays);
+            if (spannedLabel) {
+                spannedLabel.style.display = 'none';
+                spannedLabel.textContent = '';
+            }
+        }
+    }
+
     private parseEstimatedPomodoroDurationToMinutes(value: any): number {
         if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
             return Math.round(value);
@@ -1371,6 +1460,7 @@ export class QuickReminderDialog {
         if (!showHolidays) {
             holidaysInput.checked = this.getReminderSkipHolidaysEffectiveValue(controlReminder);
         }
+        this.updateDurationAndSpannedDays();
     }
 
     private applyReminderSkipDateOverrides(target: any): void {
@@ -1672,17 +1762,6 @@ export class QuickReminderDialog {
             skipHolidaysInput.checked = this.getReminderSkipHolidaysEffectiveValue(this.reminder);
         }
         this.updateReminderSkipDateControls();
-
-        // 填充持续天数（如果有起止日期则计算）
-        const durationInput = this.dialog.element.querySelector('#quickDurationDays') as HTMLInputElement;
-        if (durationInput) {
-            if (dateInput.value && endDateInput.value) {
-                const dur = this.getDurationInclusive(dateInput.value, endDateInput.value);
-                durationInput.value = String(dur > 0 ? dur : 1);
-            } else {
-                durationInput.value = '1';
-            }
-        }
 
         // 填充项目 
         if (projectSelector && this.reminder.projectId) {
@@ -2865,6 +2944,7 @@ export class QuickReminderDialog {
                                     <span style="font-size: 13px; color: var(--b3-theme-on-surface); white-space: nowrap; flex: 0 0 auto;">${i18n("durationLabel")}</span>
                                     <input type="number" id="quickDurationDays" min="1" step="1" class="b3-text-field" value="1" style="width: 100px; min-width: 80px;">
                                     <span style="font-size: 13px; color: var(--b3-theme-on-surface-light);">${i18n("daysUnit")}</span>
+                                    <span id="quickSpannedDaysLabel" style="font-size: 13px; color: var(--b3-theme-on-surface-light); margin-left: 4px; display: none;"></span>
                                     <button type="button" id="quickSwapStartEndTimeBtn" class="b3-button b3-button--outline ariaLabel" aria-label="交换开始和结束时间" title="交换开始和结束时间" style="display: none; align-items: center; justify-content: center; padding: 4px 8px; font-size: 14px; line-height: 1; flex: 0 0 auto;">
                                         ⇵
                                     </button>
@@ -3679,15 +3759,6 @@ export class QuickReminderDialog {
                 endTimeInput.value = this.initialEndTime;
             }
 
-            // 如果传入了初始起止日期，计算并填充持续天数
-            const durationInputInit = this.dialog.element.querySelector('#quickDurationDays') as HTMLInputElement;
-            if (durationInputInit) {
-                if (dateInput.value && endDateInput && endDateInput.value) {
-                    durationInputInit.value = String(this.getDurationInclusive(dateInput.value, endDateInput.value) || 1);
-                } else {
-                    durationInputInit.value = '1';
-                }
-            }
             this.updateStartEndSwapButtonState();
             this.updateStartDateOnlyOverdueControl();
             this.updateReminderSkipDateControls();
@@ -5052,25 +5123,37 @@ export class QuickReminderDialog {
             this.updateReminderSkipDateControls();
             if (!startDateInput.value) return;
 
+            const skipWeekendModeSelect = this.dialog.element.querySelector('#quickReminderSkipWeekendMode') as HTMLSelectElement | null;
+            const skipHolidaysInput = this.dialog.element.querySelector('#quickReminderSkipHolidays') as HTMLInputElement | null;
+            const weekendMode = skipWeekendModeSelect ? (skipWeekendModeSelect.value as ReminderSkipWeekendMode) : 'none';
+            const skipHolidays = skipHolidaysInput ? skipHolidaysInput.checked : false;
+
             // 如果任务已有开始和结束日期，修改开始日期时保持当前持续天数并平移结束日期
             if (endDateInput && endDateInput.value && durationInput && !this.isApplyingNaturalLanguageResult) {
                 let days = parseInt(durationInput.value || '1', 10) || 1;
                 if (days < 1) days = 1;
                 durationInput.value = String(days);
-                endDateInput.value = this.addDaysToDate(startDateInput.value, days - 1);
+                if (weekendMode !== 'none' || skipHolidays) {
+                    endDateInput.value = this.calculateEndDateFromWorkingDays(startDateInput.value, days, weekendMode, skipHolidays);
+                } else {
+                    endDateInput.value = this.addDaysToDate(startDateInput.value, days - 1);
+                }
                 this.updateStartDateOnlyOverdueControl();
                 this.updateReminderSkipDateControls();
                 endDateInput.dispatchEvent(new Event('change'));
             } else if (endDateInput && !endDateInput.value && durationInput && this.durationManuallyChanged) {
                 const days = parseInt(durationInput.value || '1') || 1;
-                endDateInput.value = this.addDaysToDate(startDateInput.value, days - 1);
+                if (weekendMode !== 'none' || skipHolidays) {
+                    endDateInput.value = this.calculateEndDateFromWorkingDays(startDateInput.value, days, weekendMode, skipHolidays);
+                } else {
+                    endDateInput.value = this.addDaysToDate(startDateInput.value, days - 1);
+                }
                 this.updateStartDateOnlyOverdueControl();
                 this.updateReminderSkipDateControls();
                 endDateInput.dispatchEvent(new Event('change'));
             } else if (endDateInput && endDateInput.value && durationInput) {
                 // 自动识别等场景会同时写入开始/结束日期，此时根据新的日期范围刷新持续天数
-                const dur = this.getDurationInclusive(startDateInput.value, endDateInput.value);
-                durationInput.value = String(dur > 0 ? dur : 1);
+                this.updateDurationAndSpannedDays();
             }
         });
 
@@ -5083,8 +5166,16 @@ export class QuickReminderDialog {
             // 标记用户已手动修改持续天数
             this.durationManuallyChanged = true;
             if (startDateInput && startDateInput.value && endDateInput) {
-                // 始终覆盖结束日期以保证与持续天数一致（当改为1时会设置为开始日期）
-                endDateInput.value = this.addDaysToDate(startDateInput.value, val - 1);
+                const skipWeekendModeSelect = this.dialog.element.querySelector('#quickReminderSkipWeekendMode') as HTMLSelectElement | null;
+                const skipHolidaysInput = this.dialog.element.querySelector('#quickReminderSkipHolidays') as HTMLInputElement | null;
+                const weekendMode = skipWeekendModeSelect ? (skipWeekendModeSelect.value as ReminderSkipWeekendMode) : 'none';
+                const skipHolidays = skipHolidaysInput ? skipHolidaysInput.checked : false;
+
+                if (weekendMode !== 'none' || skipHolidays) {
+                    endDateInput.value = this.calculateEndDateFromWorkingDays(startDateInput.value, val, weekendMode, skipHolidays);
+                } else {
+                    endDateInput.value = this.addDaysToDate(startDateInput.value, val - 1);
+                }
                 endDateInput.dispatchEvent(new Event('change'));
             }
         };
@@ -5113,6 +5204,15 @@ export class QuickReminderDialog {
         const startDateOnlyOverdueCheckbox = this.dialog.element.querySelector('#quickStartDateOnlyOverdue') as HTMLInputElement;
         startDateOnlyOverdueCheckbox?.addEventListener('change', () => {
             this.updateReminderSkipDateControls();
+        });
+
+        const skipWeekendModeSelect = this.dialog.element.querySelector('#quickReminderSkipWeekendMode') as HTMLSelectElement;
+        const skipHolidaysInput = this.dialog.element.querySelector('#quickReminderSkipHolidays') as HTMLInputElement;
+        skipWeekendModeSelect?.addEventListener('change', () => {
+            this.updateDurationAndSpannedDays();
+        });
+        skipHolidaysInput?.addEventListener('change', () => {
+            this.updateDurationAndSpannedDays();
         });
 
         const normalizeEstimatedPomodoroDuration = () => {
@@ -5155,16 +5255,21 @@ export class QuickReminderDialog {
             if (!startDateInput || !startDateInput.value) return;
             if (!endDateInput.value) {
                 if (durationInput) durationInput.value = '1';
+                const spannedLabel = this.dialog?.element?.querySelector('#quickSpannedDaysLabel') as HTMLElement | null;
+                if (spannedLabel) {
+                    spannedLabel.style.display = 'none';
+                    spannedLabel.textContent = '';
+                }
                 return;
             }
             // 如果结束日期早于开始日期，修正为开始日期
             if (compareDateStrings(endDateInput.value, startDateInput.value) < 0) {
                 endDateInput.value = startDateInput.value;
                 if (durationInput) durationInput.value = '1';
-            } else {
-                if (durationInput) {
-                    const dur = this.getDurationInclusive(startDateInput.value, endDateInput.value);
-                    durationInput.value = String(dur > 0 ? dur : 1);
+                const spannedLabel = this.dialog?.element?.querySelector('#quickSpannedDaysLabel') as HTMLElement | null;
+                if (spannedLabel) {
+                    spannedLabel.style.display = 'none';
+                    spannedLabel.textContent = '';
                 }
             }
         });

@@ -1765,6 +1765,7 @@
     "durationLabel": "持续：",
     "endLabel": "结束：",
     "daysUnit": "天",
+    "totalSpannedDays": "（总天数：${days}天）",
     "pleaseEnterReminderTime": "请输入提醒时间",
     "setDateTimeFirst": "请先为任务设置日期和时间，然后使用快速设置。",
     "blockSelected": "✓ 已选择块",
