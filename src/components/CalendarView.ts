@@ -3334,6 +3334,10 @@ export class CalendarView {
 
         const originalEventType = calendarEvent.extendedProps.type;
         const rawCalendarEvent = calendarEvent;
+        let reminderTimeDate: string | undefined = undefined;
+        if ((originalEventType === 'reminderTime' || originalEventType === 'completedTaskTime') && rawCalendarEvent.start) {
+            reminderTimeDate = getLocalDateString(rawCalendarEvent.start);
+        }
 
         // Handle Pomodoro events specifically
         if (calendarEvent.extendedProps.type === 'pomodoro') {
@@ -3623,7 +3627,7 @@ export class CalendarView {
 
             if (isCrossDay) {
                 const isGloballyCompleted = reminder ? reminder.completed === true : calendarEvent.extendedProps.completed;
-                const targetDate = isSingleDayView ? getLocalDateString(this.calendar.getDate()) : getLogicalDateString();
+                const targetDate = reminderTimeDate || (isSingleDayView ? getLocalDateString(this.calendar.getDate()) : getLogicalDateString());
                 const isTodayCompleted = !!(reminder && reminder.dailyCompletions && reminder.dailyCompletions[targetDate] === true);
 
                 menu.addItem({
@@ -5595,7 +5599,9 @@ export class CalendarView {
                                 await updateBindBlockAtrrs(blockId, this.plugin);
                             }
 
-                            event.setExtendedProp('completed', false);
+                            if (event && typeof event.setExtendedProp === 'function') {
+                                event.setExtendedProp('completed', false);
+                            }
                             window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
                             await this.refreshEvents();
                         } else {
@@ -5624,7 +5630,9 @@ export class CalendarView {
                                 await updateBindBlockAtrrs(blockId, this.plugin);
                             }
 
-                            event.setExtendedProp('completed', newCompletedState);
+                            if (event && typeof event.setExtendedProp === 'function') {
+                                event.setExtendedProp('completed', newCompletedState);
+                            }
                             window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
                             await this.refreshEvents();
                         }
@@ -5648,7 +5656,9 @@ export class CalendarView {
                         }
 
                         // 更新事件的显示状态
-                        event.setExtendedProp('completed', newCompletedState);
+                        if (event && typeof event.setExtendedProp === 'function') {
+                            event.setExtendedProp('completed', newCompletedState);
+                        }
 
                         // 触发更新事件
                         window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
