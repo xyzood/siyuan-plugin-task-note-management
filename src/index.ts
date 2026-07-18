@@ -3602,7 +3602,19 @@ export default class ReminderPlugin extends Plugin {
                 return null;
             }
 
-            const rawTitle = String(block.content || "").trim();
+            // 列表/列表项的 content 会包含子块，使用 fcontent 并去除列表标记
+            const isListType = block.type === 'l' || block.type === 'i';
+            let rawTitle = '';
+            if (isListType) {
+                rawTitle = String(block.fcontent || block.content || '').trim();
+                rawTitle = rawTitle
+                    .replace(/^[-*+]\s+\[[ xX]\]\s+/, '')
+                    .replace(/^[-*+]\s+/, '')
+                    .replace(/^\d+\.\s+/, '')
+                    .trim();
+            } else {
+                rawTitle = String(block.content || '').trim();
+            }
             const title = rawTitle || (i18n("untitledTask") || "未命名任务");
             return {
                 id: blockId,
