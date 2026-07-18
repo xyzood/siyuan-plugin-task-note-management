@@ -26,7 +26,7 @@ function collectFolderNodeProjects(node: any): any[] {
     return projects;
 }
 
-async function countProjectTotalPomodoro(plugin: any, projectId: string, reminderData: any): Promise<number> {
+export async function countProjectTotalPomodoro(plugin: any, projectId: string, reminderData: any): Promise<number> {
     const allReminders = reminderData && typeof reminderData === 'object' ? Object.values(reminderData) : [];
     let totalPomodoro = 0;
     try {
@@ -60,7 +60,7 @@ async function countProjectTotalPomodoro(plugin: any, projectId: string, reminde
     return totalPomodoro;
 }
 
-async function countProjectTotalFocusTime(plugin: any, projectId: string, reminderData: any): Promise<number> {
+export async function countProjectTotalFocusTime(plugin: any, projectId: string, reminderData: any): Promise<number> {
     let totalMinutes = 0;
     try {
         const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");

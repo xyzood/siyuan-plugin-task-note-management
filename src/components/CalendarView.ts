@@ -3176,33 +3176,47 @@ export class CalendarView {
 
                 const existingState = getRepeatInstanceState(originalReminder, instanceDate);
                 const reminderTimesSource = getInstanceField(existingState, 'reminderTimes', originalReminder.reminderTimes);
-                const resolvedReminderTimes = resolveRepeatReminderTimes(
-                    reminderTimesSource,
-                    info.event.extendedProps.date || instanceDate,
-                    info.event.extendedProps.endDate || undefined,
-                    originalReminder.date,
-                    originalReminder.endDate
-                ) || [];
+                const reminderTimes = Array.isArray(reminderTimesSource) ? JSON.parse(JSON.stringify(reminderTimesSource)) : [];
 
-                if (!resolvedReminderTimes[reminderIndex]) {
+                if (!reminderTimes[reminderIndex]) {
                     throw new Error('提醒时间索引不存在');
                 }
 
-                if (resolvedReminderTimes[reminderIndex].everyDay) {
-                    resolvedReminderTimes[reminderIndex] = {
-                        ...resolvedReminderTimes[reminderIndex],
-                        time: startTimeStr,
-                        endTime: endTimeStr || undefined
-                    };
+                const entry = reminderTimes[reminderIndex];
+                const isEveryDay = typeof entry === 'object' && entry !== null ? !!entry.everyDay : false;
+
+                if (isEveryDay) {
+                    const isAlreadyOverridden = typeof entry === 'object' && entry !== null && entry.overrides?.[startDateStr];
+                    let result: 'single' | 'all' | 'cancel' = 'single';
+                    if (!isAlreadyOverridden) {
+                        result = await this.askApplyToAllDays();
+                        if (result === 'cancel') {
+                            info.revert();
+                            return;
+                        }
+                    }
+
+                    let targetEntry = typeof entry === 'string' ? { time: entry, everyDay: true } : { ...entry };
+                    if (result === 'single') {
+                        const overrides = targetEntry.overrides ? { ...targetEntry.overrides } : {};
+                        overrides[startDateStr] = {
+                            time: startTimeStr,
+                            endTime: endTimeStr || undefined
+                        };
+                        targetEntry.overrides = overrides;
+                    } else {
+                        targetEntry.time = startTimeStr;
+                        targetEntry.endTime = endTimeStr || undefined;
+                    }
+                    reminderTimes[reminderIndex] = targetEntry;
                 } else {
-                    resolvedReminderTimes[reminderIndex] = {
-                        ...resolvedReminderTimes[reminderIndex],
-                        time: `${startDateStr}T${startTimeStr}`,
-                        endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
-                    };
+                    let targetEntry = typeof entry === 'string' ? { time: entry } : { ...entry };
+                    targetEntry.time = `${startDateStr}T${startTimeStr}`;
+                    targetEntry.endTime = endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined;
+                    reminderTimes[reminderIndex] = targetEntry;
                 }
 
-                patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: resolvedReminderTimes });
+                patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: reminderTimes });
 
                 await saveReminders(this.plugin, reminderData);
                 if (this.plugin?.updateMobileNotification) {
@@ -3218,23 +3232,45 @@ export class CalendarView {
                     throw new Error('任务数据不存在');
                 }
 
-                const reminderTimes = this.getReminderTimeEntries(reminder);
+                const reminderTimesSource = reminder.reminderTimes;
+                const reminderTimes = Array.isArray(reminderTimesSource) ? JSON.parse(JSON.stringify(reminderTimesSource)) : [];
+
                 if (!reminderTimes[reminderIndex]) {
                     throw new Error('提醒时间索引不存在');
                 }
 
-                if (reminderTimes[reminderIndex].everyDay) {
-                    reminderTimes[reminderIndex] = {
-                        ...reminderTimes[reminderIndex],
-                        time: startTimeStr,
-                        endTime: endTimeStr || undefined
-                    };
+                const entry = reminderTimes[reminderIndex];
+                const isEveryDay = typeof entry === 'object' && entry !== null ? !!entry.everyDay : false;
+
+                if (isEveryDay) {
+                    const isAlreadyOverridden = typeof entry === 'object' && entry !== null && entry.overrides?.[startDateStr];
+                    let result: 'single' | 'all' | 'cancel' = 'single';
+                    if (!isAlreadyOverridden) {
+                        result = await this.askApplyToAllDays();
+                        if (result === 'cancel') {
+                            info.revert();
+                            return;
+                        }
+                    }
+
+                    let targetEntry = typeof entry === 'string' ? { time: entry, everyDay: true } : { ...entry };
+                    if (result === 'single') {
+                        const overrides = targetEntry.overrides ? { ...targetEntry.overrides } : {};
+                        overrides[startDateStr] = {
+                            time: startTimeStr,
+                            endTime: endTimeStr || undefined
+                        };
+                        targetEntry.overrides = overrides;
+                    } else {
+                        targetEntry.time = startTimeStr;
+                        targetEntry.endTime = endTimeStr || undefined;
+                    }
+                    reminderTimes[reminderIndex] = targetEntry;
                 } else {
-                    reminderTimes[reminderIndex] = {
-                        ...reminderTimes[reminderIndex],
-                        time: `${startDateStr}T${startTimeStr}`,
-                        endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
-                    };
+                    let targetEntry = typeof entry === 'string' ? { time: entry } : { ...entry };
+                    targetEntry.time = `${startDateStr}T${startTimeStr}`;
+                    targetEntry.endTime = endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined;
+                    reminderTimes[reminderIndex] = targetEntry;
                 }
 
                 reminder.reminderTimes = reminderTimes;
@@ -3262,88 +3298,122 @@ export class CalendarView {
         const reminderIndex = this.getReminderTimeEventIndex(calendarEvent);
         if (reminderIndex < 0) return;
 
-        await confirm(
-            i18n("deleteReminderTime") || "删除此提醒时间",
-            i18n("confirmDeleteReminder", { title: calendarEvent.title }),
-            async () => {
-                try {
-                    const reminderData = await getAllReminders(this.plugin);
-                    const originalReminderId = calendarEvent.extendedProps.originalId;
-                    const sourceEventId = calendarEvent.extendedProps.sourceEventId || '';
-                    const isRepeated = !!calendarEvent.extendedProps.isRepeated;
+        try {
+            const reminderData = await getAllReminders(this.plugin);
+            const originalReminderId = calendarEvent.extendedProps.originalId;
+            const sourceEventId = calendarEvent.extendedProps.sourceEventId || '';
+            const isRepeated = !!calendarEvent.extendedProps.isRepeated;
+            const { dateStr } = getLocalDateTime(calendarEvent.start);
 
-                    if (isRepeated) {
-                        const originalReminder = reminderData[originalReminderId];
-                        if (!originalReminder) {
-                            throw new Error('重复任务原始数据不存在');
-                        }
+            let isEveryDay = false;
+            let reminder: any = null;
+            let originalReminder: any = null;
+            let reminderTimes: any[] = [];
+            let instanceDate = '';
 
-                        const parsedSource = parseReminderInstanceId(sourceEventId);
-                        const instanceDate = parsedSource?.instanceDate || calendarEvent.extendedProps.date;
-                        if (!instanceDate) {
-                            throw new Error('重复任务实例日期不存在');
-                        }
-
+            if (isRepeated) {
+                originalReminder = reminderData[originalReminderId];
+                if (originalReminder) {
+                    const parsedSource = parseReminderInstanceId(sourceEventId);
+                    instanceDate = parsedSource?.instanceDate || calendarEvent.extendedProps.date;
+                    if (instanceDate) {
                         const existingState = getRepeatInstanceState(originalReminder, instanceDate);
                         const reminderTimesSource = getInstanceField(existingState, 'reminderTimes', originalReminder.reminderTimes);
-                        const resolvedReminderTimes = resolveRepeatReminderTimes(
-                            reminderTimesSource,
-                            calendarEvent.extendedProps.date || instanceDate,
-                            calendarEvent.extendedProps.endDate || undefined,
-                            originalReminder.date,
-                            originalReminder.endDate
-                        ) || [];
+                        reminderTimes = Array.isArray(reminderTimesSource) ? JSON.parse(JSON.stringify(reminderTimesSource)) : [];
+                        const entry = reminderTimes[reminderIndex];
+                        isEveryDay = typeof entry === 'object' && entry !== null ? !!entry.everyDay : false;
+                    }
+                }
+            } else {
+                reminder = reminderData[originalReminderId || sourceEventId || calendarEvent.id];
+                if (reminder) {
+                    const reminderTimesSource = reminder.reminderTimes;
+                    reminderTimes = Array.isArray(reminderTimesSource) ? JSON.parse(JSON.stringify(reminderTimesSource)) : [];
+                    const entry = reminderTimes[reminderIndex];
+                    isEveryDay = typeof entry === 'object' && entry !== null ? !!entry.everyDay : false;
+                }
+            }
 
-                        resolvedReminderTimes.splice(reminderIndex, 1);
-
-                        patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: resolvedReminderTimes });
-
-                        await saveReminders(this.plugin, reminderData);
-                        if (this.plugin?.updateMobileNotification) {
-                            try {
-                                await this.plugin.updateMobileNotification(originalReminder);
-                            } catch (e) {
-                                console.warn('删除重复提醒后更新移动端通知失败:', e);
-                            }
-                        }
+            const performDelete = async (shouldDeleteAll: boolean) => {
+                if (isRepeated) {
+                    if (!originalReminder) return;
+                    if (shouldDeleteAll) {
+                        reminderTimes.splice(reminderIndex, 1);
                     } else {
-                        const reminder = reminderData[originalReminderId || sourceEventId || calendarEvent.id];
-                        if (!reminder) {
-                            throw new Error('任务数据不存在');
-                        }
+                        const entry = reminderTimes[reminderIndex];
+                        let targetEntry = typeof entry === 'string' ? { time: entry, everyDay: true } : { ...entry };
+                        const overrides = targetEntry.overrides ? { ...targetEntry.overrides } : {};
+                        overrides[dateStr] = { deleted: true };
+                        targetEntry.overrides = overrides;
+                        reminderTimes[reminderIndex] = targetEntry;
+                    }
 
-                        const reminderTimes = this.getReminderTimeEntries(reminder);
+                    patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: reminderTimes });
+                    await saveReminders(this.plugin, reminderData);
+                    if (this.plugin?.updateMobileNotification) {
+                        try {
+                            await this.plugin.updateMobileNotification(originalReminder);
+                        } catch (e) {
+                            console.warn('删除重复提醒后更新移动端通知失败:', e);
+                        }
+                    }
+                } else {
+                    if (!reminder) return;
+                    if (shouldDeleteAll) {
                         reminderTimes.splice(reminderIndex, 1);
                         if (reminderTimes.length > 0) {
                             reminder.reminderTimes = reminderTimes;
                         } else {
                             delete reminder.reminderTimes;
                         }
+                    } else {
+                        const entry = reminderTimes[reminderIndex];
+                        let targetEntry = typeof entry === 'string' ? { time: entry, everyDay: true } : { ...entry };
+                        const overrides = targetEntry.overrides ? { ...targetEntry.overrides } : {};
+                        overrides[dateStr] = { deleted: true };
+                        targetEntry.overrides = overrides;
+                        reminderTimes[reminderIndex] = targetEntry;
+                        reminder.reminderTimes = reminderTimes;
+                    }
 
-                        await saveReminders(this.plugin, reminderData);
-                        if (this.plugin?.updateMobileNotification) {
-                            try {
-                                await this.plugin.updateMobileNotification(reminder);
-                            } catch (e) {
-                                console.warn('删除提醒后更新移动端通知失败:', e);
-                            }
+                    await saveReminders(this.plugin, reminderData);
+                    if (this.plugin?.updateMobileNotification) {
+                        try {
+                            await this.plugin.updateMobileNotification(reminder);
+                        } catch (e) {
+                            console.warn('删除提醒后更新移动端通知失败:', e);
                         }
                     }
-
-                    const targetEvent = this.calendar.getEventById(calendarEvent.id);
-                    if (targetEvent) {
-                        targetEvent.remove();
-                    }
-
-                    await this.refreshEvents();
-                    window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
-                    showMessage(i18n("deleteSuccess") || '删除成功');
-                } catch (error) {
-                    console.error('删除提醒时间失败:', error);
-                    showMessage(i18n("operationFailed"));
                 }
+
+                const targetEvent = this.calendar.getEventById(calendarEvent.id);
+                if (targetEvent) {
+                    targetEvent.remove();
+                }
+
+                await this.refreshEvents();
+                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
+                showMessage(i18n("deleteSuccess") || '删除成功');
+            };
+
+            if (isEveryDay) {
+                const result = await this.askDeleteEveryDayReminder();
+                if (result === 'cancel') return;
+                await performDelete(result === 'all');
+            } else {
+                await confirm(
+                    i18n("deleteReminderTime") || "删除此提醒时间",
+                    i18n("confirmDeleteReminder", { title: calendarEvent.title }),
+                    async () => {
+                        await performDelete(true);
+                    }
+                );
             }
-        );
+
+        } catch (error) {
+            console.error('删除提醒时间失败:', error);
+            showMessage(i18n("operationFailed"));
+        }
     }
 
     private async showEventContextMenu(event: MouseEvent, calendarEvent: any) {
@@ -6502,6 +6572,120 @@ export class CalendarView {
         }
     }
 
+    private async askDeleteEveryDayReminder(): Promise<'single' | 'all' | 'cancel'> {
+        return new Promise((resolve) => {
+            const dialog = new Dialog({
+                title: i18n("deleteEveryDayReminder") || "删除每日提醒时间",
+                content: `
+                    <div class="b3-dialog__content">
+                        <div style="margin-bottom: 16px;">${i18n("howToApplyEveryDayDelete") || "请选择如何删除此提醒时间："}</div>
+                        <div class="fn__flex fn__flex-justify-center" style="gap: 8px;">
+                            <button class="b3-button" id="btn-delete-single">${i18n("onlyDeleteThisDay") || "仅删除当天"}</button>
+                            <button class="b3-button b3-button--primary" id="btn-delete-all">${i18n("deleteAllDays") || "删除所有天"}</button>
+                            <button class="b3-button b3-button--cancel" id="btn-delete-cancel">${i18n("cancel") || "取消"}</button>
+                        </div>
+                    </div>
+                `,
+                width: "400px",
+                height: "auto"
+            });
+
+            // 等待对话框渲染完成后添加事件监听器
+            setTimeout(() => {
+                const singleBtn = dialog.element.querySelector('#btn-delete-single');
+                const allBtn = dialog.element.querySelector('#btn-delete-all');
+                const cancelBtn = dialog.element.querySelector('#btn-delete-cancel');
+
+                if (singleBtn) {
+                    singleBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('single');
+                    });
+                }
+
+                if (allBtn) {
+                    allBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('all');
+                    });
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('cancel');
+                    });
+                }
+
+                // 处理对话框关闭事件
+                const closeBtn = dialog.element.querySelector('.b3-dialog__close');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('cancel');
+                    });
+                }
+            }, 100);
+        });
+    }
+
+    private async askApplyToAllDays(): Promise<'single' | 'all' | 'cancel'> {
+        return new Promise((resolve) => {
+            const dialog = new Dialog({
+                title: i18n("modifyEveryDayReminder") || "修改每日提醒时间",
+                content: `
+                    <div class="b3-dialog__content">
+                        <div style="margin-bottom: 16px;">${i18n("howToApplyEveryDayChanges") || "请选择如何应用对此提醒时间的修改："}</div>
+                        <div class="fn__flex fn__flex-justify-center" style="gap: 8px;">
+                            <button class="b3-button" id="btn-single-day">${i18n("onlyThisDay") || "仅修改当天"}</button>
+                            <button class="b3-button b3-button--primary" id="btn-all-days">${i18n("allDays") || "修改所有天"}</button>
+                            <button class="b3-button b3-button--cancel" id="btn-cancel-days">${i18n("cancel") || "取消"}</button>
+                        </div>
+                    </div>
+                `,
+                width: "400px",
+                height: "auto"
+            });
+
+            // 等待对话框渲染完成后添加事件监听器
+            setTimeout(() => {
+                const singleBtn = dialog.element.querySelector('#btn-single-day');
+                const allBtn = dialog.element.querySelector('#btn-all-days');
+                const cancelBtn = dialog.element.querySelector('#btn-cancel-days');
+
+                if (singleBtn) {
+                    singleBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('single');
+                    });
+                }
+
+                if (allBtn) {
+                    allBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('all');
+                    });
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('cancel');
+                    });
+                }
+
+                // 处理对话框关闭事件
+                const closeBtn = dialog.element.querySelector('.b3-dialog__close');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => {
+                        dialog.destroy();
+                        resolve('cancel');
+                    });
+                }
+            }, 100);
+        });
+    }
+
     private async askApplyToAllInstances(): Promise<'single' | 'all' | 'cancel'> {
         return new Promise((resolve) => {
             const dialog = new Dialog({
@@ -8802,8 +8986,8 @@ export class CalendarView {
         return colors;
     }
 
-    private getReminderTimeEntries(reminder: any): Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean }> {
-        const entries: Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean }> = [];
+    private getReminderTimeEntries(reminder: any): Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean; overrides?: any }> {
+        const entries: Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean; overrides?: any }> = [];
 
         if (Array.isArray(reminder?.reminderTimes)) {
             reminder.reminderTimes.forEach((item: any) => {
@@ -8817,7 +9001,8 @@ export class CalendarView {
                         time: item.time.trim(),
                         endTime: typeof item.endTime === 'string' ? item.endTime.trim() : undefined,
                         note: typeof item.note === 'string' ? item.note : undefined,
-                        everyDay: !!item.everyDay
+                        everyDay: !!item.everyDay,
+                        overrides: item.overrides
                     });
                 }
             });
@@ -8942,12 +9127,26 @@ export class CalendarView {
                     // 如果是跨天事件且在该日期已完成，依然显示提醒时间，只不过提醒时间变暗
                     const isCompletedOnDate = !!(reminder.completed || (isCrossDay && reminder.dailyCompletions && reminder.dailyCompletions[dateStr] === true));
 
-                    const eventStart = new Date(`${dateStr}T${normalizedTime}:00`);
+                    const override = entry.overrides?.[dateStr];
+                    if (override && override.deleted) continue;
+
+                    let activeTime = normalizedTime;
+                    let activeEndTime = entry.endTime;
+                    if (override && override.time) {
+                        const timeOnlyOverride = override.time.includes('T') ? override.time.split('T')[1]?.split(':').slice(0, 2).join(':') || override.time : override.time;
+                        const timeMatchOverride = timeOnlyOverride.match(/^\d{1,2}:\d{2}/);
+                        if (timeMatchOverride) {
+                            activeTime = timeMatchOverride[0].padStart(5, '0');
+                        }
+                        activeEndTime = override.endTime;
+                    }
+
+                    const eventStart = new Date(`${dateStr}T${activeTime}:00`);
                     if (Number.isNaN(eventStart.getTime())) continue;
 
                     let eventEnd = new Date(eventStart.getTime() + 15 * 60 * 1000);
-                    const parsedEnd = entry.endTime
-                        ? this.parseReminderTimeToDateTime(entry.endTime, dateStr)
+                    const parsedEnd = activeEndTime
+                        ? this.parseReminderTimeToDateTime(activeEndTime, dateStr)
                         : null;
                     if (parsedEnd) {
                         const explicitEndDate = new Date(`${parsedEnd.date}T${parsedEnd.time}:00`);
@@ -8962,7 +9161,7 @@ export class CalendarView {
                     events.push({
                         id: `${sourceEventId}__reminder__${index}_d${dayIndex}`,
                         title: `⏰ ${baseTitle}`,
-                        start: `${dateStr}T${normalizedTime}:00`,
+                        start: `${dateStr}T${activeTime}:00`,
                         end: `${endDateStr2}T${endTimeStr2}:00`,
                         backgroundColor: colorWithOpacity(colors.backgroundColor, 0.22),
                         borderColor: colors.borderColor,
@@ -8977,8 +9176,8 @@ export class CalendarView {
                             type: 'reminderTime',
                             eventTitle: baseTitle,
                             sourceEventId: sourceEventId,
-                            reminderAt: entry.time,
-                            reminderEndAt: entry.endTime,
+                            reminderAt: activeTime,
+                            reminderEndAt: activeEndTime,
                             isExpiredReminderTime: isExpired,
                             reminderTimeNote: entry.note,
                             completed: isCompletedOnDate || false,

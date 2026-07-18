@@ -235,7 +235,8 @@ function normalizeReminderTimeEntry(entry: any): ReminderTimeConfig | null {
             note: entry.note,
             dayOffset: typeof entry.dayOffset === 'number' ? entry.dayOffset : undefined,
             dayIndex: typeof entry.dayIndex === 'number' ? entry.dayIndex : undefined,
-            everyDay: typeof entry.everyDay === 'boolean' ? entry.everyDay : undefined
+            everyDay: typeof entry.everyDay === 'boolean' ? entry.everyDay : undefined,
+            overrides: entry.overrides
         };
     }
     return null;
@@ -342,13 +343,17 @@ export function resolveRepeatReminderTimes(
             if (item.everyDay && durationDays > 1) {
                 for (let i = 0; i < durationDays; i++) {
                     const customDate = addDaysToDate(instanceDate, i);
-                    const resolvedTime = resolveEntryDateTime(item.time, item, customDate);
+                    const override = item.overrides?.[customDate];
+                    const activeTime = override ? override.time : item.time;
+                    const activeEndTime = override ? override.endTime : item.endTime;
+                    const resolvedTime = resolveEntryDateTime(activeTime, item, customDate);
                     if (resolvedTime) {
                         resolved.push({
                             time: resolvedTime,
-                            endTime: resolveEntryDateTime(item.endTime, item, customDate),
+                            endTime: resolveEntryDateTime(activeEndTime, item, customDate),
                             note: item.note,
-                            everyDay: true
+                            everyDay: true,
+                            overrides: item.overrides
                         });
                     }
                 }
@@ -358,7 +363,8 @@ export function resolveRepeatReminderTimes(
                     resolved.push({
                         time: resolvedTime,
                         endTime: resolveEntryDateTime(item.endTime, item),
-                        note: item.note
+                        note: item.note,
+                        overrides: item.overrides
                     });
                 }
             }

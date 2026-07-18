@@ -6287,7 +6287,7 @@ export default class ReminderPlugin extends Plugin {
         const endDateStr = reminder.endDate || startDateStr;
         const isCrossDay = !!(reminder.date && reminder.endDate && reminder.endDate !== reminder.date);
 
-        const entries: Array<{ time: string; everyDay: boolean }> = [];
+        const entries: Array<{ time: string; everyDay: boolean; overrides?: any }> = [];
         if (reminder.time) {
             entries.push({ time: reminder.time, everyDay: isCrossDay });
         }
@@ -6296,7 +6296,11 @@ export default class ReminderPlugin extends Plugin {
                 if (typeof rt === 'string') {
                     entries.push({ time: rt, everyDay: isCrossDay });
                 } else if (rt?.time) {
-                    entries.push({ time: rt.time, everyDay: !!rt.everyDay || isCrossDay });
+                    entries.push({
+                        time: rt.time,
+                        everyDay: !!rt.everyDay || isCrossDay,
+                        overrides: rt.overrides
+                    });
                 }
             }
         }
@@ -6349,7 +6353,18 @@ export default class ReminderPlugin extends Plugin {
                 const isCompletedOnDate = reminder.completed || (reminder.dailyCompletions && reminder.dailyCompletions[datePart] === true);
                 if (isCrossDay && isCompletedOnDate) continue;
 
-                const dateTime = new Date(`${datePart}T${parsed.time}`);
+                let targetTimeStr = parsed.time;
+                if (entry.overrides?.[datePart]) {
+                    const override = entry.overrides[datePart];
+                    if (override.time) {
+                        const timeMatch = override.time.match(/^\d{1,2}:\d{2}/);
+                        if (timeMatch) {
+                            targetTimeStr = timeMatch[0].padStart(5, '0');
+                        }
+                    }
+                }
+
+                const dateTime = new Date(`${datePart}T${targetTimeStr}`);
                 if (isNaN(dateTime.getTime())) continue;
 
                 // 检查是否超过限制天数

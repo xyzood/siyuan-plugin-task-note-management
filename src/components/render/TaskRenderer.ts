@@ -339,14 +339,19 @@ export class TaskRenderer {
 
         // 处理 reminderTimes
         try {
-            const entries: Array<{ time: string; note?: string; everyDay?: boolean }> = [];
+            const entries: Array<{ time: string; note?: string; everyDay?: boolean; overrides?: any }> = [];
             if (reminder?.reminderTimes && Array.isArray(reminder.reminderTimes)) {
                 reminder.reminderTimes.forEach((rtItem: any) => {
                     if (!rtItem) return;
                     const rt = typeof rtItem === 'string' ? rtItem : rtItem.time;
                     const note = typeof rtItem === 'string' ? '' : String(rtItem.note || '').trim();
                     if (rt) {
-                        entries.push({ time: rt, note, everyDay: !!rtItem.everyDay });
+                        entries.push({
+                            time: rt,
+                            note,
+                            everyDay: !!rtItem.everyDay,
+                            overrides: typeof rtItem === 'string' ? undefined : rtItem.overrides
+                        });
                     }
                 });
             }
@@ -387,6 +392,18 @@ export class TaskRenderer {
                                 targetDate = endDate || date;
                             } else {
                                 targetDate = today;
+                            }
+                        }
+
+                        // Apply everyday override if it exists for this targetDate
+                        const override = rtItem.overrides?.[targetDate];
+                        if (override) {
+                            if (override.deleted) {
+                                return '';
+                            }
+                            if (override.time) {
+                                const overrideTime = override.time.includes('T') ? override.time.split('T')[1] : override.time;
+                                timePart = overrideTime || timePart;
                             }
                         }
                     }
@@ -1628,8 +1645,8 @@ export class TaskRenderer {
     }
 
 
-    private static getReminderTimeEntries(reminder: any): Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean }> {
-        const entries: Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean }> = [];
+    private static getReminderTimeEntries(reminder: any): Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean; overrides?: any }> {
+        const entries: Array<{ time: string; endTime?: string; note?: string; everyDay?: boolean; overrides?: any }> = [];
         if (Array.isArray(reminder?.reminderTimes)) {
             reminder.reminderTimes.forEach((rtItem: any) => {
                 if (!rtItem) return;
@@ -1640,7 +1657,8 @@ export class TaskRenderer {
                         time: rt,
                         endTime: typeof rtItem === 'string' ? undefined : (typeof rtItem.endTime === 'string' ? rtItem.endTime.trim() : undefined),
                         note,
-                        everyDay: typeof rtItem === 'string' ? false : !!rtItem.everyDay
+                        everyDay: typeof rtItem === 'string' ? false : !!rtItem.everyDay,
+                        overrides: typeof rtItem === 'string' ? undefined : rtItem.overrides
                     });
                 }
             });

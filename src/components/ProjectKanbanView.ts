@@ -8394,14 +8394,19 @@ export class ProjectKanbanView {
         };
 
         const getUnexpiredReminderTimesStr = (): string => {
-            const entries: Array<{ time: string; note?: string; everyDay?: boolean }> = [];
+            const entries: Array<{ time: string; note?: string; everyDay?: boolean; overrides?: any }> = [];
             if (Array.isArray(task.reminderTimes)) {
                 task.reminderTimes.forEach((rtItem: any) => {
                     if (!rtItem) return;
                     const rt = typeof rtItem === 'string' ? rtItem : rtItem.time;
                     const note = typeof rtItem === 'string' ? '' : String(rtItem.note || '').trim();
                     if (rt) {
-                        entries.push({ time: rt, note, everyDay: !!rtItem.everyDay });
+                        entries.push({
+                            time: rt,
+                            note,
+                            everyDay: !!rtItem.everyDay,
+                            overrides: typeof rtItem === 'string' ? undefined : rtItem.overrides
+                        });
                     }
                 });
             }
@@ -8439,6 +8444,18 @@ export class ProjectKanbanView {
                                     targetDate = task.endDate || task.date;
                                 } else {
                                     targetDate = today;
+                                }
+                            }
+
+                            // Apply everyday override if it exists for this targetDate
+                            const override = item.overrides?.[targetDate];
+                            if (override) {
+                                if (override.deleted) {
+                                    return '';
+                                }
+                                if (override.time) {
+                                    const overrideTime = override.time.includes('T') ? override.time.split('T')[1] : override.time;
+                                    timePart = overrideTime || timePart;
                                 }
                             }
                         }
