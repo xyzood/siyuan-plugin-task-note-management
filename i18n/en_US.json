@@ -1480,6 +1480,7 @@
     "showCompletedTaskTimeNoDate": "No-date tasks",
     "completedTaskTimeUseTaskColor": "Use Task Color Scheme",
     "showReminderTime": "Show Task Reminder Time",
+    "alwaysShowHabitReminderTime": "Always show habit reminder times",
     "show": "Show",
     "instances": "incomplete instances",
     "noLimit": "means no limit",

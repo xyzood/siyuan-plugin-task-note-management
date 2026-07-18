@@ -30,6 +30,7 @@ export interface CalendarConfig {
     showTasks: boolean; // 是否显示任务
     showHabits: boolean; // 是否显示习惯
     showReminderTime: boolean; // 是否显示任务提醒时间
+    alwaysShowHabitReminderTime: boolean; // 是否始终显示习惯提醒时间
     multiDaysCount: number; // 多天视图显示的天数，默认为3天
     calendarOpacityLight: number; // 浅色模式任务上色背景色透明度
     calendarOpacityDark: number; // 深色模式任务上色背景色透明度
@@ -68,6 +69,7 @@ export class CalendarConfigManager {
             showTasks: true, // 默认显示任务
             showHabits: true, // 默认显示习惯
             showReminderTime: true, // 默认显示任务提醒时间
+            alwaysShowHabitReminderTime: false, // 默认不始终显示习惯提醒时间
             multiDaysCount: 3, // 默认显示3天
             calendarOpacityLight: 0.25,
             calendarOpacityDark: 0.3
@@ -113,6 +115,7 @@ export class CalendarConfigManager {
             settings.calendarShowTasks = this.config.showTasks;
             settings.calendarShowHabits = this.config.showHabits;
             settings.calendarShowReminderTime = this.config.showReminderTime;
+            settings.calendarAlwaysShowHabitReminderTime = this.config.alwaysShowHabitReminderTime;
             settings.calendarMultiDaysCount = this.config.multiDaysCount;
             settings.calendarOpacityLight = this.config.calendarOpacityLight;
             settings.calendarOpacityDark = this.config.calendarOpacityDark;
@@ -182,6 +185,7 @@ export class CalendarConfigManager {
                 showTasks: settings.calendarShowTasks !== false, // 默认为 true
                 showHabits: settings.calendarShowHabits !== false, // 默认为 true
                 showReminderTime: settings.calendarShowReminderTime !== false, // 默认为 true
+                alwaysShowHabitReminderTime: settings.calendarAlwaysShowHabitReminderTime === true, // 默认为 false
                 multiDaysCount: settings.calendarMultiDaysCount !== undefined ? settings.calendarMultiDaysCount : 3, // 默认为3天
                 calendarOpacityLight: settings.calendarOpacityLight !== undefined ? settings.calendarOpacityLight : 0.25,
                 calendarOpacityDark: settings.calendarOpacityDark !== undefined ? settings.calendarOpacityDark : 0.3
@@ -214,6 +218,7 @@ export class CalendarConfigManager {
                 showTasks: true,
                 showHabits: true,
                 showReminderTime: true,
+                alwaysShowHabitReminderTime: false,
                 multiDaysCount: 3,
                 calendarOpacityLight: 0.25,
                 calendarOpacityDark: 0.3
@@ -459,6 +464,15 @@ export class CalendarConfigManager {
 
     public getShowReminderTime(): boolean {
         return this.config.showReminderTime !== false;
+    }
+
+    public async setAlwaysShowHabitReminderTime(show: boolean) {
+        this.config.alwaysShowHabitReminderTime = show;
+        await this.saveConfig();
+    }
+
+    public getAlwaysShowHabitReminderTime(): boolean {
+        return this.config.alwaysShowHabitReminderTime === true;
     }
 
     public async setCalendarOpacityLight(opacity: number) {

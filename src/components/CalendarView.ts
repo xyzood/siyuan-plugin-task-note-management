@@ -70,6 +70,7 @@ export class CalendarView {
     private showHiddenTasks: boolean = false; // 是否显示不在日历视图显示的任务
     private showEventCheckbox: boolean = true; // 是否显示日历事件前的复选框
     private showReminderTime: boolean = true; // 是否显示任务提醒时间
+    private alwaysShowHabitReminderTime: boolean = false; // 是否始终显示习惯提醒时间
     private showCompletedTaskTime: boolean = true; // 是否显示任务完成时间（总开关）
     private showCompletedTaskTimeTimed: boolean = false; // 是否显示非全天（定时）任务的完成时间
     private showCompletedTaskTimeAllDay: boolean = true; // 是否显示全天任务的完成时间
@@ -215,6 +216,7 @@ export class CalendarView {
             this.showHiddenTasks = this.calendarConfigManager.getShowHiddenTasks();
             this.showEventCheckbox = this.calendarConfigManager.getShowEventCheckbox();
             this.showReminderTime = this.calendarConfigManager.getShowReminderTime();
+            this.alwaysShowHabitReminderTime = this.calendarConfigManager.getAlwaysShowHabitReminderTime();
             this.showPomodoro = this.calendarConfigManager.getShowPomodoro();
             this.showPomodoroBreakTime = this.calendarConfigManager.getShowPomodoroBreakTime();
             this.pomodoroUseTaskColor = this.calendarConfigManager.getPomodoroUseTaskColor();
@@ -491,6 +493,7 @@ export class CalendarView {
         this.showHiddenTasks = this.calendarConfigManager.getShowHiddenTasks();
         this.showEventCheckbox = this.calendarConfigManager.getShowEventCheckbox();
         this.showReminderTime = this.calendarConfigManager.getShowReminderTime();
+        this.alwaysShowHabitReminderTime = this.calendarConfigManager.getAlwaysShowHabitReminderTime();
         this.showCompletedTaskTime = this.calendarConfigManager.getShowCompletedTaskTime();
         this.showCompletedTaskTimeTimed = this.calendarConfigManager.getShowCompletedTaskTimeTimed();
         this.showCompletedTaskTimeAllDay = this.calendarConfigManager.getShowCompletedTaskTimeAllDay();
@@ -1227,6 +1230,13 @@ export class CalendarView {
         displaySettingsDropdown.appendChild(createSwitchItem(i18n("showHabits") || "显示习惯", this.showHabits, async (checked) => {
             this.showHabits = checked;
             await this.calendarConfigManager.setShowHabits(checked);
+            await this.refreshEvents();
+        }));
+
+        // 始终显示习惯提醒时间开关
+        displaySettingsDropdown.appendChild(createSwitchItem(i18n("alwaysShowHabitReminderTime") || "日历视图始终显示习惯提醒时间", this.alwaysShowHabitReminderTime, async (checked) => {
+            this.alwaysShowHabitReminderTime = checked;
+            await this.calendarConfigManager.setAlwaysShowHabitReminderTime(checked);
             await this.refreshEvents();
         }));
 
@@ -8124,8 +8134,8 @@ export class CalendarView {
                     // 如果既不是该日期的任务，也没有任何打卡记录，则跳过
                     if (!isDue && !completed && checkedEmojis.length === 0) continue;
 
-                    // 过去日期：未完成且无打卡记录不显示；有打卡记录则显示
-                    if (compareDateStrings(dateStr, today) < 0 && !completed && checkedEmojis.length === 0) continue;
+                    // 过去日期：未完成且无打卡记录不显示；有打卡记录则显示（如果开启了始终显示习惯提醒时间，则不跳过，以便显示提醒时间）
+                    if (!this.alwaysShowHabitReminderTime && compareDateStrings(dateStr, today) < 0 && !completed && checkedEmojis.length === 0) continue;
                     
                     if (this.currentCompletionFilter === 'completed' && !completed) continue;
                     if (this.currentCompletionFilter === 'incomplete' && completed) continue;
@@ -8178,7 +8188,7 @@ export class CalendarView {
                         });
                     });
 
-                    if (compareDateStrings(dateStr, today) < 0) continue;
+                    if (!this.alwaysShowHabitReminderTime && compareDateStrings(dateStr, today) < 0) continue;
 
                     // 如果习惯在这一天已经完成，则不需要再显示提醒时间
                     if (completed) continue;
@@ -8212,7 +8222,7 @@ export class CalendarView {
                         const endDateStr = getLocalDateString(endTime);
                         const endTimeStr = endTime.toTimeString().substring(0, 5);
 
-                        const isExpired = !completed && dateStr === today && startTime.getTime() < Date.now();
+                        const isExpired = !completed && startTime.getTime() < Date.now();
 
                         events.push({
                             id: `habit-${habit.id}-${dateStr}__reminder__${index}`,
