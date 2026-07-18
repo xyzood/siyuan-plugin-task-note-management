@@ -1288,7 +1288,15 @@ export class PasteTaskDialog {
             if (inheritedGroupId) {
                 newTask.customGroupId = inheritedGroupId;
             } else if (parentId && !this.config.isTempMode) {
-                const parent = reminderData[parentId];
+                let lookupId = parentId;
+                const lastUnderscoreIndex = parentId.lastIndexOf('_');
+                if (lastUnderscoreIndex !== -1) {
+                    const potentialDate = parentId.substring(lastUnderscoreIndex + 1);
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(potentialDate)) {
+                        lookupId = parentId.substring(0, lastUnderscoreIndex);
+                    }
+                }
+                const parent = reminderData[lookupId];
                 if (parent && parent.customGroupId) {
                     newTask.customGroupId = parent.customGroupId;
                 }

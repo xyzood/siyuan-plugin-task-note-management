@@ -9542,9 +9542,9 @@ export class ReminderPanel {
         const allReminders = Array.from(this.allRemindersMap.values());
         const maxSort = allReminders.reduce((max, r) => Math.max(max, r.sort || 0), 0);
         const defaultSort = maxSort + 10000;
-        const resolvedParentId = (parentReminder?.isRepeatInstance && parentReminder?.originalId)
-            ? parentReminder.originalId
-            : parentReminder.id;
+        // 重复任务的实例新建子任务应该作为该实例的行动拆解子任务，所以 parentId 应该是实例 ID (parentReminder.id)
+        // 只有编辑重复原始任务时，parentId 才是原始任务 ID
+        const resolvedParentId = parentReminder.id;
         const resolvedCategoryId = parentReminder?.categoryId
             || ((parentReminder?.isRepeatInstance && parentReminder?.originalId)
                 ? this.getOriginalReminder(parentReminder.originalId)?.categoryId
@@ -9553,8 +9553,9 @@ export class ReminderPanel {
             resolvedParentId,
             resolvedCategoryId
         });
+        const defaultDate = parentReminder?.isRepeatInstance ? parentReminder.date : undefined;
         const dialog = new QuickReminderDialog(
-            undefined, // initialDate
+            defaultDate, // initialDate
             undefined, // initialTime
             async (savedReminder?: any) => { // onSaved - optimistic update
                 try {
@@ -9586,9 +9587,12 @@ export class ReminderPanel {
     }
 
     private showPasteTaskDialog(parentReminder: any) {
+        const isRepeatInstance = !!parentReminder?.isRepeatInstance;
         const dialog = new PasteTaskDialog({
             plugin: this.plugin,
             parentTask: parentReminder,
+            defaultSetDate: isRepeatInstance ? true : undefined,
+            defaultDateStr: isRepeatInstance ? parentReminder.date : undefined,
             onSuccess: (totalCount) => {
                 showMessage(`${totalCount} 个子任务已创建`);
                 this.loadReminders();

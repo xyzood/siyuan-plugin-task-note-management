@@ -787,7 +787,10 @@ export class SubtasksDialog {
         const maxSort = siblingSubtasks.reduce((max, t) => Math.max(max, t.sort || 0), 0);
         const newSort = maxSort + 1000;
 
-        const dialog = new QuickReminderDialog(undefined, undefined, async (newReminder) => {
+        const { instanceDate } = this.parseInstanceParentId(parentIdForNew);
+        const defaultDate = instanceDate || undefined;
+
+        const dialog = new QuickReminderDialog(defaultDate, undefined, async (newReminder) => {
             if (!newReminder) return;
 
             // 设置 sort 值为最大值+1000，确保放在最后
@@ -1333,6 +1336,7 @@ export class SubtasksDialog {
     // 显示粘贴新建子任务对话框
     private async showPasteSubtaskDialog() {
         let parentTask: any = null;
+        let instanceDate: string | undefined = undefined;
         
         if (!this.isTempMode) {
             const reminderData = await this.plugin.loadReminderData() || {};
@@ -1344,6 +1348,7 @@ export class SubtasksDialog {
                 const potentialDate = this.parentId.substring(lastUnderscoreIndex + 1);
                 if (/^\d{4}-\d{2}-\d{2}$/.test(potentialDate)) {
                     targetParentId = this.parentId.substring(0, lastUnderscoreIndex);
+                    instanceDate = potentialDate;
                 }
             }
             
@@ -1375,6 +1380,8 @@ export class SubtasksDialog {
             projectId: parentTask?.projectId,
             customGroupId: parentTask?.customGroupId,
             defaultStatus: parentTask?.kanbanStatus || 'todo',
+            defaultSetDate: parentTask?.isRepeatInstance ? true : undefined,
+            defaultDateStr: parentTask?.isRepeatInstance ? instanceDate : undefined,
             isTempMode: this.isTempMode,
             onTasksCreated: (createdTasks) => {
                 // 临时模式：将创建的任务添加到本地数组
