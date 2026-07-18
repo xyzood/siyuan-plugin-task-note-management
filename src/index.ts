@@ -3446,18 +3446,23 @@ export default class ReminderPlugin extends Plugin {
             });
         }
 
-        // 2. 如果包含列表或列表项，显示识别/不识别两个批量选项
-        if (hasListOrListItem) {
+        // 2. 如果包含列表或列表项，且是多选或单选块有子项，才显示识别/不识别批量选项
+        const singleSelectedHasChildren =
+            blockElements.length === 1 && this.hasListChildren(blockElements[0]);
+        if (hasListOrListItem && (blockElements.length > 1 || singleSelectedHasChildren)) {
             const hierarchicalCount = this.getHierarchicalCount(blockElements);
             const flatCount = this.getFlatCount(blockElements);
 
-            detail.menu.addItem({
-                iconHTML: "⏰",
-                label: `批量设置任务（识别子任务）(${hierarchicalCount}个块)`,
-                click: async () => {
-                    await this.handleHierarchicalBatchCreateFromSelection(blockElements);
-                }
-            });
+            // 只有存在嵌套子项时，才显示“识别子任务”选项
+            if (hierarchicalCount > flatCount) {
+                detail.menu.addItem({
+                    iconHTML: "⏰",
+                    label: `批量设置任务（识别子任务）(${hierarchicalCount}个块)`,
+                    click: async () => {
+                        await this.handleHierarchicalBatchCreateFromSelection(blockElements);
+                    }
+                });
+            }
 
             detail.menu.addItem({
                 iconHTML: "⏰",
@@ -3522,11 +3527,31 @@ export default class ReminderPlugin extends Plugin {
 
     }
 
+    private hasListChildren(blockElement: HTMLElement): boolean {
+        const dataType = blockElement?.getAttribute("data-type");
+        if (dataType === "NodeList") {
+            return blockElement.querySelector('[data-type="NodeListItem"]') !== null;
+        }
+        if (dataType === "NodeListItem") {
+            return blockElement.querySelector('[data-type="NodeList"]') !== null;
+        }
+        return false;
+    }
+
+    private isTaskListElement(blockElement: HTMLElement): boolean {
+        const dataType = blockElement?.getAttribute("data-type");
+        if (dataType === "NodeList") {
+            return blockElement.getAttribute("data-subtype") === "t";
+        }
+        if (dataType === "NodeListItem") {
+            return blockElement.getAttribute("data-subtype") === "t"
+                || blockElement.querySelector(':scope > .protyle-action--task') !== null;
+        }
+        return false;
+    }
+
     private shouldShowTaskListStatusMenu(blockElements: HTMLElement[]): boolean {
-        return blockElements.some((blockElement) => {
-            const dataType = blockElement?.getAttribute("data-type");
-            return dataType === "NodeList" || dataType === "NodeListItem";
-        });
+        return blockElements.some((blockElement) => this.isTaskListElement(blockElement));
     }
 
     private createTaskListStatusSubmenu(blockElements: HTMLElement[]): any[] {
