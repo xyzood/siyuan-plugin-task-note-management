@@ -13,6 +13,7 @@ import { QuickReminderDialog } from "./QuickReminderDialog";
 import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
 import { CategoryManager, Category } from "../utils/categoryManager";
 import { confirmDialog } from "../libs/dialog";
+import { showAddTaskReminderTimeDialog } from "./dialog/AddTaskReminderTimeDialog";
 import { ProjectManager } from "../utils/projectManager";
 import { StatusManager } from "../utils/statusManager";
 import { CategoryManageDialog } from "./CategoryManageDialog";
@@ -3793,7 +3794,15 @@ export class CalendarView {
                 iconHTML: "⏰",
                 label: i18n("addReminderTime") || "添加提醒时间",
                 click: () => {
-                    this.addCurrentTimeReminder(calendarEvent);
+                    showAddTaskReminderTimeDialog(
+                        this.plugin,
+                        calendarEvent.extendedProps.originalId || calendarEvent.id,
+                        reminderTimeDate || calendarEvent.extendedProps.date,
+                        () => {
+                            this.refreshEvents();
+                            window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
+                        }
+                    );
                 }
             });
 
@@ -5674,54 +5683,7 @@ export class CalendarView {
         }
     }
 
-    private async addCurrentTimeReminder(event: any) {
-        try {
-            const reminderData = await getAllReminders(this.plugin);
-            const reminderId = event.extendedProps.originalId || event.id;
-            const reminder = reminderData[reminderId];
 
-            if (!reminder) {
-                showMessage(i18n("reminderNotExist"));
-                return;
-            }
-
-            const now = new Date();
-            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-            if (!reminder.reminderTimes) {
-                reminder.reminderTimes = [];
-            }
-
-            // Check for duplicates
-            const hasDuplicate = reminder.reminderTimes.some((rt: any) => {
-                const rtTime = typeof rt === 'string' ? rt.trim() : rt?.time?.trim();
-                return rtTime === timeStr;
-            });
-
-            if (hasDuplicate) {
-                showMessage(i18n("reminderTimeExists") || "已存在该提醒时间");
-                return;
-            }
-
-            reminder.reminderTimes.push({ time: timeStr });
-
-            await saveReminders(this.plugin, reminderData);
-            if (this.plugin?.updateMobileNotification) {
-                try {
-                    await this.plugin.updateMobileNotification(reminder);
-                } catch (e) {
-                    console.warn('添加当前时间提醒后更新移动端通知失败:', e);
-                }
-            }
-
-            await this.refreshEvents();
-            window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
-            showMessage(i18n("operationSuccessful") || "添加成功");
-        } catch (error) {
-            console.error('添加当前时间提醒失败:', error);
-            showMessage(i18n("operationFailed"));
-        }
-    }
 
     private startAllDayDragTracking(info: any) {
         const event = info.event;

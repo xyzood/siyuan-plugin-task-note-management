@@ -38,6 +38,7 @@ import { ProjectDialog } from "./ProjectDialog";
 import { showProjectStatsDialog } from "./dialog/ProjectStatsDialog";
 import { showManageGroupsDialog } from "./dialog/ManageGroupsDialog";
 import { showManageKanbanStatusesDialog } from "./dialog/ManageStatusesDialog";
+import { showAddTaskReminderTimeDialog } from "./dialog/AddTaskReminderTimeDialog";
 import { showManageTagsDialog } from "./dialog/ManageTagsDialog";
 import { showManageMilestonesDialog } from "./dialog/ManageMilestonesDialog";
 import { getFrontend, getBackend } from "siyuan";
@@ -9228,6 +9229,23 @@ export class ProjectKanbanView {
                 iconHTML: "📆",
                 label: i18n('quickReschedule') || '快速调整日期',
                 submenu: createQuickDateMenuItems(task, !!task.isRepeatInstance)
+            });
+
+            // 添加提醒时间
+            menu.addItem({
+                iconHTML: "⏰",
+                label: i18n("addReminderTime") || "添加提醒时间",
+                click: () => {
+                    showAddTaskReminderTimeDialog(
+                        this.plugin,
+                        task.isRepeatInstance ? task.originalId : task.id,
+                        task.date,
+                        async () => {
+                            this.dispatchReminderUpdate(true);
+                            await this.loadTasks();
+                        }
+                    );
+                }
             });
 
             // 设置优先级子菜单

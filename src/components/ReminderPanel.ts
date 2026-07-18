@@ -8,6 +8,7 @@ import { QuickReminderDialog } from "./QuickReminderDialog";
 import { CategoryManager } from "../utils/categoryManager";
 import { CategoryManageDialog } from "./CategoryManageDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
+import { showAddTaskReminderTimeDialog } from "./dialog/AddTaskReminderTimeDialog";
 import { i18n } from "../pluginInstance";
 import { TaskRenderer } from "./render/TaskRenderer";
 import { generateRepeatInstances, generateRepeatInstancesWithFutureGuarantee, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, removeRepeatInstance, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
@@ -7582,6 +7583,23 @@ export class ReminderPanel {
                     submenu: this.createQuickDateContextMenuItems(reminder, true)
                 });
 
+                // 添加提醒时间
+                menu.addItem({
+                    iconHTML: "⏰",
+                    label: i18n("addReminderTime") || "添加提醒时间",
+                    click: () => {
+                        showAddTaskReminderTimeDialog(
+                            this.plugin,
+                            reminder.originalId,
+                            reminder.date,
+                            async () => {
+                                await this.loadReminders();
+                                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
+                            }
+                        );
+                    }
+                });
+
                 // 重复实例右键修改优先级/分类时，统一修改原始任务（影响所有实例）
                 menu.addItem({
                     iconHTML: "🎯",
@@ -7715,6 +7733,23 @@ export class ReminderPanel {
                     iconHTML: "📆",
                     label: i18n("quickReschedule") || "快速调整日期",
                     submenu: this.createQuickDateContextMenuItems(reminder, false)
+                });
+
+                // 添加提醒时间
+                menu.addItem({
+                    iconHTML: "⏰",
+                    label: i18n("addReminderTime") || "添加提醒时间",
+                    click: () => {
+                        showAddTaskReminderTimeDialog(
+                            this.plugin,
+                            reminder.id,
+                            reminder.date,
+                            async () => {
+                                await this.loadReminders();
+                                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
+                            }
+                        );
+                    }
                 });
                 menu.addItem({
                     iconHTML: "🎯",
