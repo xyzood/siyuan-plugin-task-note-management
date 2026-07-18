@@ -2920,7 +2920,7 @@ export class CalendarView {
 
     private getReminderTimeEventIndex(calendarEvent: any): number {
         const eventId = String(calendarEvent?.id || '');
-        const matched = eventId.match(/__reminder__(\d+)$/);
+        const matched = eventId.match(/__reminder__(\d+)(?:_d\d+)?$/);
         if (!matched) return -1;
         return Number.parseInt(matched[1], 10);
     }
@@ -3188,11 +3188,19 @@ export class CalendarView {
                     throw new Error('提醒时间索引不存在');
                 }
 
-                resolvedReminderTimes[reminderIndex] = {
-                    ...resolvedReminderTimes[reminderIndex],
-                    time: `${startDateStr}T${startTimeStr}`,
-                    endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
-                };
+                if (resolvedReminderTimes[reminderIndex].everyDay) {
+                    resolvedReminderTimes[reminderIndex] = {
+                        ...resolvedReminderTimes[reminderIndex],
+                        time: startTimeStr,
+                        endTime: endTimeStr || undefined
+                    };
+                } else {
+                    resolvedReminderTimes[reminderIndex] = {
+                        ...resolvedReminderTimes[reminderIndex],
+                        time: `${startDateStr}T${startTimeStr}`,
+                        endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
+                    };
+                }
 
                 patchRepeatInstanceState(originalReminder, instanceDate, { reminderTimes: resolvedReminderTimes });
 
@@ -3215,11 +3223,19 @@ export class CalendarView {
                     throw new Error('提醒时间索引不存在');
                 }
 
-                reminderTimes[reminderIndex] = {
-                    ...reminderTimes[reminderIndex],
-                    time: `${startDateStr}T${startTimeStr}`,
-                    endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
-                };
+                if (reminderTimes[reminderIndex].everyDay) {
+                    reminderTimes[reminderIndex] = {
+                        ...reminderTimes[reminderIndex],
+                        time: startTimeStr,
+                        endTime: endTimeStr || undefined
+                    };
+                } else {
+                    reminderTimes[reminderIndex] = {
+                        ...reminderTimes[reminderIndex],
+                        time: `${startDateStr}T${startTimeStr}`,
+                        endTime: endTimeStr ? `${endDateStr}T${endTimeStr}` : undefined
+                    };
+                }
 
                 reminder.reminderTimes = reminderTimes;
                 await saveReminders(this.plugin, reminderData);
