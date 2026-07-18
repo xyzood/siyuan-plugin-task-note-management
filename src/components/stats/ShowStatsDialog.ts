@@ -1,6 +1,6 @@
 import { Dialog, showMessage } from "siyuan";
 
-type StatsTab = "pomodoro" | "task" | "habit" | "summary";
+type StatsTab = "pomodoro" | "task" | "habit" | "summary" | "project";
 
 let activeDialog: Dialog | null = null;
 let activeComponent: any = null;

@@ -3,20 +3,21 @@
     import TaskStatsTab from "./stats/TaskStatsTab.svelte";
     import HabitStatsTab from "./stats/HabitStatsTab.svelte";
     import TaskSummaryTab from "./stats/TaskSummaryTab.svelte";
+    import ProjectStatsTab from "./stats/ProjectStatsTab.svelte";
     import { setLastStatsMode } from "./stats/statsMode";
 
     export let plugin: any;
-    export let initialTab: "pomodoro" | "task" | "habit" | "summary" = "pomodoro";
+    export let initialTab: "pomodoro" | "task" | "habit" | "summary" | "project" = "pomodoro";
     export let calendar: any = null;
 
-    let activeTab: "pomodoro" | "task" | "habit" | "summary" = initialTab;
+    let activeTab: "pomodoro" | "task" | "habit" | "summary" | "project" = initialTab;
 
-    const switchTab = (tab: "pomodoro" | "task" | "habit" | "summary") => {
+    const switchTab = (tab: "pomodoro" | "task" | "habit" | "summary" | "project") => {
         activeTab = tab;
         setLastStatsMode(tab);
     };
 
-    export const setActiveTab = (tab: "pomodoro" | "task" | "habit" | "summary") => {
+    export const setActiveTab = (tab: "pomodoro" | "task" | "habit" | "summary" | "project") => {
         switchTab(tab);
     };
 </script>
@@ -26,6 +27,7 @@
         <button class:active={activeTab === "pomodoro"} on:click={() => switchTab("pomodoro")}>🍅 番茄统计</button>
         <button class:active={activeTab === "task"} on:click={() => switchTab("task")}>✅ 任务统计</button>
         <button class:active={activeTab === "summary"} on:click={() => switchTab("summary")}>📝 任务摘要</button>
+        <button class:active={activeTab === "project"} on:click={() => switchTab("project")}>🎯 项目统计</button>
         <button class:active={activeTab === "habit"} on:click={() => switchTab("habit")}>📅 习惯统计</button>
     </div>
 
@@ -38,6 +40,8 @@
             <HabitStatsTab {plugin} />
         {:else if activeTab === "summary"}
             <TaskSummaryTab {plugin} {calendar} />
+        {:else if activeTab === "project"}
+            <ProjectStatsTab {plugin} />
         {/if}
     </div>
 </div>

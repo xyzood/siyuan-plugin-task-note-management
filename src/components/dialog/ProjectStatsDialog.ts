@@ -3,7 +3,7 @@ import { i18n } from "../../pluginInstance";
 import { ProjectKanbanView } from "../ProjectKanbanView";
 import { getAllReminders } from "../../utils/icsSubscription";
 
-function parseTitle(title: string): { emoji: string; text: string } {
+export function parseTitle(title: string): { emoji: string; text: string } {
     if (!title) return { emoji: '', text: '' };
     const emojiRegex = /^([\u{1F1E6}-\u{1F1FF}]{2}|(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|[\u{1F3FB}-\u{1F3FF}]|\u200D\p{Extended_Pictographic})*)/u;
     const match = title.match(emojiRegex);
