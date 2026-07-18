@@ -3742,6 +3742,18 @@ export class CalendarView {
                         this.toggleEventCompleted(calendarEvent, 'today', targetDate);
                     }
                 });
+
+                const todayStr = getLogicalDateString();
+                if (targetDate === todayStr) {
+                    const isIgnoredToday = reminder && Array.isArray(reminder.todayIgnored) && reminder.todayIgnored.includes(todayStr);
+                    menu.addItem({
+                        iconHTML: isIgnoredToday ? "↩️" : "⭕",
+                        label: isIgnoredToday ? (i18n("undoDailyDessertIgnore") || "取消今日忽略") : (i18n("todayIgnored") ? i18n("todayIgnored").replace('⭕ ', '') : "今日忽略"),
+                        click: () => {
+                            this.toggleEventTodayIgnored(calendarEvent, todayStr);
+                        }
+                    });
+                }
             } else {
                 const isGloballyCompleted = calendarEvent.extendedProps.completed;
                 menu.addItem({
@@ -5779,7 +5791,37 @@ export class CalendarView {
         }
     }
 
+    private async toggleEventTodayIgnored(event: any, targetDate: string) {
+        try {
+            const reminderData = await getAllReminders(this.plugin);
+            const reminderId = event.extendedProps?.originalId || event.id;
+            const reminder = reminderData[reminderId];
+            if (reminder) {
+                if (!Array.isArray(reminder.todayIgnored)) {
+                    reminder.todayIgnored = [];
+                }
+                const isCurrentlyIgnored = reminder.todayIgnored.includes(targetDate);
+                if (isCurrentlyIgnored) {
+                    reminder.todayIgnored = reminder.todayIgnored.filter((d: string) => d !== targetDate);
+                } else {
+                    reminder.todayIgnored.push(targetDate);
+                }
+                await saveReminders(this.plugin, reminderData);
 
+                const blockId = reminder.blockId;
+                if (blockId) {
+                    try { await updateBindBlockAtrrs(blockId, this.plugin); } catch (e) { /* ignore */ }
+                }
+
+                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: 'calendar' } }));
+                await this.refreshEvents();
+                showMessage(isCurrentlyIgnored ? (i18n("undoDailyDessertIgnore") || "已取消今日忽略") : "今日已忽略该任务");
+            }
+        } catch (e) {
+            console.error("切换今日忽略失败", e);
+            showMessage(i18n("operationFailed"));
+        }
+    }
 
     private startAllDayDragTracking(info: any) {
         const event = info.event;
@@ -6863,8 +6905,8 @@ export class CalendarView {
                     if (isResize) {
                         if (splitIndex === 0) {
                             // First block: only allow resizing start date
-                            const oldEnd = info.oldEvent.end;
-                            const newEnd = info.event.end;
+                            const oldEnd = info.oldEvent.end || new Date(info.oldEvent.start.getTime() + 24 * 60 * 60 * 1000);
+                            const newEnd = info.event.end || new Date(info.event.start.getTime() + 24 * 60 * 60 * 1000);
                             if (oldEnd && newEnd && oldEnd.getTime() !== newEnd.getTime()) {
                                 info.revert();
                                 return;
@@ -6891,8 +6933,8 @@ export class CalendarView {
                                 return;
                             }
 
-                            const oldEnd = info.oldEvent.end;
-                            const newEnd = info.event.end;
+                            const oldEnd = info.oldEvent.end || new Date(info.oldEvent.start.getTime() + 24 * 60 * 60 * 1000);
+                            const newEnd = info.event.end || new Date(info.event.start.getTime() + 24 * 60 * 60 * 1000);
                             const deltaMs = newEnd.getTime() - oldEnd.getTime();
 
                             if (originalProps.originalEndDate) {
@@ -7855,8 +7897,9 @@ export class CalendarView {
                     if (isCrossDay) {
                         const hasSkipSettings = getReminderSkipWeekendsEffective(reminder, this.reminderSkipSettings) ||
                                                 getReminderSkipHolidaysEffective(reminder, this.reminderSkipSettings);
+                        const hasIgnoredDates = Array.isArray(reminder.todayIgnored) && reminder.todayIgnored.length > 0;
 
-                        if (hasSkipSettings) {
+                        if (hasSkipSettings || hasIgnoredDates) {
                             const activeBlocks = this.getActiveBlocks(startDateStr, endDateStr, reminder, startDate, endDate);
                             const hasBefore = startDateStr < startDate;
                             const hasAfter = endDateStr > endDate;
@@ -7889,17 +7932,17 @@ export class CalendarView {
                                 this.addEventToList(events, blockReminder, reminder.id, false);
                             }
                         } else {
-                            // 没有勾选跳过周末或节假日，直接渲染为单个连续块，不进行分割与显示锯齿
+                            // 没有勾选跳过周末或节假日，且没有忽略日期，直接渲染为单个连续块，不进行分割与显示锯齿
                             this.addEventToList(events, reminder, reminder.id, false);
                         }
                     } else {
                         // Check if the single-day task itself is skipped
-                        const isSkipped = startDateStr && shouldSkipReminderOnDate(
+                        const isSkipped = startDateStr && (shouldSkipReminderOnDate(
                             reminder,
                             startDateStr,
                             this.reminderSkipSettings || this.plugin?.settings,
                             this.holidays as HolidayData
-                        );
+                        ) || (Array.isArray(reminder.todayIgnored) && reminder.todayIgnored.includes(startDateStr)));
                         if (!isSkipped) {
                             this.addEventToList(events, reminder, reminder.id, false);
                         }
@@ -9121,7 +9164,7 @@ export class CalendarView {
                         dateStr,
                         this.reminderSkipSettings || this.plugin?.settings,
                         this.holidays as HolidayData
-                    );
+                    ) || (Array.isArray(reminder.todayIgnored) && reminder.todayIgnored.includes(dateStr));
                     if (isSkipped) continue;
 
                     // 如果是跨天事件且在该日期已完成，依然显示提醒时间，只不过提醒时间变暗
@@ -9224,7 +9267,7 @@ export class CalendarView {
                 parsed.date,
                 this.reminderSkipSettings || this.plugin?.settings,
                 this.holidays as HolidayData
-            );
+            ) || (Array.isArray(reminder.todayIgnored) && reminder.todayIgnored.includes(parsed.date));
             if (isSkipped) return;
 
             const startDate = new Date(`${parsed.date}T${parsed.time}:00`);
@@ -9332,7 +9375,7 @@ export class CalendarView {
                 currentDateStr,
                 this.reminderSkipSettings || this.plugin?.settings,
                 this.holidays as HolidayData
-            );
+            ) || (Array.isArray(reminder.todayIgnored) && reminder.todayIgnored.includes(currentDateStr));
 
             if (!isSkipped) {
                 if (currentBlockStart === null) {
