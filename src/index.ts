@@ -42,7 +42,7 @@ import { performDataMigration } from "./utils/dataMigration";
 import { initIcsSync, initIcsSubscriptionSync, handleIcsSyncSettingsChange, cleanupIcsSync } from "./utils/icsSync";
 import { cleanReminderItem } from "./utils/reminderLoadUtils";
 import { TaskNoteDOMManager } from "./components/render/taskNoteDOM";
-import { addDaysToDate, generateRepeatInstances, getDaysDifference, getRelativeReminderWindow } from "./utils/repeatUtils";
+import { addDaysToDate, generateRepeatInstances, getDaysDifference, getRelativeReminderWindow, resolveRepeatReminderTimes } from "./utils/repeatUtils";
 import { getDockItemSelector, setDockBadgeByType as applyDockBadgeByType } from "./utils/addDockBadge";
 import { shouldTreatStartDateOnlyAsOverdue } from "./utils/startDateOverdue";
 import {
@@ -4620,9 +4620,13 @@ export default class ReminderPlugin extends Plugin {
                         originalId: inst.originalId || reminderObj.id
                     }));
 
+                    const processedInstanceIds = new Set<string>();
+
                     for (const instance of instances) {
-                        const originalInstanceDate = (instance.instanceId && instance.instanceId.includes('_'))
-                            ? instance.instanceId.split('_').pop()
+                        const instanceId = instance.instanceId || instance.id;
+                        processedInstanceIds.add(instanceId);
+                        const originalInstanceDate = (instanceId && instanceId.includes('_'))
+                            ? instanceId.split('_').pop()
                             : instance.date;
                         // 重复实例已完成（含每日完成标记）时，不应再触发时间提醒
                         if (instance.completed || (originalInstanceDate && reminderObj.dailyCompletions?.[originalInstanceDate])) {
@@ -4635,13 +4639,13 @@ export default class ReminderPlugin extends Plugin {
                         // 检查实例是否需要提醒
                         // 时间提醒
                         if (instance.time) {
-                            const notifyKey = `${instance.instanceId}_${today}_${instance.time}_time`;
+                            const notifyKey = `${instanceId}_${today}_${instance.time}_time`;
                             if (!this.notifiedReminders.has(notifyKey) && this.shouldNotifyNow(instance, today, currentTime, 'time')) {
                                 // 二次检查持久化记录
                                 if (await this.hasReminderNotified(notifyKey)) {
                                     this.notifiedReminders.set(notifyKey, true);
                                 } else {
-                                    console.debug('checkTimeReminders - triggering repeat instance time reminder', { id: instance.instanceId, date: instance.date, time: instance.time });
+                                    console.debug('checkTimeReminders - triggering repeat instance time reminder', { id: instanceId, date: instance.date, time: instance.time });
                                     await this.showTimeReminder(instance, 'time');
                                     this.notifiedReminders.set(notifyKey, true);
                                     await this.markReminderNotified(notifyKey);
@@ -4662,13 +4666,13 @@ export default class ReminderPlugin extends Plugin {
                                 const reminderNum = this.timeStringToNumber(rt);
 
                                 // 只检测当前分钟，不检测过期提醒
-                                const notifyKey = `${instance.instanceId}_${today}_${rt}_reminderTimes`;
+                                const notifyKey = `${instanceId}_${today}_${rt}_reminderTimes`;
                                 if (!this.notifiedReminders.has(notifyKey) && currentNum === reminderNum) {
                                     // 二次检查持久化记录
                                     if (await this.hasReminderNotified(notifyKey)) {
                                         this.notifiedReminders.set(notifyKey, true);
                                     } else {
-                                        console.debug('checkTimeReminders - triggering repeat instance reminderTimes reminder', { id: instance.instanceId, rt });
+                                        console.debug('checkTimeReminders - triggering repeat instance reminderTimes reminder', { id: instanceId, rt });
                                         await this.showTimeReminder(instance, 'reminderTimes', rt);
                                         this.notifiedReminders.set(notifyKey, true);
                                         await this.markReminderNotified(notifyKey);
@@ -4676,6 +4680,88 @@ export default class ReminderPlugin extends Plugin {
                                 }
                             }
                         }
+                    }
+
+                    // 额外扫描 repeat.instances：处理实例级自定义提醒中的“指定日期”（可前可后），
+                    // 以及“提前 x 天”等相对提醒。只要实例未完成，即使实例发生日不是今天，也应在提醒日当天触发。
+                    try {
+                        const instStates = reminderObj.repeat?.instances || {};
+                        for (const [origKey, state] of Object.entries(instStates)) {
+                            try {
+                                if (!state || typeof state !== 'object') continue;
+                                const stateObj = state as any;
+                                if (stateObj.deleted || stateObj.date === null) continue;
+                                if (stateObj.completed) continue;
+                                if (reminderObj.dailyCompletions?.[origKey]) continue;
+                                if (!stateObj.reminderTimes || !Array.isArray(stateObj.reminderTimes) || stateObj.reminderTimes.length === 0) continue;
+
+                                const instanceId = `${reminderObj.id}_${origKey}`;
+                                if (processedInstanceIds.has(instanceId)) continue;
+
+                                const instanceDate = stateObj.date || origKey;
+                                const instanceEndDate = stateObj.endDate !== undefined
+                                    ? stateObj.endDate
+                                    : (reminderObj.endDate && reminderObj.date
+                                        ? addDaysToDate(instanceDate, getDaysDifference(reminderObj.date, reminderObj.endDate))
+                                        : undefined);
+
+                                const resolvedTimes = resolveRepeatReminderTimes(
+                                    stateObj.reminderTimes,
+                                    instanceDate,
+                                    instanceEndDate,
+                                    reminderObj.date,
+                                    reminderObj.endDate
+                                );
+                                if (!resolvedTimes || resolvedTimes.length === 0) continue;
+
+                                const matchingItems = resolvedTimes.filter((rt: any) => {
+                                    const parsed = this.extractDateAndTime(rt.time);
+                                    return parsed.date === today;
+                                });
+                                if (matchingItems.length === 0) continue;
+
+                                const constructed: any = {
+                                    ...reminderObj,
+                                    ...stateObj,
+                                    id: instanceId,
+                                    instanceId,
+                                    originalId: reminderObj.id,
+                                    isRepeatInstance: true,
+                                    date: instanceDate,
+                                    endDate: instanceEndDate,
+                                    reminderTimes: matchingItems
+                                };
+                                if (!this.canReminderNotifyOnDate(constructed, today, holidayData)) continue;
+
+                                for (const rtItem of matchingItems) {
+                                    const rt = typeof rtItem === 'string' ? rtItem : rtItem.time;
+                                    const note = typeof rtItem === 'string' ? '' : rtItem.note;
+
+                                    const parsed = this.extractDateAndTime(rt);
+                                    if (parsed.date && parsed.date !== today) continue;
+
+                                    const currentNum = this.timeStringToNumber(currentTime);
+                                    const reminderNum = this.timeStringToNumber(rt);
+
+                                    const notifyKey = `${instanceId}_${today}_${rt}_reminderTimes`;
+                                    if (!this.notifiedReminders.has(notifyKey) && currentNum === reminderNum) {
+                                        if (await this.hasReminderNotified(notifyKey)) {
+                                            this.notifiedReminders.set(notifyKey, true);
+                                        } else {
+                                            console.debug('checkTimeReminders - triggering repeat instance reminderTimes reminder (state scan)', { id: instanceId, rt });
+                                            const tempReminder = { ...constructed, note: note ? (constructed.note ? constructed.note + '\n' + note : note) : constructed.note };
+                                            await this.showTimeReminder(tempReminder, 'reminderTimes', rt);
+                                            this.notifiedReminders.set(notifyKey, true);
+                                            await this.markReminderNotified(notifyKey);
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('扫描 repeat.instances 自定义提醒时出错', e);
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('扫描重复实例自定义提醒时发生错误:', e);
                     }
                 }
             }
