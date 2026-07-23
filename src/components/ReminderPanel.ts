@@ -1724,12 +1724,11 @@ export class ReminderPanel {
     private async buildMilestoneMap() {
         this.milestoneMap.clear();
         try {
-            const { ProjectManager } = await import('../utils/projectManager');
-            const projectManager = ProjectManager.getInstance(this.plugin);
             const projectData = await this.plugin.loadProjectData() || {};
 
             for (const projectId in projectData) {
                 const project = projectData[projectId];
+                if (!project || typeof project !== 'object') continue;
                 const projectName = project.name || projectId;
 
                 // 1. 默认里程碑
@@ -1738,7 +1737,7 @@ export class ReminderPanel {
                 });
 
                 // 2. 分组里程碑
-                const projectGroups = await projectManager.getProjectCustomGroups(projectId);
+                const projectGroups = project.customGroups || [];
                 projectGroups.forEach((group: any) => {
                     (group.milestones || []).forEach((ms: any) => {
                         this.milestoneMap.set(ms.id, { name: ms.name, icon: ms.icon, projectId, projectName: `${projectName} - ${group.name}`, blockId: ms.blockId });
@@ -5690,9 +5689,10 @@ export class ReminderPanel {
 
         this.remindersContainer.addEventListener('dragover', (e) => {
             const types = e.dataTransfer?.types || [];
-            const isSiYuanDrag = Array.from(types).some(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER)) ||
-                types.includes(Constants.SIYUAN_DROP_FILE) ||
-                types.includes(Constants.SIYUAN_DROP_TAB);
+            const isSiYuanDrag = Array.from(types).some(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER) || t.includes('siyuan')) ||
+                types.includes(Constants.SIYUAN_DROP_FILE) || types.includes('application/vnd.siyuan-file') ||
+                types.includes(Constants.SIYUAN_DROP_TAB) || types.includes('application/vnd.siyuan-tab') ||
+                !!(window as any).siyuan?.dragElement;
             const isInternalDrag = types.includes('application/x-reminder');
 
             const isAnyDrag = this.isDragging || isInternalDrag || isSiYuanDrag;
@@ -5725,15 +5725,14 @@ export class ReminderPanel {
             this.remindersContainer.classList.remove('drag-over-active');
             this.stopDragScroll();
 
-            // 获取拖拽目标信息（用于排序）
+            // 获取拖拽目标信息（用于排序或设为子任务）
             const targetElement = (e.target as HTMLElement).closest('.reminder-item') as HTMLElement;
-            let targetInfo: { id: string, isBefore: boolean } | undefined = undefined;
+            let targetInfo: { id: string, isBefore: boolean, dropType: 'before' | 'after' | 'set-parent' } | undefined = undefined;
             if (targetElement) {
-                const rect = targetElement.getBoundingClientRect();
-                const isBefore = e.clientY < rect.top + rect.height / 2;
                 const targetId = targetElement.dataset.reminderId;
                 if (targetId) {
-                    targetInfo = { id: targetId, isBefore };
+                    const dropType = this.getDropType(targetElement, e);
+                    targetInfo = { id: targetId, isBefore: dropType === 'before', dropType };
                 }
             }
 
@@ -5835,26 +5834,57 @@ export class ReminderPanel {
                 return;
             }
 
-            // 处理思源内部拖拽 (Gutter, File, Tab)
-            const types = e.dataTransfer?.types || [];
-            if (Array.from(types).some(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER)) ||
-                types.includes(Constants.SIYUAN_DROP_FILE) ||
-                types.includes(Constants.SIYUAN_DROP_TAB)) {
+            const dropStartTime = performance.now();
+            console.log('🚀 [TaskNote Drag] 1. drop event fired!', {
+                types: Array.from(e.dataTransfer?.types || []),
+                dragElement: (window as any).siyuan?.dragElement
+            });
 
+            // 处理思源内部拖拽 (Gutter, File, Tab, DOM DragElement)
+            const types = Array.from(e.dataTransfer?.types || []);
+            const isSiYuanDrag = types.some(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER) || t.includes('siyuan')) ||
+                types.includes(Constants.SIYUAN_DROP_FILE) || types.includes('application/vnd.siyuan-file') ||
+                types.includes(Constants.SIYUAN_DROP_TAB) || types.includes('application/vnd.siyuan-tab') ||
+                !!(window as any).siyuan?.dragElement;
+
+            console.log('🚀 [TaskNote Drag] 2. isSiYuanDrag =', isSiYuanDrag);
+
+            if (isSiYuanDrag) {
                 e.preventDefault();
                 const dt = e.dataTransfer;
                 let blockIds: string[] = [];
 
-                // 解析拖拽数据
-                const gutterType = Array.from(types).find(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER));
-                if (gutterType) {
-                    const data = dt.getData(gutterType) || dt.getData(Constants.SIYUAN_DROP_GUTTER);
-                    if (data) {
-                        try {
-                            const parsed = JSON.parse(data);
-                            if (Array.isArray(parsed)) blockIds = parsed.map(item => item.id);
-                            else if (parsed && parsed.id) blockIds = [parsed.id];
-                        } catch (e) {
+                // 优先直接从 window.siyuan.dragElement 获取（当前 DOM 块拖拽 100% 匹配，0 毫秒延迟）
+                const dragEle = (window as any).siyuan?.dragElement as HTMLElement | undefined;
+                if (dragEle) {
+                    const realBlock = dragEle.closest('.protyle-wysiwyg [data-node-id]:not(.protyle-attr)') ||
+                                      dragEle.closest('[data-node-id]:not(.protyle-attr)');
+                    const bid = realBlock?.getAttribute('data-node-id') || dragEle.getAttribute('data-node-id') || (dragEle as any).dataset?.nodeId || (dragEle as any).dataset?.id;
+                    if (bid) {
+                        blockIds = [bid];
+                    }
+                }
+
+                // 解析拖拽数据 (若 dragElement 未能拿到)
+                if (blockIds.length === 0 && dt) {
+                    const gutterType = types.find(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER) || t.includes('siyuan-gutter'));
+                    if (gutterType) {
+                        const data = dt.getData(gutterType) || dt.getData(Constants.SIYUAN_DROP_GUTTER);
+                        if (data) {
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (Array.isArray(parsed)) blockIds = parsed.map(item => item.id);
+                                else if (parsed && parsed.id) blockIds = [parsed.id];
+                            } catch (e) {
+                                const meta = gutterType.replace(Constants.SIYUAN_DROP_GUTTER, '');
+                                const info = meta.split('\u200b');
+                                if (info && info.length >= 3) {
+                                    const idStr = info[2];
+                                    if (idStr) blockIds = idStr.split(',').map(id => id.trim()).filter(id => id && id !== '/');
+                                }
+                            }
+                        } else {
+                            // 尝试从类型字符串解析
                             const meta = gutterType.replace(Constants.SIYUAN_DROP_GUTTER, '');
                             const info = meta.split('\u200b');
                             if (info && info.length >= 3) {
@@ -5862,73 +5892,124 @@ export class ReminderPanel {
                                 if (idStr) blockIds = idStr.split(',').map(id => id.trim()).filter(id => id && id !== '/');
                             }
                         }
-                    } else {
-                        // 尝试从类型字符串解析
-                        const meta = gutterType.replace(Constants.SIYUAN_DROP_GUTTER, '');
-                        const info = meta.split('\u200b');
-                        if (info && info.length >= 3) {
-                            const idStr = info[2];
-                            if (idStr) blockIds = idStr.split(',').map(id => id.trim()).filter(id => id && id !== '/');
+                    } else if (types.includes(Constants.SIYUAN_DROP_FILE) || types.includes('application/vnd.siyuan-file')) {
+                        const ele: HTMLElement = (window as any).siyuan?.dragElement;
+                        if (ele && ele.innerText) {
+                            blockIds = ele.innerText.split(',').map(id => id.trim()).filter(id => id && id !== '/');
                         }
-                    }
-                } else if (types.includes(Constants.SIYUAN_DROP_FILE)) {
-                    const ele: HTMLElement = (window as any).siyuan?.dragElement;
-                    if (ele && ele.innerText) {
-                        blockIds = ele.innerText.split(',').map(id => id.trim()).filter(id => id && id !== '/');
-                    }
-                    if (blockIds.length === 0) {
-                        const data = dt.getData(Constants.SIYUAN_DROP_FILE);
+                        if (blockIds.length === 0) {
+                            const data = dt.getData(Constants.SIYUAN_DROP_FILE) || dt.getData('application/vnd.siyuan-file');
+                            if (data) {
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    if (Array.isArray(parsed)) blockIds = parsed.map(item => item.id || item);
+                                    else if (parsed && parsed.id) blockIds = [parsed.id];
+                                    else if (typeof parsed === 'string') blockIds = [parsed];
+                                } catch (e) { blockIds = [data]; }
+                            }
+                        }
+                    } else if (types.includes(Constants.SIYUAN_DROP_TAB) || types.includes('application/vnd.siyuan-tab')) {
+                        const data = dt.getData(Constants.SIYUAN_DROP_TAB) || dt.getData('application/vnd.siyuan-tab');
                         if (data) {
                             try {
                                 const parsed = JSON.parse(data);
-                                if (Array.isArray(parsed)) blockIds = parsed.map(item => item.id || item);
-                                else if (parsed && parsed.id) blockIds = [parsed.id];
-                                else if (typeof parsed === 'string') blockIds = [parsed];
-                            } catch (e) { blockIds = [data]; }
-                        }
-                    }
-                } else if (types.includes(Constants.SIYUAN_DROP_TAB)) {
-                    const data = dt.getData(Constants.SIYUAN_DROP_TAB);
-                    if (data) {
-                        try {
-                            const parsed = JSON.parse(data);
-                            const extractId = (item: any) => {
-                                if (item.children && item.children.blockId) return item.children.blockId;
-                                if (item.children && item.children.rootId) return item.children.rootId;
-                                if (item.blockId) return item.blockId;
-                                if (item.rootId) return item.rootId;
-                                return item.id;
-                            };
+                                const extractId = (item: any) => {
+                                    if (item.children && item.children.blockId) return item.children.blockId;
+                                    if (item.children && item.children.rootId) return item.children.rootId;
+                                    if (item.blockId) return item.blockId;
+                                    if (item.rootId) return item.rootId;
+                                    return item.id;
+                                };
 
-                            if (Array.isArray(parsed)) {
-                                blockIds = parsed.map(extractId).filter(id => id);
-                            } else if (parsed) {
-                                const bid = extractId(parsed);
-                                if (bid) blockIds = [bid];
-                            }
+                                if (Array.isArray(parsed)) {
+                                    blockIds = parsed.map(extractId).filter(id => id);
+                                } else if (parsed) {
+                                    const bid = extractId(parsed);
+                                    if (bid) blockIds = [bid];
+                                }
 
-                            if (blockIds.length === 0 && typeof parsed === 'string') {
-                                blockIds = [parsed];
+                                if (blockIds.length === 0 && typeof parsed === 'string') {
+                                    blockIds = [parsed];
+                                }
+                            } catch (e) {
+                                blockIds = [data];
                             }
-                        } catch (e) {
-                            blockIds = [data];
                         }
                     }
                 }
 
+                console.log('🚀 [TaskNote Drag] 3. resolved blockIds =', blockIds);
+
                 if (blockIds.length > 0) {
-                    this.showLoadingDialog(i18n('refreshingIndex') || '刷新索引中...');
-                    try {
-                        await refreshSql(); // 刷新 SQL 索引，确保新创建的块内容及时更新
-                        for (const bid of blockIds) {
-                            await this.addItemByBlockId(bid, targetInfo);
+                    const optStartTime = performance.now();
+                    // 1. 纯同步极速乐观渲染：0 毫秒延迟，绝不等待任何 SQL 或 API
+                    let targetRemObject = targetInfo ? this.currentRemindersCache.find(r => r.id === targetInfo.id) : null;
+                    const defaultDate = getLogicalDateString();
+                    const createdOptIds: string[] = [];
+
+                    for (const bid of blockIds) {
+                        const { title: optTitle, docId: optDocId } = this.getBlockInfoSync(bid, e);
+                        const optReminderId = window.Lute?.NewNodeID?.() || `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                        const optReminder: any = {
+                            id: optReminderId,
+                            title: (optTitle || i18n('unnamedNote') || '未命名任务').trim(),
+                            blockId: bid,
+                            docId: optDocId || null,
+                            date: defaultDate,
+                            time: '',
+                            kanbanStatus: 'doing',
+                            createdAt: new Date().toISOString(),
+                            createdTime: new Date().toISOString(),
+                            completed: false
+                        };
+
+                        if (targetInfo && targetRemObject) {
+                            if (targetInfo.dropType === 'set-parent') {
+                                const pId = targetRemObject.isRepeatInstance ? targetRemObject.originalId : targetRemObject.id;
+                                optReminder.parentId = pId;
+                                if (targetRemObject.projectId) optReminder.projectId = targetRemObject.projectId;
+                                if (targetRemObject.categoryId) optReminder.categoryId = targetRemObject.categoryId;
+                            } else {
+                                if (targetRemObject.parentId) {
+                                    optReminder.parentId = targetRemObject.parentId;
+                                }
+                                if (targetRemObject.projectId) optReminder.projectId = targetRemObject.projectId;
+                                if (targetRemObject.categoryId) optReminder.categoryId = targetRemObject.categoryId;
+                                optReminder.priority = targetRemObject.priority || 'none';
+                            }
                         }
-                    } finally {
-                        this.closeLoadingDialog();
+
+                        // 关键锁：写入乐观更新缓存 Map，防止随后的 loadReminders() 用旧 JSON 覆盖清空新任务！
+                        if (this.optimisticUpdatesCache) {
+                            this.optimisticUpdatesCache.set(optReminderId, optReminder);
+                        }
+                        createdOptIds.push(optReminderId);
+                        this.currentRemindersCache.push(optReminder);
                     }
-                    // 刷新列表
-                    window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
-                    await this.loadReminders();
+
+                    // 0ms 瞬间重绘侧栏 UI
+                    this.renderReminders(this.currentRemindersCache);
+                    console.log(`🚀 [TaskNote Drag] 4. optimistic render done in ${(performance.now() - optStartTime).toFixed(2)}ms (total drop -> render = ${(performance.now() - dropStartTime).toFixed(2)}ms)`);
+
+                    // 2. 后台并行执行完整的数据查询、继承分析与文件持久化
+                    (async () => {
+                        const bgStartTime = performance.now();
+                        console.log('🚀 [TaskNote Drag] 5. background persistence task started...');
+                        try {
+                            for (const bid of blockIds) {
+                                await this.addItemByBlockId(bid, targetInfo, e);
+                            }
+                        } finally {
+                            // 真正落盘完成后，清除乐观缓存锁
+                            if (this.optimisticUpdatesCache) {
+                                createdOptIds.forEach(id => this.optimisticUpdatesCache.delete(id));
+                            }
+                            console.log(`🚀 [TaskNote Drag] 6. background persistence task completed in ${(performance.now() - bgStartTime).toFixed(2)}ms, triggering loadReminders...`);
+                            window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
+                            await this.loadReminders();
+                            console.log(`🚀 [TaskNote Drag] 7. ALL DONE! Total elapsed: ${(performance.now() - dropStartTime).toFixed(2)}ms`);
+                        }
+                    })();
                 }
             }
         });
@@ -5979,12 +6060,205 @@ export class ReminderPanel {
         this.lastDragClientY = null;
     }
 
+    private getBlockInfoSync(blockId: string, dropEvent?: DragEvent): { title: string | null, docId: string | null } {
+        let title: string | null = null;
+        let docId: string | null = null;
 
+        let targetEl: HTMLElement | null = null;
+        const dragEle = (window as any).siyuan?.dragElement as HTMLElement | undefined;
+        if (dragEle) {
+            const realBlock = dragEle.closest('.protyle-wysiwyg [data-node-id]:not(.protyle-attr)') ||
+                              dragEle.closest('[data-node-id]:not(.protyle-attr)');
+            if (realBlock) {
+                const dragId = realBlock.getAttribute('data-node-id') || (realBlock as HTMLElement).dataset?.nodeId;
+                if (dragId === blockId) targetEl = realBlock as HTMLElement;
+            } else {
+                const dragId = dragEle.getAttribute('data-node-id') || dragEle.dataset?.nodeId;
+                if (dragId === blockId) targetEl = dragEle;
+            }
+        }
 
-    private async addItemByBlockId(blockId: string, targetInfo?: { id: string, isBefore: boolean }) {
+        if (!targetEl) {
+            targetEl = (document.querySelector(`.protyle-wysiwyg [data-node-id="${blockId}"]`) ||
+                        document.querySelector(`[data-node-id="${blockId}"]`) ||
+                        document.querySelector(`#navigation [data-node-id="${blockId}"]`) ||
+                        document.querySelector(`.layout-tab-bar [data-id="${blockId}"]`) ||
+                        document.querySelector(`.layout__wnd .item[data-id="${blockId}"]`)) as HTMLElement | null;
+        }
+
+        if (targetEl) {
+            if (targetEl.classList.contains('protyle-title') || targetEl.getAttribute('data-type') === 'NodeDocument') {
+                const clone = targetEl.cloneNode(true) as HTMLElement;
+                clone.querySelectorAll('.protyle-attr, .protyle-action, button, svg').forEach(el => el.remove());
+                const titleInput = clone.querySelector('.title-input, [contenteditable="true"]') || clone;
+                title = (titleInput.textContent || titleInput.innerText || '').replace(/\s+/g, ' ').trim();
+                docId = blockId;
+            } else if (targetEl.classList.contains('b3-list-item')) {
+                const textEl = targetEl.querySelector('.b3-list-item__text');
+                title = (textEl?.textContent || targetEl.innerText || targetEl.textContent || '').replace(/\s+/g, ' ').trim();
+                docId = targetEl.getAttribute('data-node-id') || blockId;
+            } else if (targetEl.classList.contains('item') || targetEl.classList.contains('item--active')) {
+                const textEl = targetEl.querySelector('.item__text');
+                title = (textEl?.textContent || targetEl.innerText || targetEl.textContent || '').replace(/\s+/g, ' ').trim();
+                docId = blockId;
+            } else {
+                const clone = targetEl.cloneNode(true) as HTMLElement;
+                clone.querySelectorAll('.protyle-attr, .protyle-action, .block-pomodoro-summary, .block-bind-reminders-btn, .block-bind-reminder-date, .block-project-btn, button, svg').forEach(el => el.remove());
+                const editableEl = clone.querySelector('[contenteditable="true"]') || clone;
+                title = (editableEl.textContent || editableEl.innerText || '').replace(/\s+/g, ' ').trim();
+
+                const protyle = targetEl.closest('.protyle');
+                if (protyle) {
+                    const titleEl = protyle.querySelector('.protyle-top .protyle-title[data-node-id]');
+                    docId = titleEl?.getAttribute('data-node-id') || (protyle as any)?.protyle?.block?.rootID || null;
+                }
+                if (!docId) {
+                    docId = targetEl.closest('[data-doc-id]')?.getAttribute('data-doc-id') || null;
+                }
+            }
+        }
+
+        if ((!title || !docId) && dropEvent && dropEvent.dataTransfer) {
+            const dt = dropEvent.dataTransfer;
+            const types = Array.from(dt.types || []);
+            for (const type of types) {
+                try {
+                    const raw = dt.getData(type);
+                    if (raw && (raw.startsWith('{') || raw.startsWith('['))) {
+                        const parsed = JSON.parse(raw);
+                        const item = Array.isArray(parsed) ? parsed.find((x: any) => x.id === blockId || x.blockId === blockId) || parsed[0] : parsed;
+                        if (item) {
+                            if (!title) title = item.content || item.title || item.name || item.label || null;
+                            if (!docId) docId = item.rootId || item.docId || item.root_id || null;
+                        }
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+        }
+
+        return { title, docId };
+    }
+
+    private async getBlockInfoForDrop(blockId: string, dropEvent?: DragEvent): Promise<{ title: string, docId: string | null }> {
+        let title: string | null = null;
+        let docId: string | null = null;
+
+        // 1. 优先尝试从 window.siyuan.dragElement 或前端 DOM 中获取
+        let targetEl: HTMLElement | null = null;
+
+        const dragEle = (window as any).siyuan?.dragElement as HTMLElement | undefined;
+        if (dragEle) {
+            const realBlock = dragEle.closest('.protyle-wysiwyg [data-node-id]:not(.protyle-attr)') ||
+                              dragEle.closest('[data-node-id]:not(.protyle-attr)');
+            if (realBlock) {
+                const dragId = realBlock.getAttribute('data-node-id') || (realBlock as HTMLElement).dataset?.nodeId;
+                if (dragId === blockId) {
+                    targetEl = realBlock as HTMLElement;
+                }
+            } else {
+                const dragId = dragEle.getAttribute('data-node-id') || dragEle.dataset?.nodeId;
+                if (dragId === blockId) {
+                    targetEl = dragEle;
+                }
+            }
+        }
+
+        if (!targetEl) {
+            targetEl = (document.querySelector(`.protyle-wysiwyg [data-node-id="${blockId}"]`) ||
+                        document.querySelector(`[data-node-id="${blockId}"]`)) as HTMLElement | null;
+        }
+
+        if (!targetEl) {
+            targetEl = (document.querySelector(`#navigation [data-node-id="${blockId}"]`) ||
+                        document.querySelector(`.layout-tab-bar [data-id="${blockId}"]`) ||
+                        document.querySelector(`.layout__wnd .item[data-id="${blockId}"]`)) as HTMLElement | null;
+        }
+
+        if (targetEl) {
+            if (targetEl.classList.contains('protyle-title') || targetEl.getAttribute('data-type') === 'NodeDocument') {
+                const clone = targetEl.cloneNode(true) as HTMLElement;
+                clone.querySelectorAll('.protyle-attr, .protyle-action, button, svg').forEach(el => el.remove());
+                const titleInput = clone.querySelector('.title-input, [contenteditable="true"]') || clone;
+                title = (titleInput.textContent || titleInput.innerText || '').replace(/\s+/g, ' ').trim();
+                docId = blockId;
+            } else if (targetEl.classList.contains('b3-list-item')) {
+                const textEl = targetEl.querySelector('.b3-list-item__text');
+                title = (textEl?.textContent || targetEl.innerText || targetEl.textContent || '').replace(/\s+/g, ' ').trim();
+                docId = targetEl.getAttribute('data-node-id') || blockId;
+            } else if (targetEl.classList.contains('item') || targetEl.classList.contains('item--active')) {
+                const textEl = targetEl.querySelector('.item__text');
+                title = (textEl?.textContent || targetEl.innerText || targetEl.textContent || '').replace(/\s+/g, ' ').trim();
+                docId = blockId;
+            } else {
+                // 普通编辑器块：复制节点并清除所有 .protyle-attr 属性栏与挂载按钮，防止把番茄钟/日期属性等误提取为标题
+                const clone = targetEl.cloneNode(true) as HTMLElement;
+                clone.querySelectorAll('.protyle-attr, .protyle-action, .block-pomodoro-summary, .block-bind-reminders-btn, .block-bind-reminder-date, .block-project-btn, button, svg').forEach(el => el.remove());
+                const editableEl = clone.querySelector('[contenteditable="true"]') || clone;
+                title = (editableEl.textContent || editableEl.innerText || '').replace(/\s+/g, ' ').trim();
+
+                const protyle = targetEl.closest('.protyle');
+                if (protyle) {
+                    const titleEl = protyle.querySelector('.protyle-top .protyle-title[data-node-id]');
+                    docId = titleEl?.getAttribute('data-node-id') || (protyle as any)?.protyle?.block?.rootID || null;
+                }
+                if (!docId) {
+                    docId = targetEl.closest('[data-doc-id]')?.getAttribute('data-doc-id') || null;
+                }
+            }
+        }
+
+        // 2. 从 dropEvent.dataTransfer 的 payload 提取
+        if ((!title || !docId) && dropEvent && dropEvent.dataTransfer) {
+            const dt = dropEvent.dataTransfer;
+            const types = Array.from(dt.types || []);
+            for (const type of types) {
+                try {
+                    const raw = dt.getData(type);
+                    if (raw && (raw.startsWith('{') || raw.startsWith('['))) {
+                        const parsed = JSON.parse(raw);
+                        const item = Array.isArray(parsed) ? parsed.find((x: any) => x.id === blockId || x.blockId === blockId) || parsed[0] : parsed;
+                        if (item) {
+                            if (!title) {
+                                title = item.content || item.title || item.name || item.label || null;
+                            }
+                            if (!docId) {
+                                docId = item.rootId || item.docId || item.root_id || null;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }
+        }
+
+        // 3. 降级：如果前端 DOM / 拖拽数据未获取到，调用 getBlockByID，但绝对不刷新 SQL 索引
+        if (!title) {
+            try {
+                const block = await getBlockByID(blockId);
+                if (block) {
+                    title = block.content || null;
+                    if (!docId) {
+                        docId = block.root_id || (block.type === 'd' ? block.id : null);
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        return {
+            title: title || i18n('unnamedNote') || '未命名任务',
+            docId: docId || null,
+        };
+    }
+
+    private async addItemByBlockId(blockId: string, targetInfo?: { id: string, isBefore: boolean, dropType?: 'before' | 'after' | 'set-parent' }, dropEvent?: DragEvent) {
+        const itemStart = performance.now();
         try {
-            const block = await getBlockByID(blockId);
-            if (!block) return;
+            const { title: fetchedTitle, docId: fetchedDocId } = await this.getBlockInfoForDrop(blockId, dropEvent);
 
             const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
             const { defaultDate, defaultEndDate, defaultCategoryId, defaultProjectId, defaultPriority } = await this.getFilterAttributes();
@@ -6011,14 +6285,14 @@ export class ReminderPanel {
             // 不需要去重，直接创建新任务
 
             const reminderId = window.Lute?.NewNodeID?.() || `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            let title = block.content || i18n('unnamedNote') || '未命名任务';
+            let title = fetchedTitle || i18n('unnamedNote') || '未命名任务';
             if (title.length > 100) title = title.substring(0, 100) + '...';
 
             const newReminder: any = {
                 id: reminderId,
                 title: title.trim(),
                 blockId: blockId,
-                docId: block.root_id || (block.type === 'd' ? block.id : null),
+                docId: fetchedDocId || null,
                 date: defaultDate || getLogicalDateString(), // 默认为今天
                 endDate: defaultEndDate || undefined,
                 time: '', // 默认不设置时间
@@ -6039,27 +6313,42 @@ export class ReminderPanel {
             //     newReminder.date = getRelativeDateString(1);
             // }
 
-            // Apply priority from target if available (handling repeating instances via cache)
+            // Apply priority or parent relation from target if available
             let targetRemObject = null;
             if (targetInfo) {
                 targetRemObject = this.currentRemindersCache.find(r => r.id === targetInfo.id);
                 if (targetRemObject) {
-                    newReminder.priority = targetRemObject.priority || 'none';
+                    if (targetInfo.dropType === 'set-parent') {
+                        const parentId = targetRemObject.isRepeatInstance ? targetRemObject.originalId : targetRemObject.id;
+                        newReminder.parentId = parentId;
+                        if (targetRemObject.projectId) newReminder.projectId = targetRemObject.projectId;
+                        if (targetRemObject.categoryId) newReminder.categoryId = targetRemObject.categoryId;
+                    } else {
+                        // 拖到目标的上下方 (before / after)
+                        // 如果目标任务本身是子任务 (有 parentId)，新建的任务也设为该 parentId
+                        if (targetRemObject.parentId) {
+                            newReminder.parentId = targetRemObject.parentId;
+                        }
+                        if (targetRemObject.projectId) newReminder.projectId = targetRemObject.projectId;
+                        if (targetRemObject.categoryId) newReminder.categoryId = targetRemObject.categoryId;
+                        newReminder.priority = targetRemObject.priority || 'none';
+                    }
                 }
             }
 
             reminderData[reminderId] = newReminder;
 
-            // Apply sorting if target exists, otherwise just save
-            // We pass reminderData to reorderReminders to avoid stale data issues (since we just added the new item but haven't saved yet)
-            if (targetInfo && targetRemObject) {
-                await this.reorderReminders(newReminder, targetRemObject, targetInfo.isBefore, reminderData);
-            } else {
-                await saveReminders(this.plugin, reminderData);
+            const t3 = performance.now();
+            // Apply sorting if target exists (not set-parent), passing skipSaveAndLoad=true
+            if (targetInfo && targetRemObject && targetInfo.dropType !== 'set-parent') {
+                await this.reorderReminders(newReminder, targetRemObject, targetInfo.isBefore, reminderData, true);
             }
+            // 异步后台保存落盘，不阻塞主流程
+            void saveReminders(this.plugin, reminderData);
+            console.log(`🚀 [TaskNote Drag]     ├─ saveReminders/reorder non-blocking trigger done in ${(performance.now() - t3).toFixed(2)}ms (total addItemByBlockId = ${(performance.now() - itemStart).toFixed(2)}ms)`);
 
-            // Update block attributes after saving so the reminder exists
-            await updateBindBlockAtrrs(blockId, this.plugin);
+            // Update block attributes after saving so the reminder exists (run in background to keep UI instant)
+            void updateBindBlockAtrrs(blockId, this.plugin, reminderData);
         } catch (error) {
             console.error('addItemByBlockId failed:', error);
             showMessage(i18n('createFailed') || '创建失败');
@@ -6642,9 +6931,25 @@ export class ReminderPanel {
                 // 检查是否为同级排序（不需要移除父子关系的情况）
                 const isSameLevelSort = this.isSameLevelSort(draggedReminder, targetReminder);
 
-                if (draggedReminder.parentId && !isSameLevelSort) {
-                    // 不同级排序：自动移除父子关系
-                    await this.removeParentRelation(draggedReminder, true);
+                if (!isSameLevelSort) {
+                    if (targetReminder.parentId) {
+                        // 拖到某个子任务的上下方：将 draggedReminder 的 parentId 设为目标的 parentId
+                        draggedReminder.parentId = targetReminder.parentId;
+                        if (targetReminder.projectId) draggedReminder.projectId = targetReminder.projectId;
+                        if (targetReminder.categoryId) draggedReminder.categoryId = targetReminder.categoryId;
+
+                        const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
+                        const baseChildId = draggedReminder.isRepeatInstance ? draggedReminder.originalId : draggedReminder.id;
+                        if (reminderData[baseChildId]) {
+                            reminderData[baseChildId].parentId = targetReminder.parentId;
+                            if (targetReminder.projectId) reminderData[baseChildId].projectId = targetReminder.projectId;
+                            if (targetReminder.categoryId) reminderData[baseChildId].categoryId = targetReminder.categoryId;
+                            await saveReminders(this.plugin, reminderData);
+                        }
+                    } else if (draggedReminder.parentId) {
+                        // 拖到根任务上下方：自动移除父子关系
+                        await this.removeParentRelation(draggedReminder, true);
+                    }
                 }
 
                 // 执行排序操作
@@ -6775,7 +7080,7 @@ export class ReminderPanel {
     }
 
     // 新增：重新排序提醒（支持重复实例）
-    private async reorderReminders(draggedReminder: any, targetReminder: any, insertBefore: boolean, providedReminderData?: any) {
+    private async reorderReminders(draggedReminder: any, targetReminder: any, insertBefore: boolean, providedReminderData?: any, skipSaveAndLoad: boolean = false) {
         try {
             if (this.isDragDisabledBySortMode()) {
                 return;
@@ -6794,7 +7099,6 @@ export class ReminderPanel {
             const targetParsed = parseReminderInstanceId(targetReminder?.id);
 
             // 判断是否为重复实例
-            // 仅在明确标记为实例，或可从 id 解析出实例日期时，才按实例处理。
             const isDraggedInstance = draggedReminder?.isRepeatInstance === true || draggedReminder?.isSpanningTodayCompletedInstance === true || (!!draggedReminder?.originalId && !!draggedParsed);
             const isTargetInstance = targetReminder?.isRepeatInstance === true || targetReminder?.isSpanningTodayCompletedInstance === true || (!!targetReminder?.originalId && !!targetParsed);
 
@@ -6843,11 +7147,10 @@ export class ReminderPanel {
                     targetReminder
                 );
 
-                await saveReminders(this.plugin, reminderData);
-                window.dispatchEvent(new CustomEvent('reminderUpdated', {
-                    detail: { source: this.panelId }
-                }));
-                await this.loadReminders();
+                if (!skipSaveAndLoad) {
+                    void saveReminders(this.plugin, reminderData);
+                    window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
+                }
                 return;
             }
 
@@ -6855,7 +7158,6 @@ export class ReminderPanel {
             if (oldPriority !== newPriority) {
                 // 跨优先级：更新被拖拽任务的优先级
                 if (isDraggedInstance) {
-                    // 重复实例拖动时直接修改原始任务优先级，避免只影响当前实例
                     const originalTask = reminderData[draggedOriginalId];
                     if (originalTask) {
                         originalTask.priority = newPriority;
@@ -6868,7 +7170,6 @@ export class ReminderPanel {
                         }
                     }
                 } else {
-                    // 普通任务
                     if (reminderData[draggedReminder.id]) {
                         reminderData[draggedReminder.id].priority = newPriority;
                         draggedReminder.priority = newPriority;
@@ -6878,21 +7179,14 @@ export class ReminderPanel {
                 // 重新排序两个优先级分组
                 await this.reorderPriorityGroup(reminderData, oldPriority, draggedOriginalId, isDraggedInstance, draggedOriginalInstanceDate);
                 await this.reorderPriorityGroup(reminderData, newPriority, draggedOriginalId, isDraggedInstance, draggedOriginalInstanceDate, targetOriginalId, targetOriginalInstanceDate, insertBefore);
-
-                await saveReminders(this.plugin, reminderData);
-
-                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
-                await this.loadReminders();
-
             } else {
                 // 同优先级排序
                 await this.reorderPriorityGroup(reminderData, oldPriority, draggedOriginalId, isDraggedInstance, draggedOriginalInstanceDate, targetOriginalId, targetOriginalInstanceDate, insertBefore, draggedReminder, targetReminder);
+            }
 
-                await saveReminders(this.plugin, reminderData);
-                window.dispatchEvent(new CustomEvent('reminderUpdated', {
-                    detail: { source: this.panelId }
-                }));
-                await this.loadReminders();
+            if (!skipSaveAndLoad) {
+                void saveReminders(this.plugin, reminderData);
+                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
             }
 
         } catch (error) {

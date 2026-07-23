@@ -1080,9 +1080,9 @@ export async function resetDoingAndAbandonedTaskListMarkers(): Promise<number> {
  * @param blockId 块ID
  * @param plugin 插件实例
  */
-export async function updateBindBlockAtrrs(blockId: string, plugin: any): Promise<void> {
+export async function updateBindBlockAtrrs(blockId: string, plugin: any, providedReminderData?: any): Promise<void> {
     try {
-        const reminderData = await plugin.loadReminderData();
+        const reminderData = providedReminderData || (plugin && plugin.reminderDataCache) || await plugin.loadReminderData();
 
         // 查找该块的所有提醒
         const directBlockReminders = Object.values(reminderData).filter((reminder: any) =>
@@ -1237,6 +1237,15 @@ export async function updateBindBlockAtrrs(blockId: string, plugin: any): Promis
 
         // 一次性更新所有属性
         await setBlockAttrs(blockId, attrs);
+
+        // 刷新编辑器中的 Protyle DOM 任务按钮与面包屑
+        if (plugin && plugin.taskNoteDOM && typeof plugin.taskNoteDOM.addBreadcrumbButtonsToExistingProtyles === 'function') {
+            try {
+                plugin.taskNoteDOM.addBreadcrumbButtonsToExistingProtyles();
+            } catch (domErr) {
+                // ignore
+            }
+        }
 
         // 统一在 API 层同步任务列表块勾选状态，避免各面板重复实现
         try {

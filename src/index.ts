@@ -2915,6 +2915,40 @@ export default class ReminderPlugin extends Plugin {
                     }) as any[];
 
                 const blockInfoCache = new Map<string, any | null>();
+                const ancestorIdSet = new Set((ancestors || []).map((item: any) => item.id));
+
+                // 批量预加载所有涉及到的 groupBlockId 和 projectBlockId，避免在循环中重复触发单独的 SQL 查询
+                const idsToQuery = new Set<string>();
+                for (const p of projectList) {
+                    if (p.customGroups && Array.isArray(p.customGroups)) {
+                        for (const group of p.customGroups) {
+                            if (group?.archived) continue;
+                            const gId = group?.blockId;
+                            if (gId && gId !== rootId && !ancestorIdSet.has(gId)) {
+                                idsToQuery.add(gId);
+                            }
+                        }
+                    }
+                    const pId = p?.blockId;
+                    if (pId && pId !== rootId && !ancestorIdSet.has(pId)) {
+                        idsToQuery.add(pId);
+                    }
+                }
+
+                if (idsToQuery.size > 0) {
+                    try {
+                        const idsStr = Array.from(idsToQuery).map(id => `'${id}'`).join(",");
+                        const rows = await sql(`SELECT id, root_id FROM blocks WHERE id IN (${idsStr})`);
+                        if (Array.isArray(rows)) {
+                            for (const r of rows) {
+                                if (r?.id) blockInfoCache.set(r.id, r);
+                            }
+                        }
+                    } catch (e) {
+                        // ignore batch query failure, fall back to single query
+                    }
+                }
+
                 const getBlockInfoWithCache = async (id?: string) => {
                     if (!id) return null;
                     if (blockInfoCache.has(id)) return blockInfoCache.get(id);
@@ -2922,8 +2956,6 @@ export default class ReminderPlugin extends Plugin {
                     blockInfoCache.set(id, blockInfo || null);
                     return blockInfo || null;
                 };
-
-                const ancestorIdSet = new Set((ancestors || []).map((item: any) => item.id));
 
                 // 1.5.1 优先匹配分组绑定块：同文档且不是该绑定块子块时，也默认继承该分组
                 for (const p of projectList) {

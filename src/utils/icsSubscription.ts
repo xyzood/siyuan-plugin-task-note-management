@@ -469,6 +469,10 @@ export async function deleteSubscriptionReminderTask(plugin: any, reminder: any)
 
 export async function saveReminders(plugin: any, allReminders: any): Promise<void> {
     try {
+        if (plugin && allReminders) {
+            plugin.reminderDataCache = allReminders;
+        }
+
         const localReminders: any = {};
         const subRemindersBySubId: { [subId: string]: any } = {};
 
