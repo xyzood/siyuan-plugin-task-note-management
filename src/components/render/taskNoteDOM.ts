@@ -581,13 +581,16 @@ export class TaskNoteDOMManager {
         };
 
         if (!rawAttr && !hasBind && !rawMilestones && pomodoroTotalCount <= 0 && pomodoroTotalMinutes <= 0) {
-            const trackedSource = this._findTrackedSourceForBlock(protyle, blockId);
-            if (trackedSource && trackedSource !== attrSource) return;
-            const btns = protyle.element.querySelectorAll(`[data-block-id="${blockId}"][data-plugin-added="reminder-plugin"]`);
-            if (btns.length > 0) {
-                btns.forEach((b: Element) => b.remove());
+            // 文档块即使自身没有数据，也需要继续处理（由异步方法扫描子块后决定是否显示）
+            if (!isDocumentLevel) {
+                const trackedSource = this._findTrackedSourceForBlock(protyle, blockId);
+                if (trackedSource && trackedSource !== attrSource) return;
+                const btns = protyle.element.querySelectorAll(`[data-block-id="${blockId}"][data-plugin-added="reminder-plugin"]`);
+                if (btns.length > 0) {
+                    btns.forEach((b: Element) => b.remove());
+                }
+                return;
             }
-            return;
         }
 
         if (this.processingBlockButtons.has(blockId)) return;
@@ -606,11 +609,6 @@ export class TaskNoteDOMManager {
 
             const selector = `[custom-task-projectid], [custom-bind-reminders], [custom-bind-milestones], [${BLOCK_POMODORO_COUNT_ATTR}], [${BLOCK_POMODORO_MINUTES_ATTR}]`;
             const allBlocks = Array.from(protyle.element.querySelectorAll(selector)) as Element[];
-
-            if (allBlocks.length === 0) {
-                this._cleanupOrphanedButtons(protyle);
-                return;
-            }
 
             const blocksToProcess = new Map<string, {
                 projectIds: string[];
@@ -666,6 +664,26 @@ export class TaskNoteDOMManager {
                 }
             }
 
+            // 文档块始终加入处理队列（即使自身无属性，也需通过异步扫描子块来显示/清除番茄按钮）
+            const wysiwyg = protyle.element.querySelector(".protyle-wysiwyg") as HTMLElement | null;
+            const docBlockId = wysiwyg ? (wysiwyg.getAttribute("data-node-id") || this._getBlockIdFromElement(wysiwyg)) : null;
+            if (docBlockId && wysiwyg && !blocksToProcess.has(docBlockId)) {
+                blocksToProcess.set(docBlockId, {
+                    projectIds: [],
+                    hasBind: false,
+                    bindReminderIds: [],
+                    milestoneIds: [],
+                    pomodoroTotalCount: 0,
+                    pomodoroTotalMinutes: 0,
+                    element: wysiwyg,
+                });
+            }
+
+            if (blocksToProcess.size === 0) {
+                this._cleanupOrphanedButtons(protyle);
+                return;
+            }
+
             this._cleanupOrphanedButtons(protyle, blocksToProcess);
 
             for (const [blockId, info] of blocksToProcess) {
@@ -681,6 +699,7 @@ export class TaskNoteDOMManager {
             console.error("扫描块按钮失败:", error);
         }
     }
+
 
     public async addBlockProjectButtonsToProtyle(protyle: any) {
         if (!protyle || !protyle.element) return;
@@ -945,14 +964,17 @@ export class TaskNoteDOMManager {
         pomodoroTotalMinutes?: number;
         element: Element
     }) {
+        const isDocElementBlock = info.element?.classList?.contains('protyle-wysiwyg');
         const blockEl = (info.element && info.element.getAttribute("data-node-id") === blockId)
             ? (info.element as HTMLElement)
-            : (protyle.element.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement);
+            : (protyle.element.querySelector(`[data-node-id="${blockId}"]`) as HTMLElement)
+            || (isDocElementBlock ? (info.element as HTMLElement) : null);
 
         if (!blockEl) return;
 
         const container = this._findButtonContainer(blockEl, info.element);
         if (!container) return;
+
 
         const existingProjectButtons = new Map<string, HTMLElement>();
         container.querySelectorAll(`.block-project-btn[data-block-id="${blockId}"]`).forEach((btn: HTMLElement) => {
@@ -1108,13 +1130,18 @@ export class TaskNoteDOMManager {
             existingPomodoroBtn.remove();
         }
 
-        void this.refreshPomodoroSummaryWithMergedSessions(
-            protyle,
-            blockId,
-            selfPomodoroCount,
-            selfPomodoroMinutes,
-            linkedReminderIds
-        );
+        // 异步刷新（含子任务/文档内子块聚合）
+        // 文档块无论是否有自身番茄数据，均调用异步方法（由其扫描子块后决定是否显示）
+        const isDocumentBlock = info.element?.classList?.contains('protyle-wysiwyg');
+        if (hasPomodoroSummary || isDocumentBlock) {
+            void this.refreshPomodoroSummaryWithMergedSessions(
+                protyle,
+                blockId,
+                selfPomodoroCount,
+                selfPomodoroMinutes,
+                linkedReminderIds
+            );
+        }
     }
 
     private async refreshPomodoroSummaryWithMergedSessions(
@@ -1135,51 +1162,54 @@ export class TaskNoteDOMManager {
             return;
         }
 
-        // 扩展 linkedReminderIds 以包含子任务的 ID（通过 parentId 字段，最多2层递归）
-        let expandedLinkedIds = this.normalizeReminderIds(linkedReminderIds);
+        // 提前加载 reminderData，供子任务展开和文档级聚合复用
+        let reminderData: Record<string, any> | null = null;
         try {
-            if (expandedLinkedIds.length > 0 && this.plugin && typeof this.plugin.loadReminderData === 'function') {
-                const reminderData = await this.plugin.loadReminderData() as Record<string, any>;
-                if (reminderData) {
-                    // 只有后缀是 YYYY-MM-DD 时才去掉（重复任务实例），其他情况保留完整 ID
-                    const getSeriesBaseId = (id: string): string => {
-                        const m = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
-                        return m ? m[1] : id;
-                    };
-
-                    // 预建 parentId -> [childId] 索引
-                    const childrenByParentId = new Map<string, string[]>();
-                    for (const rem of Object.values(reminderData) as any[]) {
-                        if (!rem || !rem.parentId || !rem.id) continue;
-                        const parentBase = getSeriesBaseId(String(rem.parentId));
-                        if (!childrenByParentId.has(parentBase)) childrenByParentId.set(parentBase, []);
-                        childrenByParentId.get(parentBase)!.push(rem.id);
-                    }
-
-                    const visited = new Set<string>(expandedLinkedIds);
-                    const collectSubtaskIds = (ids: string[], depth: number) => {
-                        if (depth > 2) return;
-                        for (const id of ids) {
-                            const baseId = getSeriesBaseId(id);
-                            const childIds = childrenByParentId.get(baseId);
-                            if (!childIds?.length) continue;
-                            for (const subId of childIds) {
-                                if (!subId || visited.has(subId)) continue;
-                                visited.add(subId);
-                                expandedLinkedIds.push(subId);
-                                collectSubtaskIds([subId], depth + 1);
-                            }
-                        }
-                    };
-                    collectSubtaskIds([...expandedLinkedIds], 0);
-                }
+            if (this.plugin && typeof this.plugin.loadReminderData === 'function') {
+                reminderData = await this.plugin.loadReminderData() as Record<string, any>;
             }
         } catch (e) {
-            console.warn('扩展子任务 ID 失败:', e);
+            console.warn('加载 reminderData 失败:', e);
         }
 
+        // 辅助：只有后缀是 YYYY-MM-DD 时才去掉（重复任务实例），其他情况保留完整 ID
+        const getSeriesBaseId = (id: string): string => {
+            const m = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+            return m ? m[1] : id;
+        };
 
+        // 预建 parentId -> [childId] 索引（供子任务展开和文档级聚合复用）
+        let childrenByParentId: Map<string, string[]> | null = null;
+        if (reminderData) {
+            childrenByParentId = new Map();
+            for (const rem of Object.values(reminderData) as any[]) {
+                if (!rem?.parentId || !rem.id) continue;
+                const parentBase = getSeriesBaseId(String(rem.parentId));
+                if (!childrenByParentId.has(parentBase)) childrenByParentId.set(parentBase, []);
+                childrenByParentId.get(parentBase)!.push(rem.id);
+            }
+        }
 
+        // 扩展 linkedReminderIds 以包含子任务的 ID（通过 parentId 字段，最多2层递归）
+        let expandedLinkedIds = this.normalizeReminderIds(linkedReminderIds);
+        if (expandedLinkedIds.length > 0 && childrenByParentId) {
+            const visited = new Set<string>(expandedLinkedIds);
+            const collectSubtaskIds = (ids: string[], depth: number) => {
+                if (depth > 2) return;
+                for (const id of ids) {
+                    const baseId = getSeriesBaseId(id);
+                    const childIds = childrenByParentId!.get(baseId);
+                    if (!childIds?.length) continue;
+                    for (const subId of childIds) {
+                        if (!subId || visited.has(subId)) continue;
+                        visited.add(subId);
+                        expandedLinkedIds.push(subId);
+                        collectSubtaskIds([subId], depth + 1);
+                    }
+                }
+            };
+            collectSubtaskIds([...expandedLinkedIds], 0);
+        }
         const linkedStats = this.getBoundPomodoroStatsFromCache(expandedLinkedIds);
         const selfStats = this.getSelfPomodoroStats(
             blockId,
@@ -1187,9 +1217,8 @@ export class TaskNoteDOMManager {
             selfPomodoroMinutes,
             linkedStats
         );
-        const mergedCount = Math.max(0, Math.floor(selfStats.count + linkedStats.count));
-        const mergedMinutes = Math.max(0, Math.floor(selfStats.minutes + linkedStats.minutes));
-        const hasPomodoroSummary = mergedCount > 0 || mergedMinutes > 0;
+        let mergedCount = Math.max(0, Math.floor(selfStats.count + linkedStats.count));
+        let mergedMinutes = Math.max(0, Math.floor(selfStats.minutes + linkedStats.minutes));
 
         const trackedSource =
             this._findTrackedSourceForBlock(protyle, blockId) ||
@@ -1197,6 +1226,98 @@ export class TaskNoteDOMManager {
         const blockEl = (protyle?.element?.querySelector?.(`[data-node-id="${blockId}"]`) as HTMLElement | null) ||
             (trackedSource as HTMLElement | null);
         if (!trackedSource || !blockEl) return;
+
+        // 文档块：基于已有番茄数据的 eventId 反向判定是否属于当前文档，极速、准确且脱离 DOM 渲染限制
+        const isDocumentBlock = trackedSource.classList.contains("protyle-wysiwyg");
+        if (isDocumentBlock) {
+            try {
+                // 1. 获取所有已有番茄数据的 eventId / baseEventId
+                const candidateEventIds = new Set<string>([
+                    ...this.pomodoroStatsByEventId.keys(),
+                    ...this.pomodoroStatsByBaseEventId.keys(),
+                ]);
+
+                const matchedDocEventIds = new Set<string>();
+                const unknownBlockIdsToQuery = new Map<string, string[]>(); // blockId -> eventIds
+
+                // 辅助：递归判断提醒任务及其父任务链是否归属于当前文档
+                const isTaskInDoc = (rem: any): boolean => {
+                    if (!rem) return false;
+                    if (rem.docId === blockId || rem.blockId === blockId) return true;
+                    let current = rem;
+                    const visited = new Set<string>([rem.id]);
+                    while (current && current.parentId && reminderData) {
+                        const parentBase = getSeriesBaseId(current.parentId);
+                        if (visited.has(parentBase)) break;
+                        visited.add(parentBase);
+                        const parentRem = reminderData[parentBase] || reminderData[current.parentId];
+                        if (!parentRem) break;
+                        if (parentRem.docId === blockId || parentRem.blockId === blockId) return true;
+                        current = parentRem;
+                    }
+                    return false;
+                };
+
+                for (const eventId of candidateEventIds) {
+                    if (!eventId) continue;
+                    if (eventId === blockId) {
+                        matchedDocEventIds.add(eventId);
+                        continue;
+                    }
+
+                    const baseId = getSeriesBaseId(eventId);
+                    const rem = reminderData ? (reminderData[baseId] || reminderData[eventId]) : null;
+
+                    if (rem) {
+                        if (isTaskInDoc(rem)) {
+                            matchedDocEventIds.add(eventId);
+                        } else if (rem.blockId) {
+                            // 提醒关联了块 ID，但暂未直接确认 docId 是否为当前文档，搜集块 ID 待 SQL 校验
+                            if (!unknownBlockIdsToQuery.has(rem.blockId)) {
+                                unknownBlockIdsToQuery.set(rem.blockId, []);
+                            }
+                            unknownBlockIdsToQuery.get(rem.blockId)!.push(eventId);
+                        }
+                    } else {
+                        // 非提醒任务（可能是直接在块上打卡的 eventId），搜集以确认是否为该文档下的块
+                        if (!unknownBlockIdsToQuery.has(eventId)) {
+                            unknownBlockIdsToQuery.set(eventId, []);
+                        }
+                        unknownBlockIdsToQuery.get(eventId)!.push(eventId);
+                    }
+                }
+
+                // 2. 如果存在待校验归属的块 ID，只针对这少量块 ID 发起 SQL 查询校验 root_id
+                if (unknownBlockIdsToQuery.size > 0) {
+                    try {
+                        const { sql } = await import("../../api");
+                        const idsStr = Array.from(unknownBlockIdsToQuery.keys()).map(id => `'${id}'`).join(",");
+                        const rows = await sql(`SELECT id, root_id FROM blocks WHERE id IN (${idsStr}) LIMIT -1`);
+                        if (Array.isArray(rows)) {
+                            for (const row of rows) {
+                                if (row && row.root_id === blockId) {
+                                    const evIds = unknownBlockIdsToQuery.get(row.id);
+                                    if (evIds) {
+                                        evIds.forEach(id => matchedDocEventIds.add(id));
+                                    }
+                                }
+                            }
+                        }
+                    } catch (sqlErr) {
+                        console.warn("校验块 ID 所属文档 SQL 失败:", sqlErr);
+                    }
+                }
+
+                // 3. 一次性累加所有归属于当前文档的番茄钟数据
+                const docStats = this.getBoundPomodoroStatsFromCache(Array.from(matchedDocEventIds));
+                mergedCount = Math.max(0, Math.floor(docStats.count));
+                mergedMinutes = Math.max(0, Math.floor(docStats.minutes));
+            } catch (err) {
+                console.warn("文档级反向匹配番茄数据失败:", err);
+            }
+        }
+
+        const hasPomodoroSummary = mergedCount > 0 || mergedMinutes > 0;
 
         const container = this._findButtonContainer(blockEl, trackedSource);
         if (!container) return;
