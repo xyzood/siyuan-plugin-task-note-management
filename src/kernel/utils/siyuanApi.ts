@@ -249,11 +249,27 @@ export async function updateBindBlockAtrrs(blockId: string, bridge: any): Promis
 
         if (blockReminders.length === 0) {
             try {
-                await setBlockAttrs(blockId, {
+                const cleanupAttrs: { [key: string]: string } = {
                     "bookmark": "",
                     'custom-bind-reminders': '',
                     'custom-task-projectId': ''
-                });
+                };
+
+                try {
+                    const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+                    const pomodoroManager = PomodoroRecordManager.getInstance(bridge);
+                    if (pomodoroManager) {
+                        await pomodoroManager.initialize();
+                        const ownCount = pomodoroManager.getRepeatingEventTotalPomodoroCount(blockId);
+                        const ownMinutes = pomodoroManager.getRepeatingEventTotalFocusTime(blockId);
+                        cleanupAttrs['custom-task-pomodoro-count'] = ownCount > 0 ? String(ownCount) : '';
+                        cleanupAttrs['custom-task-pomodoro-minutes'] = ownMinutes > 0 ? String(ownMinutes) : '';
+                    }
+                } catch (pomoErr) {
+                    console.warn('清理块属性计算块自有番茄失败:', blockId, pomoErr);
+                }
+
+                await setBlockAttrs(blockId, cleanupAttrs);
                 return;
             } catch (err) {
                 console.warn('clean up block attributes failed for', blockId, err);
@@ -282,6 +298,44 @@ export async function updateBindBlockAtrrs(blockId: string, bridge: any): Promis
 
         const projectIds = Array.from(new Set(blockReminders.map((r: any) => r.projectId).filter(id => id)));
         attrs['custom-task-projectId'] = projectIds.length > 0 ? projectIds.join(',') : '';
+
+        try {
+            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+            const pomodoroManager = PomodoroRecordManager.getInstance(bridge);
+            if (pomodoroManager) {
+                await pomodoroManager.initialize();
+
+                let totalPomoCount = pomodoroManager.getRepeatingEventTotalPomodoroCount(blockId);
+                let totalPomoMinutes = pomodoroManager.getRepeatingEventTotalFocusTime(blockId);
+
+                const processedTaskSeries = new Set<string>();
+                for (const r of blockReminders) {
+                    const taskId = r.originalId || r.id;
+                    if (!taskId) continue;
+
+                    if (r.isRepeatInstance || r.repeat?.enabled) {
+                        const seriesId = r.originalId || (r.id ? r.id.split('_')[0] : '');
+                        if (seriesId) {
+                            if (processedTaskSeries.has(seriesId)) continue;
+                            processedTaskSeries.add(seriesId);
+                            totalPomoCount += pomodoroManager.getRepeatingEventTotalPomodoroCount(seriesId);
+                            totalPomoMinutes += pomodoroManager.getRepeatingEventTotalFocusTime(seriesId);
+                            continue;
+                        }
+                    }
+
+                    if (processedTaskSeries.has(r.id)) continue;
+                    processedTaskSeries.add(r.id);
+                    totalPomoCount += pomodoroManager.getEventTotalPomodoroCount(r.id);
+                    totalPomoMinutes += pomodoroManager.getEventTotalFocusTime(r.id);
+                }
+
+                attrs['custom-task-pomodoro-count'] = totalPomoCount > 0 ? String(totalPomoCount) : '';
+                attrs['custom-task-pomodoro-minutes'] = totalPomoMinutes > 0 ? String(totalPomoMinutes) : '';
+            }
+        } catch (pomoErr) {
+            console.warn('计算/更新块番茄属性失败:', blockId, pomoErr);
+        }
 
         await setBlockAttrs(blockId, attrs);
 

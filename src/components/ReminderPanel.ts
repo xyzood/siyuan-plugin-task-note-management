@@ -8620,6 +8620,7 @@ export class ReminderPanel {
 
     private async deleteReminder(reminder: any) {
         const targetId = reminder.isSpanningTodayCompletedInstance ? reminder.originalId : reminder.id;
+        const initialBlockId = reminder.blockId;
         try {
             if (this.isDeleting) return;
             const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
@@ -8631,7 +8632,7 @@ export class ReminderPanel {
                 i18n("deleteReminder"),
                 `${i18n("confirmDelete", { title: reminder.title })}${extra}`,
                 () => {
-                    this.performDeleteReminder(targetId, reminderData, childrenIndex);
+                    this.performDeleteReminder(targetId, reminderData, childrenIndex, initialBlockId);
                 }
             );
         } catch (error) {
@@ -8640,7 +8641,7 @@ export class ReminderPanel {
                 i18n("deleteReminder"),
                 i18n("confirmDelete", { title: reminder.title }),
                 () => {
-                    this.performDeleteReminder(targetId);
+                    this.performDeleteReminder(targetId, undefined, undefined, initialBlockId);
                 }
             );
         }
@@ -8707,20 +8708,24 @@ export class ReminderPanel {
         return index;
     }
 
-    private async performDeleteReminder(reminderId: string, preloadedReminderData?: any, preloadedChildrenIndex?: Map<string, string[]>) {
+    private async performDeleteReminder(reminderId: string, preloadedReminderData?: any, preloadedChildrenIndex?: Map<string, string[]>, initialBlockId?: string) {
         if (this.isDeleting) return;
         this.isDeleting = true;
 
         try {
             const reminderData = preloadedReminderData || await getAllReminders(this.plugin, undefined, false, 'sidebar');
 
-            if (!reminderData[reminderId]) {
+            const parsed = parseReminderInstanceId(reminderId);
+            const baseId = parsed ? parsed.originalId : (reminderId.includes('_') ? reminderId.split('_')[0] : reminderId);
+            const targetId = reminderData[reminderId] ? reminderId : (reminderData[baseId] ? baseId : reminderId);
+
+            if (!reminderData[targetId]) {
                 showMessage(i18n("reminderNotExist"));
                 return;
             }
 
             // 保存父任务ID（用于更新父任务进度）
-            const reminder = reminderData[reminderId];
+            const reminder = reminderData[targetId];
             const parentId = reminder?.parentId;
 
             // 构建提醒映射以便查找子任务
@@ -8731,13 +8736,15 @@ export class ReminderPanel {
 
             // 使用 parent->children 索引收集所有后代 id
             const childrenIndex = preloadedChildrenIndex || this.buildChildrenIndex(reminderData);
-            const descendantIds = this.collectDescendantIds(reminderId, childrenIndex);
+            const descendantIds = this.collectDescendantIds(targetId, childrenIndex);
 
             // 收集要删除的 id（包括自身）
-            const toDelete = new Set<string>([reminderId, ...descendantIds]);
+            const toDelete = new Set<string>([targetId, ...descendantIds]);
 
-            // 收集受影响的 blockId 以便之后更新书签
+            // 收集受影响的 blockId 以便之后更新书签及番茄钟
             const affectedBlockIds = new Set<string>();
+            if (initialBlockId) affectedBlockIds.add(initialBlockId);
+            if (reminder?.blockId) affectedBlockIds.add(reminder.blockId);
 
             // 预收集实例键，避免嵌套循环
             const instanceKeysByBaseId = this.buildInstanceKeysIndex(reminderData);
@@ -8752,6 +8759,11 @@ export class ReminderPanel {
                 const rem = reminderData[id];
                 if (rem) {
                     if (rem.blockId) affectedBlockIds.add(rem.blockId);
+                    if (rem.repeat?.instances) {
+                        Object.values(rem.repeat.instances).forEach((st: any) => {
+                            if (st?.blockId) affectedBlockIds.add(st.blockId);
+                        });
+                    }
                     notificationIds.push(id);
                     if (rem.isSubscribed && rem.subscriptionType === 'caldav') {
                         caldavDeletions.push({ id, rem });
@@ -8801,10 +8813,10 @@ export class ReminderPanel {
                     ));
                 }
 
-                // 批量更新受影响的块的书签状态
+                // 批量更新受影响的块的书签及番茄钟属性
                 await Promise.all(Array.from(affectedBlockIds).map(bId =>
                     updateBindBlockAtrrs(bId, this.plugin).catch((e: any) => {
-                        console.warn('更新块书签失败:', bId, e);
+                        console.warn('更新块属性失败:', bId, e);
                     })
                 ));
 
@@ -9421,10 +9433,19 @@ export class ReminderPanel {
             i18n("confirmDeleteInstance"),
             async () => {
                 try {
-                    const originalId = reminder.originalId;
-                    const instanceDate = reminder.date;
+                    const originalId = reminder.originalId || parseReminderInstanceId(reminder.id)?.originalId || reminder.id;
+                    const instanceDate = reminder.instanceDate || reminder.date;
 
                     await this.addExcludedDate(originalId, instanceDate);
+
+                    const affectedBlockId = reminder.blockId;
+                    if (affectedBlockId) {
+                        try {
+                            await updateBindBlockAtrrs(affectedBlockId, this.plugin);
+                        } catch (e) {
+                            console.warn('更新实例删除后绑定块属性失败:', affectedBlockId, e);
+                        }
+                    }
 
                     // 局部移除该实例的DOM，避免全量刷新
                     this.removeReminderFromDOM(reminder.id, [reminder.id]);
@@ -11416,9 +11437,13 @@ export class ReminderPanel {
                     const affectedBlockIds = new Set<string>();
                     const notificationIds: string[] = [];
                     for (const id of toDelete) {
-                        const rem = reminderData[id];
-                        if (!rem) continue;
-                        if (rem.blockId) affectedBlockIds.add(rem.blockId);
+                        const parsed = parseReminderInstanceId(id);
+                        const actualId = parsed ? parsed.originalId : (id.includes('_') ? id.split('_')[0] : id);
+                        const rem = reminderData[actualId] || reminderData[id];
+                        if (rem?.blockId) affectedBlockIds.add(rem.blockId);
+                        if (parsed && rem?.repeat?.instances?.[parsed.instanceDate]?.blockId) {
+                            affectedBlockIds.add(rem.repeat.instances[parsed.instanceDate].blockId);
+                        }
                         notificationIds.push(id);
                     }
 

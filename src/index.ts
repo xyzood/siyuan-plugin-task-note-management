@@ -6728,6 +6728,8 @@ export default class ReminderPlugin extends Plugin {
             const reminder = data[reminderId];
 
             if (!reminder) return false;
+            const blockId = reminder.blockId;
+
             // 删除提醒数据
             delete data[reminderId];
             // 取消移动端通知（从 notify.json 获取并取消）
@@ -6736,6 +6738,14 @@ export default class ReminderPlugin extends Plugin {
             // 如果没有传入 reminderData，则保存更改
             if (!reminderData) {
                 await this.saveReminderData(data);
+                if (blockId) {
+                    try {
+                        const { updateBindBlockAtrrs } = await import('./api');
+                        await updateBindBlockAtrrs(blockId, this);
+                    } catch (e) {
+                        console.warn('删除任务后更新块属性失败:', blockId, e);
+                    }
+                }
             }
 
             return true;
