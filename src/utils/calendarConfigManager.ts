@@ -32,6 +32,7 @@ export interface CalendarConfig {
     showReminderTime: boolean; // 是否显示任务提醒时间
     alwaysShowHabitReminderTime: boolean; // 是否始终显示习惯提醒时间
     multiDaysCount: number; // 多天视图显示的天数，默认为3天
+    eventMaxStack: number; // 同一时段最多显示任务数，默认为3
     calendarOpacityLight: number; // 浅色模式任务上色背景色透明度
     calendarOpacityDark: number; // 深色模式任务上色背景色透明度
 }
@@ -71,6 +72,7 @@ export class CalendarConfigManager {
             showReminderTime: true, // 默认显示任务提醒时间
             alwaysShowHabitReminderTime: false, // 默认不始终显示习惯提醒时间
             multiDaysCount: 3, // 默认显示3天
+            eventMaxStack: 3, // 默认同一时段最多显示3个任务
             calendarOpacityLight: 0.25,
             calendarOpacityDark: 0.3
         };
@@ -117,6 +119,7 @@ export class CalendarConfigManager {
             settings.calendarShowReminderTime = this.config.showReminderTime;
             settings.calendarAlwaysShowHabitReminderTime = this.config.alwaysShowHabitReminderTime;
             settings.calendarMultiDaysCount = this.config.multiDaysCount;
+            settings.calendarEventMaxStack = this.config.eventMaxStack;
             settings.calendarOpacityLight = this.config.calendarOpacityLight;
             settings.calendarOpacityDark = this.config.calendarOpacityDark;
             await (this.plugin as any).saveSettings(settings);
@@ -187,6 +190,7 @@ export class CalendarConfigManager {
                 showReminderTime: settings.calendarShowReminderTime !== false, // 默认为 true
                 alwaysShowHabitReminderTime: settings.calendarAlwaysShowHabitReminderTime === true, // 默认为 false
                 multiDaysCount: settings.calendarMultiDaysCount !== undefined ? settings.calendarMultiDaysCount : 3, // 默认为3天
+                eventMaxStack: settings.calendarEventMaxStack !== undefined ? settings.calendarEventMaxStack : 3, // 默认为3个
                 calendarOpacityLight: settings.calendarOpacityLight !== undefined ? settings.calendarOpacityLight : 0.25,
                 calendarOpacityDark: settings.calendarOpacityDark !== undefined ? settings.calendarOpacityDark : 0.3
             };
@@ -220,6 +224,7 @@ export class CalendarConfigManager {
                 showReminderTime: true,
                 alwaysShowHabitReminderTime: false,
                 multiDaysCount: 3,
+                eventMaxStack: 3,
                 calendarOpacityLight: 0.25,
                 calendarOpacityDark: 0.3
             };
@@ -437,6 +442,15 @@ export class CalendarConfigManager {
 
     public getMultiDaysCount(): number {
         return this.config.multiDaysCount !== undefined ? this.config.multiDaysCount : 3;
+    }
+
+    public async setEventMaxStack(count: number) {
+        this.config.eventMaxStack = count;
+        await this.saveConfig();
+    }
+
+    public getEventMaxStack(): number {
+        return this.config.eventMaxStack !== undefined ? this.config.eventMaxStack : 3;
     }
 
     public async setShowTasks(show: boolean) {

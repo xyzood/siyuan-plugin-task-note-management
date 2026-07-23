@@ -68,6 +68,7 @@ export class CalendarView {
     private showSubtasks: boolean = true; // 是否显示子任务
     private showRepeatTasks: boolean = true; // 是否显示重复任务
     private repeatInstanceLimit: number = -1; // 重复任务显示实例数量限制
+    private eventMaxStack: number = 3; // 同一时段最多显示任务数，默认3
     private showHiddenTasks: boolean = false; // 是否显示不在日历视图显示的任务
     private showEventCheckbox: boolean = true; // 是否显示日历事件前的复选框
     private showReminderTime: boolean = true; // 是否显示任务提醒时间
@@ -214,6 +215,7 @@ export class CalendarView {
             this.showSubtasks = this.calendarConfigManager.getShowSubtasks();
             this.showRepeatTasks = this.calendarConfigManager.getShowRepeatTasks();
             this.repeatInstanceLimit = this.calendarConfigManager.getRepeatInstanceLimit();
+            this.eventMaxStack = this.calendarConfigManager.getEventMaxStack();
             this.showHiddenTasks = this.calendarConfigManager.getShowHiddenTasks();
             this.showEventCheckbox = this.calendarConfigManager.getShowEventCheckbox();
             this.showReminderTime = this.calendarConfigManager.getShowReminderTime();
@@ -273,6 +275,7 @@ export class CalendarView {
         this.calendar.setOption('firstDay', weekStartDay);
         this.calendar.setOption('slotMinTime', adjustedTimes.slotMinTime);
         this.calendar.setOption('slotMaxTime', adjustedTimes.slotMaxTime);
+        this.calendar.setOption('eventMaxStack', this.eventMaxStack);
         
         // 滚动目标：优先使用用户设置的日历视图起始时间（dayStartTime）。
         // 当顶部展开且底部折叠时，slotMinTime 可能仍在底部段结束后（如 08:00），
@@ -491,6 +494,7 @@ export class CalendarView {
         this.showSubtasks = this.calendarConfigManager.getShowSubtasks();
         this.showRepeatTasks = this.calendarConfigManager.getShowRepeatTasks();
         this.repeatInstanceLimit = this.calendarConfigManager.getRepeatInstanceLimit();
+        this.eventMaxStack = this.calendarConfigManager.getEventMaxStack();
         this.showHiddenTasks = this.calendarConfigManager.getShowHiddenTasks();
         this.showEventCheckbox = this.calendarConfigManager.getShowEventCheckbox();
         this.showReminderTime = this.calendarConfigManager.getShowReminderTime();
@@ -1075,6 +1079,28 @@ export class CalendarView {
             await this.refreshEvents();
         });
         displaySettingsDropdown.appendChild(repeatLimitItem);
+
+        // 同一时段最多显示任务数
+        const eventMaxStackItem = document.createElement('div');
+        eventMaxStackItem.className = 'fn__flex fn__flex-center';
+        eventMaxStackItem.style.padding = '6px 12px';
+        eventMaxStackItem.style.gap = '8px';
+        eventMaxStackItem.innerHTML = `
+            <div class="fn__flex-1">${i18n("eventMaxStack") || "同一时段最多显示"}</div>
+            <input class="b3-text-field" type="number" value="${this.eventMaxStack}" min="1" style="width: 50px; text-align: center;">
+            <div>${i18n("tasksUnit") || "个任务"}</div>
+        `;
+        const eventMaxStackInput = eventMaxStackItem.querySelector('input') as HTMLInputElement;
+        eventMaxStackInput.addEventListener('change', async () => {
+            let val = parseInt(eventMaxStackInput.value);
+            if (isNaN(val) || val < 1) val = 1;
+            this.eventMaxStack = val;
+            eventMaxStackInput.value = val.toString();
+            await this.calendarConfigManager.setEventMaxStack(this.eventMaxStack);
+            this.calendar.setOption('eventMaxStack', this.eventMaxStack);
+            await this.refreshEvents();
+        });
+        displaySettingsDropdown.appendChild(eventMaxStackItem);
 
         // 番茄专注设置
         displaySettingsDropdown.appendChild(createSwitchItem(i18n("showPomodoroRecords") || "显示番茄专注", this.showPomodoro, async (checked) => {
@@ -1707,7 +1733,7 @@ export class CalendarView {
             nowIndicator: true, // 显示当前时间指示线
             snapDuration: '00:05:00', // 设置吸附间隔为5分钟
             slotDuration: '00:15:00', // 设置默认时间间隔为15分钟
-            eventMaxStack: 2, // 最多显示2个重叠事件
+            eventMaxStack: this.eventMaxStack, // 最多显示重叠任务数，默认3
             allDayText: i18n("allDay"), // 置全天事件的文本
             slotEventOverlap: false, // 不允许事件重叠
             slotLabelFormat: {

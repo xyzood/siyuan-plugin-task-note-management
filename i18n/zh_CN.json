@@ -1491,6 +1491,8 @@
     "completedTaskTimeUseTaskColor": "使用任务上色方式",
     "showReminderTime": "显示任务提醒时间",
     "alwaysShowHabitReminderTime": "始终显示习惯提醒时间",
+    "eventMaxStack": "同一时段最多显示",
+    "tasksUnit": "个任务",
     "show": "显示",
     "instances": "个未完成实例",
     "noLimit": "表示不限制",

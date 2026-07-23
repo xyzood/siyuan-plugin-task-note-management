@@ -1491,6 +1491,8 @@
     "completedTaskTimeUseTaskColor": "Use Task Color Scheme",
     "showReminderTime": "Show Task Reminder Time",
     "alwaysShowHabitReminderTime": "Always show habit reminder times",
+    "eventMaxStack": "Max tasks per time slot",
+    "tasksUnit": "tasks",
     "show": "Show",
     "instances": "incomplete instances",
     "noLimit": "means no limit",
