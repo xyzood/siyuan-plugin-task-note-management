@@ -10105,7 +10105,7 @@ export class ReminderPanel {
             const maxSort = allReminders.reduce((max, r) => Math.max(max, r.sort || 0), 0);
             const defaultSort = maxSort + 10000;
 
-            const today = getLogicalDateString();
+            const today = getLocalDateString();
             const quickDialog = new QuickReminderDialog(
                 today, // 初始日期为今天
                 undefined, // 不指定初始时间
@@ -10477,7 +10477,7 @@ export class ReminderPanel {
                     const dialog = new PasteTaskDialog({
                         plugin: this.plugin,
                         defaultSetDate: true,
-                        defaultDateStr: getLogicalDateString(),
+                        defaultDateStr: getLocalDateString(),
                         onSuccess: () => {
                             this.loadReminders(true);
                         }
