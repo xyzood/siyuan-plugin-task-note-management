@@ -6729,17 +6729,9 @@ export class ReminderPanel {
                 return false;
             }
 
-            // 如果被拖动的任务有父任务，说明是要移除父子关系，此时不检查优先级限制
-            const isRemovingParent = draggedReminder.parentId != null;
-
-            if (!isRemovingParent) {
-                // 只有在不是移除父子关系的情况下，才检查优先级限制
-                // 允许跨优先级拖拽，后续在 dropping 时处理优先级变更
-                /* const draggedPriority = draggedReminder.priority || 'none';
-                const targetPriority = targetReminder.priority || 'none';
-                if (draggedPriority !== targetPriority) {
-                    return false;
-                } */
+            // 如果目标任务有 parentId，拖到其上下方会将 dragged 的 parentId 设为 target.parentId，需防止造成循环引用
+            if (targetReminder.parentId && this.wouldCreateCycle(draggedReminder.id, targetReminder.parentId)) {
+                return false;
             }
         }
 
@@ -6771,49 +6763,11 @@ export class ReminderPanel {
         return false;
     }
 
-    // 新增：检查是否为同级排序（不需要移除父子关系）
+    // 新增：检查是否为同级排序（即父任务ID完全一致）
     private isSameLevelSort(draggedReminder: any, targetReminder: any): boolean {
-        // 如果被拖拽的任务没有父任务，则一定是同级排序
-        if (!draggedReminder.parentId) {
-            return true;
-        }
-
-        // 如果目标任务的父任务ID与被拖拽任务的父任务ID相同，则为同级排序
-        if (targetReminder.parentId === draggedReminder.parentId) {
-            return true;
-        }
-
-        // 检查目标任务是否是被拖拽任务的祖先（在同一棵树内）
-        const reminderMap = new Map<string, any>();
-        this.currentRemindersCache.forEach(r => reminderMap.set(r.id, r));
-
-        let currentId: string | undefined = draggedReminder.parentId;
-        const visited1 = new Set<string>();
-        while (currentId) {
-            if (currentId === targetReminder.id) {
-                return true; // 目标任务是被拖拽任务的祖先，属于同级排序
-            }
-            if (visited1.has(currentId)) break;
-            visited1.add(currentId);
-            const current = reminderMap.get(currentId);
-            currentId = current?.parentId;
-        }
-
-        // 检查被拖拽任务是否是目标任务的祖先（这种情况很少见，但也要处理）
-        currentId = targetReminder.parentId;
-        const visited2 = new Set<string>();
-        while (currentId) {
-            if (currentId === draggedReminder.id) {
-                return true; // 被拖拽任务是目标任务的祖先，属于同级排序
-            }
-            if (visited2.has(currentId)) break;
-            visited2.add(currentId);
-            const current = reminderMap.get(currentId);
-            currentId = current?.parentId;
-        }
-
-        // 其他情况：父任务ID不同，且不在同一棵树内，则为不同级排序
-        return false;
+        const draggedParentId = draggedReminder?.parentId || null;
+        const targetParentId = targetReminder?.parentId || null;
+        return draggedParentId === targetParentId;
     }
 
     // 新增：显示拖放指示器
@@ -6955,6 +6909,7 @@ export class ReminderPanel {
                 // 执行排序操作
                 await this.reorderReminders(draggedReminder, targetReminder, insertBefore);
                 this.updateDOMOrder(draggedReminder, targetReminder, insertBefore);
+                await this.loadReminders();
             }
         } catch (error) {
             console.error('处理拖放失败:', error);
