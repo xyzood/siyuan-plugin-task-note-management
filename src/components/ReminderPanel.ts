@@ -5687,7 +5687,7 @@ export class ReminderPanel {
             }
         }, { passive: true });
 
-        this.remindersContainer.addEventListener('dragover', (e) => {
+        this.container.addEventListener('dragover', (e) => {
             const types = e.dataTransfer?.types || [];
             const isSiYuanDrag = Array.from(types).some(t => t.startsWith(Constants.SIYUAN_DROP_GUTTER) || t.includes('siyuan')) ||
                 types.includes(Constants.SIYUAN_DROP_FILE) || types.includes('application/vnd.siyuan-file') ||
@@ -5715,12 +5715,15 @@ export class ReminderPanel {
             }
         });
 
-        this.remindersContainer.addEventListener('dragleave', () => {
+        this.container.addEventListener('dragleave', (e: DragEvent) => {
+            if (e.relatedTarget && this.container.contains(e.relatedTarget as Node)) {
+                return;
+            }
             this.remindersContainer.classList.remove('drag-over-active');
             this.stopDragScroll();
         });
 
-        this.remindersContainer.addEventListener('drop', async (e) => {
+        this.container.addEventListener('drop', async (e) => {
             this.hideDropIndicator();
             this.remindersContainer.classList.remove('drag-over-active');
             this.stopDragScroll();
@@ -5750,55 +5753,69 @@ export class ReminderPanel {
                     // 计算目标属性
                     const { defaultDate, defaultEndDate, defaultCategoryId, defaultProjectId, defaultPriority } = await this.getFilterAttributes();
 
-                    // 如果有默认属性，则更新任务
-                    if (defaultDate || defaultProjectId || defaultPriority || defaultCategoryId) {
-                        const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
-                        const reminder = reminderData[taskId];
-                        if (reminder) {
-                            let changed = false;
+                    const reminderData = await getAllReminders(this.plugin, undefined, false, 'sidebar');
+                    const reminder = reminderData[taskId];
+                    if (reminder) {
+                        let changed = false;
 
-                            // Date
-                            if (defaultDate && reminder.date !== defaultDate) {
-                                reminder.date = defaultDate;
-                                changed = true;
-                            }
-                            if (defaultEndDate && reminder.endDate !== defaultEndDate) {
-                                reminder.endDate = defaultEndDate;
-                                changed = true;
-                            } else if (defaultDate && !defaultEndDate && reminder.endDate) {
-                                // If setting to a single day (defaultEndDate empty), clear endDate if it exists
-                                delete reminder.endDate;
-                                changed = true;
-                            }
+                        // 1. 根据当前面板的筛选条件设置/更新属性
+                        if (defaultDate && reminder.date !== defaultDate) {
+                            reminder.date = defaultDate;
+                            changed = true;
+                        }
+                        if (defaultEndDate && reminder.endDate !== defaultEndDate) {
+                            reminder.endDate = defaultEndDate;
+                            changed = true;
+                        } else if (defaultDate && !defaultEndDate && reminder.endDate) {
+                            delete reminder.endDate;
+                            changed = true;
+                        }
 
-                            // Priority
-                            if (defaultPriority && (reminder.priority || 'none') !== defaultPriority) {
-                                reminder.priority = defaultPriority;
-                                changed = true;
-                            }
+                        if (defaultPriority && (reminder.priority || 'none') !== defaultPriority) {
+                            reminder.priority = defaultPriority;
+                            changed = true;
+                        }
 
-                            // Project
-                            if (defaultProjectId && reminder.projectId !== defaultProjectId) {
-                                reminder.projectId = defaultProjectId;
-                                changed = true;
-                            }
+                        if (defaultProjectId && reminder.projectId !== defaultProjectId) {
+                            reminder.projectId = defaultProjectId;
+                            changed = true;
+                        }
 
-                            // Category
-                            if (defaultCategoryId && reminder.categoryId !== defaultCategoryId) {
-                                reminder.categoryId = defaultCategoryId;
-                                changed = true;
-                            }
+                        if (defaultCategoryId && reminder.categoryId !== defaultCategoryId) {
+                            reminder.categoryId = defaultCategoryId;
+                            changed = true;
+                        }
 
-                            // Support sorting for internal drag if dropped on an item
-                            if (targetInfo) {
-                                // Resolve target reminder (including instances)
-                                const targetRem = this.currentRemindersCache.find(r => r.id === targetInfo.id);
-                                if (targetRem) {
-                                    // If target has specific priority and we didn't force one from filter, adopt target's priority?
-                                    // User request: "based on current filters".
-                                    // But typically dropping ON an item implies sorting.
-                                    // If we conform to filter, we might conflict with target item's group if filter is 'all'?
-                                    // Let's stick to filter first. If filter didn't specify priority, maybe use target's?
+                        // 2. 处理拖到侧栏指定任务上 (targetInfo) 的父子关系与排序
+                        if (targetInfo) {
+                            const targetRem = reminderData[targetInfo.id] || this.currentRemindersCache.find(r => r.id === targetInfo.id);
+                            if (targetRem) {
+                                if (targetInfo.dropType === 'set-parent') {
+                                    // 设为目标的子任务
+                                    const parentId = targetRem.isRepeatInstance ? targetRem.originalId : targetRem.id;
+                                    if (!this.wouldCreateCycle(taskId, parentId)) {
+                                        reminder.parentId = parentId;
+                                        if (targetRem.projectId) reminder.projectId = targetRem.projectId;
+                                        if (targetRem.categoryId) reminder.categoryId = targetRem.categoryId;
+                                        changed = true;
+                                    }
+                                } else {
+                                    // 拖到目标的上下方 (before / after)
+                                    const isSameLevelSort = this.isSameLevelSort(reminder, targetRem);
+                                    if (!isSameLevelSort) {
+                                        if (targetRem.parentId) {
+                                            if (!this.wouldCreateCycle(taskId, targetRem.parentId)) {
+                                                reminder.parentId = targetRem.parentId;
+                                                if (targetRem.projectId) reminder.projectId = targetRem.projectId;
+                                                if (targetRem.categoryId) reminder.categoryId = targetRem.categoryId;
+                                                changed = true;
+                                            }
+                                        } else if (reminder.parentId) {
+                                            delete reminder.parentId;
+                                            changed = true;
+                                        }
+                                    }
+
                                     if (!defaultPriority) {
                                         const targetPriority = targetRem.priority || 'none';
                                         if ((reminder.priority || 'none') !== targetPriority) {
@@ -5807,26 +5824,20 @@ export class ReminderPanel {
                                         }
                                     }
 
-                                    if (changed) {
-                                        await saveReminders(this.plugin, reminderData);
-                                        // Reset changed flag because we just saved
-                                        changed = false;
-                                    }
-
-                                    await this.reorderReminders(reminder, targetRem, targetInfo.isBefore, reminderData);
+                                    await this.reorderReminders(reminder, targetRem, targetInfo.isBefore, reminderData, true);
+                                    changed = true;
                                 }
                             }
+                        }
 
-                            if (changed) {
-                                await saveReminders(this.plugin, reminderData);
-                                window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
-                                await this.loadReminders();
-                                showMessage(i18n("reminderUpdated") || "任务已更新");
-                            }
+                        // 3. 保存更改并即时刷侧栏 DOM
+                        if (changed) {
+                            await saveReminders(this.plugin, reminderData);
+                            window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.panelId } }));
+                            await this.loadReminders();
+                            showMessage(i18n("reminderUpdated") || "任务已更新");
                         }
                     }
-                    // 如果不在特定日期视图（如全部、逾期等），仅允许拖拽（可能用于排序，但此处未实现跨列表排序逻辑，暂不操作）
-                    // 用户需求是"不限制视图"，所以解除之前的 return 限制即可。
                 } catch (error) {
                     console.error('处理拖放失败:', error);
                     showMessage(i18n("operationFailed"));
