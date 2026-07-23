@@ -5528,10 +5528,8 @@ export class QuickReminderDialog {
                     everyDay: true
                 });
             } else {
-                const yyyy = now.getFullYear();
-                const mm = String(now.getMonth() + 1).padStart(2, '0');
-                const dd = String(now.getDate()).padStart(2, '0');
-                this.addCustomTime(`${yyyy}-${mm}-${dd}T${hh}:${min}`, '');
+                const targetDate = date || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                this.addCustomTime(`${targetDate}T${hh}:${min}`, '');
             }
             showMessage(i18n('reminderTimeAdded') || '提醒时间已添加');
         });

@@ -38,6 +38,7 @@ import { getHabitProgressOnDate, getHabitReminderTimes, getHabitReminderTimesFor
 import { HabitGroupManager } from "../utils/habitGroupManager";
 import { normalizeReminderSkipWeekendMode, shouldSkipReminderOnDate, type HolidayData, getReminderSkipWeekendsEffective, getReminderSkipHolidaysEffective } from "../utils/reminderSkipDate";
 import { syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../utils/habitMemoBlockSync";
+import { isOpenEndedStartDateTask } from "../utils/startDateOverdue";
 export class CalendarView {
     private container: HTMLElement;
     private calendar: Calendar;
@@ -9133,13 +9134,16 @@ export class CalendarView {
                 const activeEnd = currentView ? getLocalDateString(currentView.activeEnd) : undefined;
                 const todayStr = getLocalDateString(new Date());
 
-                let startStr = reminder.date || activeStart || todayStr;
-                let endStr = reminder.endDate;
+                const hasExplicitTaskDate = !!(reminder.date || reminder.endDate);
+                const isOpenEndedStartTask = isOpenEndedStartDateTask(reminder, this.plugin?.settings);
+                let startStr = reminder.date || reminder.endDate || activeStart || todayStr;
+                let endStr = reminder.endDate || reminder.date;
                 
-                // If not cross-day task, calculate dynamic end date
-                if (!isCrossDay) {
+                // Dateless tasks OR open-ended start-date tasks (start date set, no end date, treatStartDateOnlyAsOverdue is false):
+                // everyDay reminder time continues until completed or activeEnd
+                if (!hasExplicitTaskDate || isOpenEndedStartTask) {
                     if (reminder.completed) {
-                        endStr = reminder.completedTime ? reminder.completedTime.substring(0, 10) : (reminder.date || todayStr);
+                        endStr = reminder.completedTime ? reminder.completedTime.substring(0, 10) : (startStr || todayStr);
                         if (startStr > endStr) {
                             endStr = startStr;
                         }
@@ -9149,6 +9153,9 @@ export class CalendarView {
                             endStr = startStr;
                         }
                     }
+                } else if (!isCrossDay) {
+                    // Single-day tasks (start date set and treated as deadline/overdue when past, or start and end date on same day): only display on that single day
+                    endStr = startStr;
                 }
 
                 const startParts = startStr.split('-').map(Number);
