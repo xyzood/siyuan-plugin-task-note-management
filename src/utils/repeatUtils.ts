@@ -106,11 +106,12 @@ export function getInstanceField<T>(
     fallback: T
 ): T {
     if (!state || !Object.prototype.hasOwnProperty.call(state, field)) return fallback;
-    return (state as any)[field];
+    const val = (state as any)[field];
+    return val !== undefined ? val : fallback;
 }
 
 export function hasInstanceField(state: RepeatInstanceState | undefined, field: keyof RepeatInstanceState): boolean {
-    return !!state && Object.prototype.hasOwnProperty.call(state, field);
+    return !!state && Object.prototype.hasOwnProperty.call(state, field) && (state as any)[field] !== undefined;
 }
 
 export function patchRepeatInstanceState(

@@ -10146,8 +10146,38 @@ export class ReminderPanel {
         try {
             if (!savedReminder || typeof savedReminder !== 'object') return;
 
+            const isRepeatInstance = !!savedReminder.isRepeatInstance || !!savedReminder.isInstance || (typeof savedReminder.id === 'string' && parseReminderInstanceId(savedReminder.id) !== null);
+            const parsed = parseReminderInstanceId(savedReminder.id);
+            const targetId = savedReminder.originalId || parsed?.originalId || savedReminder.id;
+            const instanceDate = savedReminder.instanceDate || parsed?.instanceDate;
+
+            if (isRepeatInstance && instanceDate && targetId) {
+                // 重复任务的单条实例乐观更新：不能将实例对象（含 instance date, isRepeatInstance 等）当成主任务模板放入 optimisticUpdatesCache
+                if (this.optimisticUpdatesCache) {
+                    let cachedTarget = this.optimisticUpdatesCache.get(targetId);
+                    if (!cachedTarget) {
+                        const diskTask = this.allRemindersMap.get(targetId) || (this.originalRemindersCache ? this.originalRemindersCache[targetId] : null);
+                        if (diskTask) {
+                            cachedTarget = JSON.parse(JSON.stringify(diskTask));
+                        }
+                    }
+                    if (cachedTarget) {
+                        patchRepeatInstanceState(cachedTarget, instanceDate, {
+                            note: savedReminder.note,
+                            title: savedReminder.title,
+                            completed: savedReminder.completed,
+                            completedTime: savedReminder.completedTime,
+                            priority: savedReminder.priority,
+                            kanbanStatus: savedReminder.kanbanStatus
+                        });
+                        this.optimisticUpdatesCache.set(targetId, cachedTarget);
+                    }
+                }
+                await this.loadReminders();
+                return;
+            }
+
             // 无论是否为跨天任务，都在缓存中记录该乐观更新（使用原ID作为键）
-            const targetId = savedReminder.originalId || savedReminder.id;
             if (this.optimisticUpdatesCache) {
                 const normalizedReminder = { ...savedReminder, id: targetId };
                 if (normalizedReminder.isSpanningTodayCompletedInstance) {

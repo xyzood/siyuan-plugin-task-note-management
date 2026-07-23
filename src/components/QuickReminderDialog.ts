@@ -8,7 +8,7 @@ import { i18n } from "../pluginInstance";
 import { RepeatSettingsDialog, RepeatConfig } from "./RepeatSettingsDialog";
 import { solarToLunar } from "../utils/lunarUtils";
 import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
-import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
+import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField, parseReminderInstanceId } from "../utils/repeatUtils";
 import { CategoryManageDialog } from "./CategoryManageDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { SubtasksDialog } from "./SubtasksDialog";
@@ -690,10 +690,19 @@ export class QuickReminderDialog {
             this.blockContent = this.reminder.content || '';
         }
 
-        if (this.isInstanceEdit && this.reminder && this.instanceDate) {
-            const instanceState = getRepeatInstanceState(this.reminder, this.instanceDate) || {};
-            const originalId = this.reminder.originalId || this.reminder.id;
-            const instanceId = this.reminder.isInstance ? this.reminder.id : `${originalId}_${this.instanceDate}`;
+        if (!this.isInstanceEdit && this.reminder) {
+            if (this.reminder.isInstance || this.reminder.isRepeatInstance || (this.reminder.originalId && this.reminder.originalId !== this.reminder.id) || parseReminderInstanceId(this.reminder.id) !== null) {
+                this.isInstanceEdit = true;
+            }
+        }
+
+        if (this.isInstanceEdit && this.reminder) {
+            if (!this.instanceDate) {
+                this.instanceDate = this.reminder.instanceDate || parseReminderInstanceId(this.reminder.id)?.instanceDate || this.reminder.date;
+            }
+            const originalId = this.reminder.originalId || parseReminderInstanceId(this.reminder.id)?.originalId || this.reminder.id;
+            const instanceState = this.instanceDate ? (getRepeatInstanceState(this.reminder, this.instanceDate) || {}) : {};
+            const instanceId = (this.reminder.isInstance || this.reminder.isRepeatInstance) ? this.reminder.id : `${originalId}_${this.instanceDate}`;
             this.reminder = {
                 ...this.reminder,
                 ...instanceState,
@@ -701,6 +710,7 @@ export class QuickReminderDialog {
                 originalId,
                 instanceDate: this.instanceDate,
                 isInstance: true,
+                isRepeatInstance: true,
                 title: instanceState.title || this.reminder.title || '(无标题)'
             };
             this.defaultStatus = this.reminder.kanbanStatus || this.defaultStatus;
@@ -6875,9 +6885,19 @@ export class QuickReminderDialog {
         let note = this.editor ? this.currentNote : this.reminder.note;
         note = this.convertMarkdownImgToHtml(note);
 
+        const isInstance = this.isInstanceEdit || !!this.reminder.isInstance || !!this.reminder.isRepeatInstance || (!!this.reminder.originalId && this.reminder.originalId !== this.reminder.id) || parseReminderInstanceId(this.reminder.id) !== null;
+        const originalId = this.reminder.originalId || parseReminderInstanceId(this.reminder.id)?.originalId || this.reminder.id;
+        const instanceDate = this.reminder.instanceDate || this.instanceDate || parseReminderInstanceId(this.reminder.id)?.instanceDate || this.reminder.date;
+
         // 乐观更新
-        const optimisticReminder = { ...this.reminder };
-        optimisticReminder.note = note;
+        const optimisticReminder = {
+            ...this.reminder,
+            note: note,
+            isInstance: isInstance,
+            isRepeatInstance: isInstance,
+            originalId: originalId,
+            instanceDate: instanceDate
+        };
 
         // 立即回调
         if (this.onSaved) {
@@ -6888,11 +6908,11 @@ export class QuickReminderDialog {
 
         // 后台持久化
         try {
-            if (this.isInstanceEdit && this.reminder.isInstance) {
+            if (isInstance && originalId && instanceDate) {
                 // 实例备注修改
                 await this.saveInstanceModification({
-                    originalId: this.reminder.originalId,
-                    instanceDate: this.reminder.instanceDate,
+                    originalId: originalId,
+                    instanceDate: instanceDate,
                     note: note
                 });
                 console.debug('实例备注已更新 (后台)');
@@ -7864,10 +7884,10 @@ export class QuickReminderDialog {
             const instances = reminderData[originalId].repeat.instances;
 
             // 如果修改了日期，需要清理可能存在的中间修改记录
-            if (instanceData.date !== instanceDate) {
+            if (instanceData.date && instanceData.date !== instanceDate) {
                 const keysToDelete: string[] = [];
                 for (const key in instances) {
-                    if (key !== instanceDate && instances[key]?.date === instanceData.date) {
+                    if (key !== instanceDate && instances[key]?.date && instances[key]?.date === instanceData.date) {
                         keysToDelete.push(key);
                     }
                 }
@@ -7890,36 +7910,50 @@ export class QuickReminderDialog {
             const newProject = instanceData.projectId;
 
             // 保存此实例的修改数据；如果调用方显式传入了完成状态/完成时间则使用传入值，否则保留旧值
-            const newCompleted = hasInstanceField('completed') ? instanceData.completed : oldState.completed;
-            const newCompletedTime = hasInstanceField('completedTime') ? instanceData.completedTime : oldState.completedTime;
-            instances[instanceDate] = {
+            const updatedState: Record<string, any> = {
                 ...oldState,
-                title: instanceData.title,
-                date: instanceData.date,
-                endDate: instanceData.endDate,
-                time: instanceData.time,
-                endTime: instanceData.endTime,
-                blockId: hasInstanceField('blockId') ? instanceData.blockId : oldState.blockId,
-                docId: hasInstanceField('docId') ? instanceData.docId : oldState.docId,
-                url: hasInstanceField('url') ? instanceData.url : oldState.url,
-                note: instanceData.note,
-                priority: instanceData.priority,
-                notified: instanceData.notified,
-                projectId: instanceData.projectId,
-                customGroupId: instanceData.customGroupId,
-                milestoneId: instanceData.milestoneId,
-                kanbanStatus: instanceData.kanbanStatus,
-                reminderTimes: instanceData.reminderTimes,
-                estimatedPomodoroDuration: instanceData.estimatedPomodoroDuration,
-                customProgress: instanceData.customProgress,
-                treatStartDateAsDeadline: instanceData.treatStartDateAsDeadline,
-                reminderSkipWeekendMode: instanceData.reminderSkipWeekendMode,
-                reminderSkipHolidays: instanceData.reminderSkipHolidays,
-                pinned: instanceData.pinned,
-                completed: newCompleted,
-                completedTime: newCompletedTime,
                 modifiedAt: new Date().toISOString().split('T')[0]
             };
+
+            const directFields = [
+                'title', 'date', 'endDate', 'time', 'endTime', 'note', 'priority',
+                'notified', 'projectId', 'customGroupId', 'milestoneId', 'kanbanStatus',
+                'reminderTimes', 'estimatedPomodoroDuration', 'customProgress',
+                'treatStartDateAsDeadline', 'reminderSkipWeekendMode', 'reminderSkipHolidays',
+                'pinned'
+            ];
+
+            for (const f of directFields) {
+                if (hasInstanceField(f)) {
+                    if (instanceData[f] !== undefined) {
+                        updatedState[f] = instanceData[f];
+                    } else {
+                        delete updatedState[f];
+                    }
+                }
+            }
+            if (hasInstanceField('blockId')) {
+                if (instanceData.blockId !== undefined) updatedState.blockId = instanceData.blockId;
+                else delete updatedState.blockId;
+            }
+            if (hasInstanceField('docId')) {
+                if (instanceData.docId !== undefined) updatedState.docId = instanceData.docId;
+                else delete updatedState.docId;
+            }
+            if (hasInstanceField('url')) {
+                if (instanceData.url !== undefined) updatedState.url = instanceData.url;
+                else delete updatedState.url;
+            }
+            if (hasInstanceField('completed')) {
+                if (newCompleted !== undefined) updatedState.completed = newCompleted;
+                else delete updatedState.completed;
+            }
+            if (hasInstanceField('completedTime')) {
+                if (newCompletedTime !== undefined) updatedState.completedTime = newCompletedTime;
+                else delete updatedState.completedTime;
+            }
+
+            instances[instanceDate] = updatedState;
 
             // 如果状态、分组或项目发生了变更，递归更新所有子任务（ghost tasks）
             if (oldStatus !== newStatus || oldGroup !== newGroup || oldProject !== newProject) {
