@@ -3221,34 +3221,6 @@ export class QuickReminderDialog {
                                 </button>
                             </div>
                         </div>
-                        <div class="b3-form__group" id="quickHabitGroup">
-                            <label class="b3-form__label">${i18n("bindHabit") || "绑定习惯"}</label>
-                            <div class="custom-select" id="quickHabitSelectCustom" style="position: relative;">
-                                <div style="position: relative;">
-                                    <input type="text" id="quickHabitSearchInput" class="b3-text-field" placeholder="${i18n("searchHabit") || "搜索习惯"}" autocomplete="off" style="width: 100%; padding-right: 30px; background: var(--b3-select-background);" spellcheck="false">
-                                    <input type="hidden" id="quickHabitSelector">
-                                </div>
-                                <div id="quickHabitDropdown" class="b3-menu" style="display: none; position: absolute; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; margin-top: 4px; box-shadow: var(--b3-menu-shadow); background: var(--b3-menu-background); border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius);">
-                                    <!-- 习惯选项将在这里渲染 -->
-                                </div>
-                            </div>
-                            <div id="quickHabitBindingOptions" style="display: none; margin-top: 8px; padding: 8px; border-radius: 6px; background: var(--b3-theme-background-light);">
-                                <label class="b3-checkbox" style="display: flex; align-items: center; margin-bottom: 6px;">
-                                    <input type="checkbox" class="b3-switch" id="quickHabitSyncPomodoroToday">
-                                    <span class="b3-checkbox__graphic"></span>
-                                    <span class="b3-checkbox__label">${i18n("taskPomodoroSyncToHabitToday") || "将任务今日番茄钟计入习惯今日番茄钟"}</span>
-                                </label>
-                                <label class="b3-checkbox" style="display: flex; align-items: center;">
-                                    <input type="checkbox" class="b3-switch" id="quickHabitAutoCheckInOnComplete">
-                                    <span class="b3-checkbox__graphic"></span>
-                                    <span class="b3-checkbox__label">${i18n("taskAutoCheckInHabitOnComplete") || "任务完成时自动完成习惯打卡"}</span>
-                                </label>
-                                <div id="quickHabitAutoCheckInOptionRow" style="display: none; margin-top: 8px; gap: 8px; align-items: center;">
-                                    <label class="b3-form__label" style="margin: 0; white-space: nowrap;">${i18n("taskAutoCheckInOption") || "打卡选项"}</label>
-                                    <select id="quickHabitAutoCheckInOption" class="b3-select" style="flex: 1; min-width: 0;"></select>
-                                </div>
-                            </div>
-                        </div>
                         <!-- 绑定块/文档输入，允许手动输入块 ID 或文档 ID -->
                         <div class="b3-form__group">
                             <label class="b3-form__label">${i18n("bindToBlock") || '块或文档 ID'}</label>
@@ -3280,6 +3252,34 @@ export class QuickReminderDialog {
                                 <button type="button" id="quickOpenUrlBtn" class="b3-button b3-button--outline ariaLabel" aria-label="${i18n("openUrl") || '在浏览器中打开'}">
                                     <svg class="b3-button__icon"><use xlink:href="#iconOpenWindow"></use></svg>
                                 </button>
+                            </div>
+                        </div>
+                        <div class="b3-form__group" id="quickHabitGroup">
+                            <label class="b3-form__label">${i18n("bindHabit") || "绑定习惯"}</label>
+                            <div class="custom-select" id="quickHabitSelectCustom" style="position: relative;">
+                                <div style="position: relative;">
+                                    <input type="text" id="quickHabitSearchInput" class="b3-text-field" placeholder="${i18n("searchHabit") || "搜索习惯"}" autocomplete="off" style="width: 100%; padding-right: 30px; background: var(--b3-select-background);" spellcheck="false">
+                                    <input type="hidden" id="quickHabitSelector">
+                                </div>
+                                <div id="quickHabitDropdown" class="b3-menu" style="display: none; position: absolute; width: 100%; max-height: 200px; overflow-y: auto; z-index: 10; margin-top: 4px; box-shadow: var(--b3-menu-shadow); background: var(--b3-menu-background); border: 1px solid var(--b3-border-color); border-radius: var(--b3-border-radius);">
+                                    <!-- 习惯选项将在这里渲染 -->
+                                </div>
+                            </div>
+                            <div id="quickHabitBindingOptions" style="display: none; margin-top: 8px; padding: 8px; border-radius: 6px; background: var(--b3-theme-background-light);">
+                                <label class="b3-checkbox" style="display: flex; align-items: center; margin-bottom: 6px;">
+                                    <input type="checkbox" class="b3-switch" id="quickHabitSyncPomodoroToday">
+                                    <span class="b3-checkbox__graphic"></span>
+                                    <span class="b3-checkbox__label">${i18n("taskPomodoroSyncToHabitToday") || "将任务今日番茄钟计入习惯今日番茄钟"}</span>
+                                </label>
+                                <label class="b3-checkbox" style="display: flex; align-items: center;">
+                                    <input type="checkbox" class="b3-switch" id="quickHabitAutoCheckInOnComplete">
+                                    <span class="b3-checkbox__graphic"></span>
+                                    <span class="b3-checkbox__label">${i18n("taskAutoCheckInHabitOnComplete") || "任务完成时自动完成习惯打卡"}</span>
+                                </label>
+                                <div id="quickHabitAutoCheckInOptionRow" style="display: none; margin-top: 8px; gap: 8px; align-items: center;">
+                                    <label class="b3-form__label" style="margin: 0; white-space: nowrap;">${i18n("taskAutoCheckInOption") || "打卡选项"}</label>
+                                    <select id="quickHabitAutoCheckInOption" class="b3-select" style="flex: 1; min-width: 0;"></select>
+                                </div>
                             </div>
                         </div>
                         <!-- Removed Notes from sequential settings layout -->
