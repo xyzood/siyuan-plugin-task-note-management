@@ -1185,27 +1185,47 @@ export async function updateBindBlockAtrrs(blockId: string, plugin: any): Promis
                 let totalPomoCount = pomodoroManager.getRepeatingEventTotalPomodoroCount(blockId);
                 let totalPomoMinutes = pomodoroManager.getRepeatingEventTotalFocusTime(blockId);
 
-                // 加上当前仍绑定在该块上的所有任务的番茄
+                // 加上当前仍绑定在该块上的所有任务的番茄（含子任务，最多2层深度）
                 const processedTaskSeries = new Set<string>();
-                for (const r of blockReminders) {
-                    const taskId = r.originalId || r.id;
-                    if (!taskId) continue;
 
-                    if (r.isRepeatInstance || r.repeat?.enabled) {
-                        const seriesId = r.originalId || (r.id ? r.id.split('_')[0] : '');
-                        if (seriesId) {
-                            if (processedTaskSeries.has(seriesId)) continue;
-                            processedTaskSeries.add(seriesId);
-                            totalPomoCount += pomodoroManager.getRepeatingEventTotalPomodoroCount(seriesId);
-                            totalPomoMinutes += pomodoroManager.getRepeatingEventTotalFocusTime(seriesId);
-                            continue;
+                // 只有后缀是 YYYY-MM-DD 时才去掉（重复任务实例），其他情况保留完整 ID
+                const getSeriesBaseId = (id: string): string => {
+                    const m = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+                    return m ? m[1] : id;
+                };
+
+                // 预建 parentId -> [childId] 索引（基于 reminder 的 parentId 字段）
+                const childrenByParentId = new Map<string, string[]>();
+                for (const rem of Object.values(reminderData) as any[]) {
+                    if (!rem || !rem.parentId || !rem.id) continue;
+                    const parentBase = getSeriesBaseId(String(rem.parentId));
+                    if (!childrenByParentId.has(parentBase)) childrenByParentId.set(parentBase, []);
+                    childrenByParentId.get(parentBase)!.push(rem.id);
+                }
+
+                // 辅助：收集一批任务 ID 的番茄，并递归收集其子任务（深度限制 maxDepth）
+                const collectPomodoroForIds = (ids: string[], depth: number) => {
+                    if (depth > 2) return;
+                    for (const id of ids) {
+                        if (!id) continue;
+                        const baseId = getSeriesBaseId(id);
+                        if (processedTaskSeries.has(baseId)) continue;
+                        processedTaskSeries.add(baseId);
+                        // 使用 getRepeatingEventTotalPomodoroCount 可同时覆盖非重复和重复任务的全部实例
+                        totalPomoCount += pomodoroManager.getRepeatingEventTotalPomodoroCount(baseId);
+                        totalPomoMinutes += pomodoroManager.getRepeatingEventTotalFocusTime(baseId);
+                        // 通过 parentId 索引递归子任务
+                        const childIds = childrenByParentId.get(baseId);
+                        if (childIds?.length) {
+                            collectPomodoroForIds(childIds, depth + 1);
                         }
                     }
+                };
 
-                    if (processedTaskSeries.has(r.id)) continue;
-                    processedTaskSeries.add(r.id);
-                    totalPomoCount += pomodoroManager.getEventTotalPomodoroCount(r.id);
-                    totalPomoMinutes += pomodoroManager.getEventTotalFocusTime(r.id);
+                for (const r of blockReminders) {
+                    const seriesId = r.originalId || getSeriesBaseId(r.id || '');
+                    if (!seriesId) continue;
+                    collectPomodoroForIds([seriesId], 0);
                 }
 
                 attrs['custom-task-pomodoro-count'] = totalPomoCount > 0 ? String(totalPomoCount) : '';

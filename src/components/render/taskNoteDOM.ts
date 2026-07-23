@@ -1135,7 +1135,52 @@ export class TaskNoteDOMManager {
             return;
         }
 
-        const linkedStats = this.getBoundPomodoroStatsFromCache(linkedReminderIds);
+        // 扩展 linkedReminderIds 以包含子任务的 ID（通过 parentId 字段，最多2层递归）
+        let expandedLinkedIds = this.normalizeReminderIds(linkedReminderIds);
+        try {
+            if (expandedLinkedIds.length > 0 && this.plugin && typeof this.plugin.loadReminderData === 'function') {
+                const reminderData = await this.plugin.loadReminderData() as Record<string, any>;
+                if (reminderData) {
+                    // 只有后缀是 YYYY-MM-DD 时才去掉（重复任务实例），其他情况保留完整 ID
+                    const getSeriesBaseId = (id: string): string => {
+                        const m = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+                        return m ? m[1] : id;
+                    };
+
+                    // 预建 parentId -> [childId] 索引
+                    const childrenByParentId = new Map<string, string[]>();
+                    for (const rem of Object.values(reminderData) as any[]) {
+                        if (!rem || !rem.parentId || !rem.id) continue;
+                        const parentBase = getSeriesBaseId(String(rem.parentId));
+                        if (!childrenByParentId.has(parentBase)) childrenByParentId.set(parentBase, []);
+                        childrenByParentId.get(parentBase)!.push(rem.id);
+                    }
+
+                    const visited = new Set<string>(expandedLinkedIds);
+                    const collectSubtaskIds = (ids: string[], depth: number) => {
+                        if (depth > 2) return;
+                        for (const id of ids) {
+                            const baseId = getSeriesBaseId(id);
+                            const childIds = childrenByParentId.get(baseId);
+                            if (!childIds?.length) continue;
+                            for (const subId of childIds) {
+                                if (!subId || visited.has(subId)) continue;
+                                visited.add(subId);
+                                expandedLinkedIds.push(subId);
+                                collectSubtaskIds([subId], depth + 1);
+                            }
+                        }
+                    };
+                    collectSubtaskIds([...expandedLinkedIds], 0);
+                }
+            }
+        } catch (e) {
+            console.warn('扩展子任务 ID 失败:', e);
+        }
+
+
+
+        const linkedStats = this.getBoundPomodoroStatsFromCache(expandedLinkedIds);
         const selfStats = this.getSelfPomodoroStats(
             blockId,
             selfPomodoroCount,
@@ -1165,10 +1210,10 @@ export class TaskNoteDOMManager {
         }
 
         if (!existingPomodoroBtn) {
-            container.appendChild(this._createPomodoroSummaryButton(blockId, mergedCount, mergedMinutes, linkedReminderIds));
+            container.appendChild(this._createPomodoroSummaryButton(blockId, mergedCount, mergedMinutes, expandedLinkedIds));
             return;
         }
-        this._updatePomodoroSummaryButton(existingPomodoroBtn, mergedCount, mergedMinutes, linkedReminderIds);
+        this._updatePomodoroSummaryButton(existingPomodoroBtn, mergedCount, mergedMinutes, expandedLinkedIds);
         if (existingPomodoroBtn.parentElement !== container) {
             container.appendChild(existingPomodoroBtn);
         }
