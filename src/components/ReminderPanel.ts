@@ -5152,6 +5152,9 @@ export class ReminderPanel {
 
     private async toggleReminder(reminderId: string, completed: boolean, isRepeatInstance?: boolean, instanceDate?: string, optimisticReminderId?: string) {
         try {
+            if (completed && this.plugin?.playTaskCompleteSound) {
+                this.plugin.playTaskCompleteSound();
+            }
             const optimisticRootId = optimisticReminderId || (isRepeatInstance && instanceDate ? `${reminderId}_${instanceDate}` : reminderId);
             const optimisticIds = [optimisticRootId, ...this.getDescendantIdsFromCache(optimisticRootId)];
             const optimisticCompletedTime = completed ? getLocalDateTimeString(new Date()) : undefined;
@@ -11253,6 +11256,9 @@ export class ReminderPanel {
         const ids = Array.from(this.selectedReminderIds);
         if (ids.length === 0) return;
         try {
+            if (this.plugin?.playTaskCompleteSound) {
+                this.plugin.playTaskCompleteSound();
+            }
             const selectedReminders = ids.map(id =>
                 this.currentRemindersCache.find(r => r.id === id) ||
                 this.allRemindersMap.get(id) ||

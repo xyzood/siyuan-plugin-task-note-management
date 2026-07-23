@@ -382,6 +382,7 @@
         pomodoroBreakEndSound: 'breakEndVolume',
         randomRestSounds: 'randomRestVolume',
         randomRestEndSound: 'randomRestEndVolume',
+        taskCompleteSound: 'taskCompleteVolume',
     };
 
     /** 获取音频条目对应的试听音量 */
@@ -654,6 +655,33 @@
                             description:
                                 i18n('reminderSkipHolidaysDesc') ||
                                 '仅对重复任务，以及同时横跨节假日和非节假日的跨天任务生效；单个任务可在任务编辑弹窗单独覆盖。',
+                        },
+                    ],
+                },
+                {
+                    name: i18n('subGroupTaskAudio') || '任务完成音效',
+                    items: [
+                        {
+                            key: 'taskCompleteSoundEnabled',
+                            value: settings.taskCompleteSoundEnabled !== false,
+                            type: 'checkbox',
+                            title: i18n('taskCompleteSoundEnabled') || '开启任务完成音效',
+                            description: i18n('taskCompleteSoundEnabledDesc') || '勾选完成任务时播放音效提示',
+                        },
+                        {
+                            key: 'taskCompleteVolume',
+                            value: settings.taskCompleteVolume ?? 1,
+                            type: 'slider',
+                            title: i18n('taskCompleteVolume') || '任务完成音效音量',
+                            description: i18n('taskCompleteVolumeDesc') || '单独设置任务完成提示音的音量大小，范围0-1',
+                            slider: { min: 0, max: 1, step: 0.1 },
+                        },
+                        {
+                            key: 'taskCompleteSound',
+                            value: settings.audioSelected?.taskCompleteSound || '',
+                            type: 'custom-audio',
+                            title: i18n('taskCompleteSound') || '任务完成音效',
+                            description: i18n('taskCompleteSoundDesc') || '选择或上传完成任务时播放的音效文件',
                         },
                     ],
                 },

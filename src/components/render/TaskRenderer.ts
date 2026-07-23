@@ -812,6 +812,9 @@ export class TaskRenderer {
         });
         checkbox.addEventListener('change', (e) => {
             e.stopPropagation();
+            if (checkbox.checked && context?.plugin?.playTaskCompleteSound) {
+                context.plugin.playTaskCompleteSound();
+            }
             if (callbacks.onCheckboxClick) {
                 callbacks.onCheckboxClick(task, checkbox.checked, e);
             }

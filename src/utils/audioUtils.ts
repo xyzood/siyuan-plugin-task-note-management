@@ -66,3 +66,95 @@ export async function createAudio(path: string): Promise<HTMLAudioElement | null
     if (!resolvedUrl) return null;
     return new Audio(resolvedUrl);
 }
+
+// 防抖状态与播放锁
+let lastTaskCompleteSoundTime = 0;
+let isPlayingNotificationSound = false;
+
+/**
+ * 获取通知声音设置路径
+ */
+export function getNotificationSound(settings: any): string {
+    return settings?.audioSelected?.notificationSound || '';
+}
+
+/**
+ * 播放任务完成音效
+ */
+export async function playTaskCompleteSound(settings: any): Promise<void> {
+    try {
+        if (!settings || settings.taskCompleteSoundEnabled === false) {
+            return;
+        }
+
+        const now = Date.now();
+        if (now - lastTaskCompleteSoundTime < 300) {
+            return; // 防抖，避免短时间内多次重复播放
+        }
+        lastTaskCompleteSoundTime = now;
+
+        const soundPath = settings.audioSelected?.taskCompleteSound || '/plugins/siyuan-plugin-task-note-management/audios/task_complete.mp3';
+        if (!soundPath) return;
+
+        const resolvedUrl = await resolveAudioPath(soundPath);
+        if (!resolvedUrl) return;
+
+        const audio = new Audio(resolvedUrl);
+        const volume = typeof settings.taskCompleteVolume === 'number' ? settings.taskCompleteVolume : 1;
+        audio.volume = Math.max(0, Math.min(1, volume));
+        await audio.play();
+    } catch (error) {
+        console.warn('[AudioUtils] 播放任务完成音效失败:', error);
+    }
+}
+
+/**
+ * 播放通知声音
+ */
+export async function playNotificationSound(plugin: any, settings: any): Promise<void> {
+    try {
+        const soundPath = getNotificationSound(settings);
+        if (!soundPath) return;
+
+        if (plugin && !plugin.audioEnabled) return;
+
+        if (isPlayingNotificationSound) {
+            console.debug('[AudioUtils] playNotificationSound - already playing, skip');
+            return;
+        }
+
+        if (plugin?.preloadedAudio && plugin.preloadedAudio.src.includes(soundPath)) {
+            try {
+                isPlayingNotificationSound = true;
+                plugin.preloadedAudio.currentTime = 0;
+                await plugin.preloadedAudio.play();
+                plugin.preloadedAudio.onended = () => {
+                    isPlayingNotificationSound = false;
+                };
+                setTimeout(() => { isPlayingNotificationSound = false; }, 10000);
+                return;
+            } catch (error) {
+                console.warn('[AudioUtils] 预加载音频播放失败，尝试创建新音频:', error);
+            }
+        }
+
+        const resolvedUrl = await resolveAudioPath(soundPath);
+        const audio = new Audio(resolvedUrl || soundPath);
+        audio.volume = 1;
+        isPlayingNotificationSound = true;
+        audio.addEventListener('ended', () => {
+            isPlayingNotificationSound = false;
+        });
+        const clearTimer = setTimeout(() => {
+            isPlayingNotificationSound = false;
+        }, 10000);
+        try {
+            await audio.play();
+        } finally {
+            clearTimeout(clearTimer);
+        }
+    } catch (error: any) {
+        console.warn('[AudioUtils] 播放通知声音失败:', error?.name || error);
+    }
+}
+

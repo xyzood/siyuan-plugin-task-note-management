@@ -36,7 +36,7 @@ import { PomodoroManager } from "./utils/pomodoroManager";
 import SettingPanelComponent from "./SettingPanel.svelte";
 import { exportIcsFile } from "./utils/icsUtils";
 import { getFile, sendNotification, cancelNotification, pushErrMsg, pushMsg, isInMobileApp, batchUpdateTaskListItemMarker, isTaskListLikeBlock, type TaskListItemMarker } from "./api";
-import { resolveAudioPath } from "./utils/audioUtils";
+import { resolveAudioPath, playTaskCompleteSound as playTaskCompleteSoundUtil, playNotificationSound as playNotificationSoundUtil, getNotificationSound as getNotificationSoundUtil } from "./utils/audioUtils";
 import { showVipDialog } from "./components/vip/VipDialog";
 import { performDataMigration } from "./utils/dataMigration";
 import { initIcsSync, initIcsSubscriptionSync, handleIcsSyncSettingsChange, cleanupIcsSync } from "./utils/icsSync";
@@ -315,9 +315,12 @@ export const DEFAULT_SETTINGS = {
     randomRestBreakDuration: 10,
     randomRestSystemNotification: true, // 新增：随机微休息系统通知
     randomRestPopupWindow: true, // 新增：随机微休息弹窗提醒，默认关闭
+    taskCompleteSoundEnabled: true, // 新增：任务完成音效默认开启
+    taskCompleteVolume: 0.8, // 新增：任务完成音效默认音量
     // 每个声音设置项各自的音频文件列表 { settingKey: [{path: url, removed: false}, ...] }
     audioFileLists: {
         notificationSound: [{ path: '/plugins/siyuan-plugin-task-note-management/audios/notify.mp3' }],
+        taskCompleteSound: [{ path: '/plugins/siyuan-plugin-task-note-management/audios/task_complete.mp3' }],
         pomodoroWorkSound: [
             { path: '/plugins/siyuan-plugin-task-note-management/audios/background_music.mp3' },
             { path: 'https://cdn.jsdelivr.net/gh/remvze/moodist@main/public/sounds/nature/campfire.mp3' },
@@ -344,6 +347,7 @@ export const DEFAULT_SETTINGS = {
     // 每个声音设置项当前的选中项 { settingKey: url }
     audioSelected: {
         notificationSound: '/plugins/siyuan-plugin-task-note-management/audios/notify.mp3',
+        taskCompleteSound: '/plugins/siyuan-plugin-task-note-management/audios/task_complete.mp3',
         pomodoroWorkSound: '/plugins/siyuan-plugin-task-note-management/audios/background_music.mp3',
         pomodoroBreakSound: '/plugins/siyuan-plugin-task-note-management/audios/relax_background.mp3',
         pomodoroLongBreakSound: '/plugins/siyuan-plugin-task-note-management/audios/relax_background.mp3',
@@ -1951,6 +1955,20 @@ export default class ReminderPlugin extends Plugin {
         } else {
             settings.pomodoroDurationPresets = [...DEFAULT_SETTINGS.pomodoroDurationPresets];
         }
+        if (!settings.audioFileLists) settings.audioFileLists = {};
+        if (!settings.audioFileLists.taskCompleteSound) {
+            settings.audioFileLists.taskCompleteSound = [...DEFAULT_SETTINGS.audioFileLists.taskCompleteSound];
+        }
+        if (!settings.audioSelected) settings.audioSelected = {};
+        if (!settings.audioSelected.taskCompleteSound) {
+            settings.audioSelected.taskCompleteSound = DEFAULT_SETTINGS.audioSelected.taskCompleteSound;
+        }
+        if (settings.taskCompleteSoundEnabled === undefined) {
+            settings.taskCompleteSoundEnabled = DEFAULT_SETTINGS.taskCompleteSoundEnabled;
+        }
+        if (settings.taskCompleteVolume === undefined) {
+            settings.taskCompleteVolume = DEFAULT_SETTINGS.taskCompleteVolume;
+        }
         setDayStartTime(settings.todayStartTime);
         setSingleDateDefaultRole(settings.singleDateDefaultRole);
         this.settings = settings;
@@ -2284,69 +2302,19 @@ export default class ReminderPlugin extends Plugin {
     // 获取通知声音设置
     async getNotificationSound(): Promise<string> {
         const settings = await this.loadSettings();
-        return settings.audioSelected?.notificationSound || '';
+        return getNotificationSoundUtil(settings);
     }
 
     // 播放通知声音
     async playNotificationSound() {
-        try {
-            const soundPath = await this.getNotificationSound();
-            if (!soundPath) {
-                return;
-            }
+        const settings = await this.loadSettings();
+        await playNotificationSoundUtil(this, settings);
+    }
 
-            if (!this.audioEnabled) {
-                return;
-            }
-            // 如果已经在播放提示音，则避免重复播放
-            if (this.isPlayingNotificationSound) {
-                console.debug('playNotificationSound - already playing, skip');
-                return;
-            }
-            // 优先使用预加载的音频
-            if (this.preloadedAudio && this.preloadedAudio.src.includes(soundPath)) {
-                try {
-                    this.isPlayingNotificationSound = true;
-                    this.preloadedAudio.currentTime = 0;
-                    await this.preloadedAudio.play();
-                    // 尝试监听 ended 事件以便清理状态
-                    this.preloadedAudio.onended = () => {
-                        this.isPlayingNotificationSound = false;
-                    };
-                    // 作为保险，10s后强制清除播放状态，防止意外情况导致状态未被清除
-                    setTimeout(() => { this.isPlayingNotificationSound = false; }, 10000);
-                    return;
-                } catch (error) {
-                    console.warn('预加载音频播放失败，尝试创建新音频:', error);
-                }
-            }
-
-            // 如果预加载音频不可用，创建新的音频实例
-            // 创建新的音频实例并播放
-            const audio = new Audio(soundPath);
-            audio.volume = 1;
-            this.isPlayingNotificationSound = true;
-            audio.addEventListener('ended', () => {
-                this.isPlayingNotificationSound = false;
-            });
-            // 10s超时清理防止某些浏览器/环境不触发 ended
-            const clearTimer = setTimeout(() => {
-                this.isPlayingNotificationSound = false;
-            }, 10000);
-            try {
-                await audio.play();
-            } finally {
-                clearTimeout(clearTimer);
-            }
-
-        } catch (error) {
-            // 不再显示错误消息，只记录到控制台
-            console.warn('播放通知声音失败 (这是正常的，如果用户未交互):', error.name);
-
-            // 如果是权限错误，提示用户
-            if (error.name === 'NotAllowedError') {
-            }
-        }
+    // 播放任务完成音效
+    async playTaskCompleteSound() {
+        const settings = await this.loadSettings();
+        await playTaskCompleteSoundUtil(settings);
     }
     private registerDockPanel(options: {
         type: string;

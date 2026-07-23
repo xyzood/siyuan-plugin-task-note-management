@@ -15671,6 +15671,9 @@ export class ProjectKanbanView {
     private async batchUpdateTasks(taskIds: string[], updates: { kanbanStatus?: string, customGroupId?: string | null, tagIds?: string[], milestoneId?: string | null, projectId?: string | null, priority?: string }) {
         // console.log('[Kanban] batchUpdateTasks called:', { taskIds, updates });
         try {
+            if (updates.kanbanStatus === 'completed' && this.plugin?.playTaskCompleteSound) {
+                this.plugin.playTaskCompleteSound();
+            }
             const reminderData = await this.getReminders();
             // 如果尝试修改状态（尤其是将任务移出 doing/completed），在执行前先检查是否有未完成且日期为今天或已过的任务。
             // 若存在此类任务，提示用户需先修改任务时间才能移出“进行中”。
