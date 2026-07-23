@@ -646,10 +646,13 @@ export class PomodoroSessionsDialog {
     /**
      * 派发更新事件：
      * - 始终派发 reminderUpdated，确保任务相关视图刷新
+     * - 自动更新受影响的所有子块及文档块在思源数据库中的 custom-task-pomodoro-* 块属性
      * - 若当前 eventId 对应习惯，则额外派发 habitUpdated，确保习惯面板刷新
      */
     private async dispatchUpdateEvents() {
         window.dispatchEvent(new CustomEvent('reminderUpdated'));
+
+        void this.updateAffectedBlockAttrs();
 
         try {
             const habitData = await this.plugin.loadHabitData?.();
@@ -658,6 +661,64 @@ export class PomodoroSessionsDialog {
             }
         } catch (error) {
             console.warn("派发习惯更新事件失败:", error);
+        }
+    }
+
+    /**
+     * 更新受影响的块在思源数据库中的 custom-task-pomodoro-* 块属性
+     */
+    private async updateAffectedBlockAttrs() {
+        try {
+            const { updateBindBlockAtrrs } = await import("../api");
+            const targetIds = new Set<string>();
+
+            if (this.reminderId) targetIds.add(this.reminderId);
+            if (this.includeEventIds) {
+                this.includeEventIds.forEach(id => targetIds.add(id));
+            }
+
+            const getSeriesBaseId = (id: string): string => {
+                const m = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+                return m ? m[1] : id;
+            };
+
+            let reminderData: any = null;
+            if (this.plugin && typeof this.plugin.loadReminderData === 'function') {
+                try {
+                    reminderData = await this.plugin.loadReminderData();
+                } catch { /* ignore */ }
+            }
+
+            const blockIdsToUpdate = new Set<string>();
+
+            for (const id of targetIds) {
+                if (!id) continue;
+                const baseId = getSeriesBaseId(id);
+
+                // 候选 1：当前 ID 或 baseId 直接就是块 ID
+                blockIdsToUpdate.add(baseId);
+
+                // 候选 2：关联的 reminder.blockId 或 rem.docId
+                if (reminderData) {
+                    const rem = reminderData[baseId] || reminderData[id];
+                    if (rem) {
+                        if (rem.blockId) blockIdsToUpdate.add(rem.blockId);
+                        if (rem.docId) blockIdsToUpdate.add(rem.docId);
+                    }
+                }
+            }
+
+            // 对所有提取出来的受影响块 ID 执行 updateBindBlockAtrrs
+            for (const blockId of blockIdsToUpdate) {
+                if (!blockId) continue;
+                try {
+                    await updateBindBlockAtrrs(blockId, this.plugin);
+                } catch (e) {
+                    console.warn("更新块番茄属性失败:", blockId, e);
+                }
+            }
+        } catch (err) {
+            console.warn("批量更新块番茄属性异常:", err);
         }
     }
 

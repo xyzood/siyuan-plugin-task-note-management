@@ -1227,6 +1227,8 @@ export class TaskNoteDOMManager {
             (trackedSource as HTMLElement | null);
         if (!trackedSource || !blockEl) return;
 
+        let summaryIncludeEventIds = expandedLinkedIds;
+
         // 文档块：基于已有番茄数据的 eventId 反向判定是否属于当前文档，极速、准确且脱离 DOM 渲染限制
         const isDocumentBlock = trackedSource.classList.contains("protyle-wysiwyg");
         if (isDocumentBlock) {
@@ -1312,6 +1314,7 @@ export class TaskNoteDOMManager {
                 const docStats = this.getBoundPomodoroStatsFromCache(Array.from(matchedDocEventIds));
                 mergedCount = Math.max(0, Math.floor(docStats.count));
                 mergedMinutes = Math.max(0, Math.floor(docStats.minutes));
+                summaryIncludeEventIds = Array.from(matchedDocEventIds);
             } catch (err) {
                 console.warn("文档级反向匹配番茄数据失败:", err);
             }
@@ -1331,10 +1334,13 @@ export class TaskNoteDOMManager {
         }
 
         if (!existingPomodoroBtn) {
-            container.appendChild(this._createPomodoroSummaryButton(blockId, mergedCount, mergedMinutes, expandedLinkedIds));
+            container.appendChild(this._createPomodoroSummaryButton(blockId, mergedCount, mergedMinutes, summaryIncludeEventIds));
             return;
         }
-        this._updatePomodoroSummaryButton(existingPomodoroBtn, mergedCount, mergedMinutes, expandedLinkedIds);
+        this._updatePomodoroSummaryButton(existingPomodoroBtn, mergedCount, mergedMinutes, summaryIncludeEventIds);
+        if (existingPomodoroBtn.parentElement !== container) {
+            container.appendChild(existingPomodoroBtn);
+        }
         if (existingPomodoroBtn.parentElement !== container) {
             container.appendChild(existingPomodoroBtn);
         }
