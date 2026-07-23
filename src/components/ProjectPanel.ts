@@ -2226,10 +2226,10 @@ export class ProjectPanel {
             const title = project.title || i18n("unnamedNote") || '未命名项目';
             const blockRef = `((${blockId} "${title}"))`;
             await platformUtils.writeText(blockRef);
-            showMessage(i18n("copyBlockRef") + i18n("success") || "块引用已复制到剪贴板");
+            showMessage(i18n("blockRefCopied") || "块引用已复制到剪贴板");
         } catch (error) {
-            console.error('复制块引失败:', error);
-            showMessage(i18n("copyBlockRef") + i18n("operationFailed") || "复制块引失败");
+            console.error('复制块引用失败:', error);
+            showMessage(i18n("copyBlockRefFailed") || i18n("copyFailed") || "复制块引用失败");
         }
     }
 

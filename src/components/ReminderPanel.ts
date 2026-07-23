@@ -76,6 +76,8 @@ export class ReminderPanel {
     private showCompletedSubtasks: boolean = false;
     // 是否将任务标题限制在一行显示（超出部分省略号截断）
     private clipTitleToOneLine: boolean = false;
+    // 是否在任务卡片上显示绑定块所属文档标题
+    private showTaskCardDocumentTitle: boolean = true;
 
     // 使用全局番茄钟管理器
     private pomodoroManager: PomodoroManager = PomodoroManager.getInstance();
@@ -178,6 +180,14 @@ export class ReminderPanel {
         this.settingsUpdatedHandler = () => {
             void (async () => {
                 await this.refreshReminderSkipDateContext();
+                try {
+                    const settings = await this.plugin.loadSettings();
+                    if (typeof settings.showTaskCardDocumentTitle === 'boolean') {
+                        this.showTaskCardDocumentTitle = settings.showTaskCardDocumentTitle;
+                    }
+                } catch (e) {
+                    // ignore
+                }
                 this.loadReminders(true);
             })();
         };
@@ -203,6 +213,9 @@ export class ReminderPanel {
             }
             if (typeof settings.clipTitleToOneLine === 'boolean') {
                 this.clipTitleToOneLine = settings.clipTitleToOneLine;
+            }
+            if (typeof settings.showTaskCardDocumentTitle === 'boolean') {
+                this.showTaskCardDocumentTitle = settings.showTaskCardDocumentTitle;
             }
             if (Array.isArray(settings.reminderPanelSelectedCategories)) {
                 this.selectedCategories = settings.reminderPanelSelectedCategories;
@@ -1546,7 +1559,7 @@ export class ReminderPanel {
 
 
     private isTaskCardDocumentTitleEnabled(): boolean {
-        return this.plugin?.settings?.showTaskCardDocumentTitle !== false;
+        return this.showTaskCardDocumentTitle !== false;
     }
 
     private shouldShowDocumentTitleForReminder(reminder: any): boolean {
@@ -10797,6 +10810,17 @@ export class ReminderPanel {
                             this.clipTitleToOneLine = !this.clipTitleToOneLine;
                             void this.savePanelSettings({
                                 clipTitleToOneLine: this.clipTitleToOneLine
+                            });
+                            void this.loadReminders(true);
+                        }
+                    },
+                    {
+                        icon: this.showTaskCardDocumentTitle ? 'iconSelect' : '',
+                        label: i18n("showTaskCardDocumentTitle") || "显示绑定块文档标题",
+                        click: () => {
+                            this.showTaskCardDocumentTitle = !this.showTaskCardDocumentTitle;
+                            void this.savePanelSettings({
+                                showTaskCardDocumentTitle: this.showTaskCardDocumentTitle
                             });
                             void this.loadReminders(true);
                         }
