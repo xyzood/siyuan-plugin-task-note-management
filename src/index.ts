@@ -44,7 +44,7 @@ import { cleanReminderItem } from "./utils/reminderLoadUtils";
 import { TaskNoteDOMManager } from "./components/render/taskNoteDOM";
 import { addDaysToDate, generateRepeatInstances, getDaysDifference, getRelativeReminderWindow, resolveRepeatReminderTimes } from "./utils/repeatUtils";
 import { getDockItemSelector, setDockBadgeByType as applyDockBadgeByType } from "./utils/addDockBadge";
-import { shouldTreatStartDateOnlyAsOverdue } from "./utils/startDateOverdue";
+import { shouldTreatStartDateOnlyAsOverdue, isOpenEndedStartDateTask } from "./utils/startDateOverdue";
 import {
     Habit,
     HabitEmojiConfig,
@@ -4507,12 +4507,24 @@ export default class ReminderPlugin extends Plugin {
                 if (!reminderObj.repeat?.enabled) {
                     // 普通（非重复）提醒：按字段分别处理 time 和 reminderTimes
 
-                    // 计算任务的起止范围（用于跨天提醒）
-                    const startDate = reminderObj.date || today;
-                    const endDate = reminderObj.endDate || reminderObj.date || startDate;
-                    const inDateRange = startDate <= today && today <= endDate;
+                    // 计算任务的起止范围与开放式任务判定（对齐日历视图与 ReminderPanel）
+                    const hasExplicitTaskDate = !!(reminderObj.date || reminderObj.endDate);
+                    const isOpenEnded = isOpenEndedStartDateTask(reminderObj, this.settings);
+                    const checkIsCrossDay = !!(reminderObj.date && reminderObj.endDate && reminderObj.endDate > reminderObj.date);
 
-                    // 检查 time 提醒（支持跨天：如果 today 在 startDate..endDate 范围内，则每天在该时间提醒）
+                    let inDateRange = false;
+                    if (!hasExplicitTaskDate) {
+                        inDateRange = true;
+                    } else if (isOpenEnded) {
+                        inDateRange = today >= reminderObj.date;
+                    } else if (checkIsCrossDay) {
+                        inDateRange = reminderObj.date <= today && today <= reminderObj.endDate;
+                    } else {
+                        const singleDate = reminderObj.date || reminderObj.endDate;
+                        inDateRange = today === singleDate;
+                    }
+
+                    // 检查 time 提醒
                     if (reminderObj.time && inDateRange) {
                         const notifyKey = `${reminderObj.id}_${today}_${reminderObj.time}_time`;
                         if (!this.notifiedReminders.has(notifyKey) && this.shouldNotifyNow(reminderObj, today, currentTime, 'time')) {
@@ -4538,10 +4550,10 @@ export default class ReminderPlugin extends Plugin {
                             const hasDate = !!parsed.date;
 
                             let shouldCheck = false;
-                            if (typeof rtItem === 'object' && rtItem.everyDay) {
-                                shouldCheck = !reminderObj.date || today >= reminderObj.date;
+                            if (hasDate) {
+                                shouldCheck = (parsed.date === today);
                             } else {
-                                shouldCheck = hasDate ? (parsed.date === today) : inDateRange;
+                                shouldCheck = inDateRange;
                             }
 
                             if (shouldCheck) {
@@ -4815,7 +4827,11 @@ export default class ReminderPlugin extends Plugin {
     private updateOverallNotifiedFlag(reminder: any, today: string, currentTime: string): boolean {
         const prev = !!reminder.notified;
 
-        // 对于跨多天任务，只有当 endDate 是过去时间时，才允许设置 notified
+        // 对于跨多天任务或开放式未闭合任务，在完成前或结束日期前不允许设置 notified 为 true
+        if (isOpenEndedStartDateTask(reminder, this.settings)) {
+            reminder.notified = false;
+            return prev !== false;
+        }
         if (reminder.endDate && compareDateStrings(reminder.endDate, today) >= 0) {
             reminder.notified = false;
             return prev !== false;
