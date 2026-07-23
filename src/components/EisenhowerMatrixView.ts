@@ -3231,7 +3231,12 @@ export class EisenhowerMatrixView {
 
                     // 删除所有相关任务
                     let deletedCount = 0;
+                    const affectedBlockIds = new Set<string>();
                     for (const taskId of taskIdsToDelete) {
+                        const targetTask = reminderData[taskId];
+                        if (targetTask?.blockId) {
+                            affectedBlockIds.add(targetTask.blockId);
+                        }
                         if (reminderData[taskId]) {
                             // 取消移动端通知
                             await this.plugin.cancelMobileNotification(taskId);
@@ -3242,6 +3247,14 @@ export class EisenhowerMatrixView {
 
                     if (deletedCount > 0) {
                         await saveReminders(this.plugin, reminderData);
+                        if (affectedBlockIds.size > 0) {
+                            const { updateBindBlockAtrrs } = await import('../api');
+                            for (const bId of affectedBlockIds) {
+                                try {
+                                    await updateBindBlockAtrrs(bId, this.plugin);
+                                } catch (e) { }
+                            }
+                        }
                         await this.refresh();
                         window.dispatchEvent(new CustomEvent('reminderUpdated', { detail: { source: this.viewId } }));
 

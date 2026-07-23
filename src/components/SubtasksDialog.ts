@@ -305,7 +305,7 @@ export class SubtasksDialog {
     }
 
     private normalizeSubtaskSortCriteria(criteria: any): SortCriterion[] {
-        const availableMethods = new Set(['category', 'project', 'priority', 'time', 'completed', 'created', 'title']);
+        const availableMethods = new Set(['category', 'project', 'priority', 'time', 'startDate', 'endDate', 'completed', 'created', 'title']);
         const normalized = Array.isArray(criteria)
             ? criteria
                 .filter((criterion: any) => criterion && availableMethods.has(criterion.method))
@@ -341,7 +341,8 @@ export class SubtasksDialog {
         let result = 0;
 
         switch (criterion.method) {
-            case 'time': {
+            case 'time':
+            case 'startDate': {
                 const hasDateA = !!(a.date || a.endDate);
                 const hasDateB = !!(b.date || b.endDate);
                 if (!hasDateA && !hasDateB) {
@@ -352,6 +353,20 @@ export class SubtasksDialog {
                     result = -1;
                 } else {
                     result = this.compareByTime(a, b);
+                }
+                break;
+            }
+            case 'endDate': {
+                const hasEndDateA = !!(a.endDate || a.date);
+                const hasEndDateB = !!(b.endDate || b.date);
+                if (!hasEndDateA && !hasEndDateB) {
+                    result = 0;
+                } else if (!hasEndDateA) {
+                    result = 1;
+                } else if (!hasEndDateB) {
+                    result = -1;
+                } else {
+                    result = this.compareByEndDate(a, b);
                 }
                 break;
             }
@@ -404,6 +419,45 @@ export class SubtasksDialog {
         const isSpanningB = b.endDate && b.endDate !== b.date;
         const isAllDayA = !a.time;
         const isAllDayB = !b.time;
+
+        if (isSpanningA && !isSpanningB) return -1;
+        if (!isSpanningA && isSpanningB) return 1;
+        if (!isSpanningA && !isSpanningB) {
+            if (!isAllDayA && isAllDayB) return -1;
+            if (isAllDayA && !isAllDayB) return 1;
+        }
+
+        return 0;
+    }
+
+    private compareByEndDate(a: any, b: any): number {
+        const endDateStrA = a.endDate || a.date;
+        const endDateStrB = b.endDate || b.date;
+        const hasDateA = !!endDateStrA;
+        const hasDateB = !!endDateStrB;
+
+        if (!hasDateA && !hasDateB) return 0;
+        if (!hasDateA) return 1;
+        if (!hasDateB) return -1;
+
+        const timeStrA = a.endDate ? (a.endTime || a.time) : a.time;
+        const timeStrB = b.endDate ? (b.endTime || b.time) : b.time;
+
+        const dateA = new Date(endDateStrA + (timeStrA ? `T${timeStrA}` : 'T00:00'));
+        const dateB = new Date(endDateStrB + (timeStrB ? `T${timeStrB}` : 'T00:00'));
+
+        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+            if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
+            return isNaN(dateA.getTime()) ? 1 : -1;
+        }
+
+        const timeDiff = dateA.getTime() - dateB.getTime();
+        if (timeDiff !== 0) return timeDiff;
+
+        const isSpanningA = a.endDate && a.date && a.endDate !== a.date;
+        const isSpanningB = b.endDate && b.date && b.endDate !== b.date;
+        const isAllDayA = !timeStrA;
+        const isAllDayB = !timeStrB;
 
         if (isSpanningA && !isSpanningB) return -1;
         if (!isSpanningA && isSpanningB) return 1;

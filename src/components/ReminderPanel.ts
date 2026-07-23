@@ -652,7 +652,7 @@ export class ReminderPanel {
 
     }
     private normalizeSortCriteria(criteria: any): SortCriterion[] {
-        const availableMethods = new Set(['priority', 'project', 'category', 'time', 'completed', 'created', 'title']);
+        const availableMethods = new Set(['priority', 'project', 'category', 'time', 'startDate', 'endDate', 'completed', 'created', 'title']);
         if (!Array.isArray(criteria) || criteria.length === 0) {
             return [{ method: 'time', order: 'asc' }];
         }
@@ -943,7 +943,8 @@ export class ReminderPanel {
 
         switch (criterion.method) {
             case 'time':
-                // 特殊处理：按时间排序时，无日期任务始终排在最后
+            case 'startDate':
+                // 特殊处理：按开始日期排序时，无日期任务始终排在最后
                 const hasDateA = !!(a.date || a.endDate);
                 const hasDateB = !!(b.date || b.endDate);
 
@@ -956,6 +957,22 @@ export class ReminderPanel {
                     result = -1; // b 无日期，排在后面
                 } else {
                     result = this.compareByTime(a, b);
+                }
+                break;
+
+            case 'endDate':
+                // 特殊处理：按结束日期排序时，无日期任务始终排在最后
+                const hasEndDateA = !!(a.endDate || a.date);
+                const hasEndDateB = !!(b.endDate || b.date);
+
+                if (!hasEndDateA && !hasEndDateB) {
+                    result = 0;
+                } else if (!hasEndDateA) {
+                    result = 1;  // a 无日期，排在后面
+                } else if (!hasEndDateB) {
+                    result = -1; // b 无日期，排在后面
+                } else {
+                    result = this.compareByEndDate(a, b);
                 }
                 break;
 
@@ -1113,10 +1130,17 @@ export class ReminderPanel {
         const primary = this.getActiveSortCriteria()?.[0];
         if (!primary || primary.method === 'priority') return '__ALLOW_ALL__';
 
-        if (primary.method === 'time') {
+        if (primary.method === 'time' || primary.method === 'startDate') {
             const baseDate = reminder?.date || reminder?.endDate;
             if (!baseDate) return '__NO_DATE__';
             const baseTime = reminder?.time || reminder?.endTime;
+            return this.getReminderLogicalDate(baseDate, baseTime);
+        }
+
+        if (primary.method === 'endDate') {
+            const baseDate = reminder?.endDate || reminder?.date;
+            if (!baseDate) return '__NO_DATE__';
+            const baseTime = reminder?.endDate ? (reminder?.endTime || reminder?.time) : reminder?.time;
             return this.getReminderLogicalDate(baseDate, baseTime);
         }
 
@@ -4815,7 +4839,7 @@ export class ReminderPanel {
         }
         return null;
     }
-    // 按时间比较（考虑跨天事件和优先级）
+    // 按时间（开始日期）比较（考虑跨天事件和优先级）
     private compareByTime(a: any, b: any): number {
         const hasDateA = !!a.date;
         const hasDateB = !!b.date;
@@ -4860,6 +4884,51 @@ export class ReminderPanel {
         }
 
         // 时间相同且类型相同时，按优先级排序
+        return 0;
+    }
+
+    // 按结束日期比较（考虑跨天事件和全天事件）
+    private compareByEndDate(a: any, b: any): number {
+        const endDateStrA = a.endDate || a.date;
+        const endDateStrB = b.endDate || b.date;
+        const hasDateA = !!endDateStrA;
+        const hasDateB = !!endDateStrB;
+
+        if (!hasDateA && !hasDateB) {
+            return 0;
+        }
+        if (!hasDateA) return 1;  // a 无日期，排在后面
+        if (!hasDateB) return -1; // b 无日期，排在后面
+
+        const timeStrA = a.endDate ? (a.endTime || a.time) : a.time;
+        const timeStrB = b.endDate ? (b.endTime || b.time) : b.time;
+
+        const dateA = new Date(endDateStrA + (timeStrA ? `T${timeStrA}` : 'T00:00'));
+        const dateB = new Date(endDateStrB + (timeStrB ? `T${timeStrB}` : 'T00:00'));
+
+        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+            if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
+            return isNaN(dateA.getTime()) ? 1 : -1;
+        }
+
+        const timeDiff = dateA.getTime() - dateB.getTime();
+        if (timeDiff !== 0) {
+            return timeDiff;
+        }
+
+        const isSpanningA = a.endDate && a.date && a.endDate !== a.date;
+        const isSpanningB = b.endDate && b.date && b.endDate !== b.date;
+        const isAllDayA = !timeStrA;
+        const isAllDayB = !timeStrB;
+
+        if (isSpanningA && !isSpanningB) return -1;
+        if (!isSpanningA && isSpanningB) return 1;
+
+        if (!isSpanningA && !isSpanningB) {
+            if (!isAllDayA && isAllDayB) return -1;
+            if (isAllDayA && !isAllDayB) return 1;
+        }
+
         return 0;
     }
 

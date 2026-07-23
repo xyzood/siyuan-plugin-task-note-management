@@ -4334,7 +4334,8 @@ export class ProjectKanbanView {
         return [
             { key: 'priority', label: () => i18n('sortByPriority') || i18n('sortingPriority'), icon: '🎯' },
             { key: 'category', label: () => i18n('sortByCategory') || '分类', icon: '🏷️' },
-            { key: 'time', label: () => i18n('sortByTime'), icon: '🕐' },
+            { key: 'time', label: () => i18n('sortByTime') || i18n('sortByStartDate') || '按开始日期排序', icon: '🕐' },
+            { key: 'endDate', label: () => i18n('sortByEndDate') || '按结束日期排序', icon: '🗓' },
             { key: 'created', label: () => i18n('sortByCreated'), icon: '📅' },
             { key: 'title', label: () => i18n('sortByTitle') || i18n('sortingTitle'), icon: '📝' },
         ];
@@ -4514,8 +4515,13 @@ export class ProjectKanbanView {
                 result = this.compareByCategory(a, b);
                 break;
             case 'time':
-                // 多选排序中，time 只比较时间本身，不在这里追加优先级兜底
+            case 'startDate':
+                // 多选排序中，time/startDate 只比较时间本身，不在这里追加优先级兜底
                 result = this.compareByTimeForCriteria(a, b);
+                break;
+            case 'endDate':
+                // 多选排序中，endDate 只比较结束时间本身
+                result = this.compareByEndDateForCriteria(a, b);
                 break;
             case 'created':
                 result = this.compareByCreatedAt(a, b);
@@ -4722,6 +4728,46 @@ export class ProjectKanbanView {
         const isSpanningB = b.endDate && b.endDate !== b.date;
         const isAllDayA = !a.time;
         const isAllDayB = !b.time;
+
+        if (isSpanningA && !isSpanningB) return -1;
+        if (!isSpanningA && isSpanningB) return 1;
+
+        if (!isSpanningA && !isSpanningB) {
+            if (!isAllDayA && isAllDayB) return -1;
+            if (isAllDayA && !isAllDayB) return 1;
+        }
+
+        return 0;
+    }
+
+    private compareByEndDateForCriteria(a: any, b: any): number {
+        const endDateStrA = a.endDate || a.date;
+        const endDateStrB = b.endDate || b.date;
+        const hasDateA = !!endDateStrA;
+        const hasDateB = !!endDateStrB;
+
+        if (!hasDateA && !hasDateB) return 0;
+        if (!hasDateA) return 1;
+        if (!hasDateB) return -1;
+
+        const timeStrA = a.endDate ? (a.endTime || a.time) : a.time;
+        const timeStrB = b.endDate ? (b.endTime || b.time) : b.time;
+
+        const dateA = new Date(endDateStrA + (timeStrA ? `T${timeStrA}` : 'T00:00'));
+        const dateB = new Date(endDateStrB + (timeStrB ? `T${timeStrB}` : 'T00:00'));
+
+        if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) {
+            if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
+            return isNaN(dateA.getTime()) ? 1 : -1;
+        }
+
+        const timeDiff = dateA.getTime() - dateB.getTime();
+        if (timeDiff !== 0) return timeDiff;
+
+        const isSpanningA = a.endDate && a.date && a.endDate !== a.date;
+        const isSpanningB = b.endDate && b.date && b.endDate !== b.date;
+        const isAllDayA = !timeStrA;
+        const isAllDayB = !timeStrB;
 
         if (isSpanningA && !isSpanningB) return -1;
         if (!isSpanningA && isSpanningB) return 1;

@@ -26,7 +26,7 @@ import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
 import { showProjectStatsDialog, showFolderStatsDialog } from "./dialog/ProjectStatsDialog";
 
 
-const PROJECT_PANEL_SORT_METHODS = new Set(['category', 'priority', 'time', 'created', 'title']);
+const PROJECT_PANEL_SORT_METHODS = new Set(['category', 'priority', 'time', 'startDate', 'endDate', 'created', 'title']);
 
 interface ProjectFolderTreeNode {
     folder: ProjectFolder;
@@ -141,6 +141,18 @@ function compareProjectByPriorityWithManualSort(a: any, b: any, order: 'asc' | '
     return compareProjectByCreatedAt(a, b);
 }
 
+function compareProjectByEndTime(a: any, b: any): number {
+    const endA = a?.endDate || a?.startDate;
+    const endB = b?.endDate || b?.startDate;
+    const hasEndA = !!endA;
+    const hasEndB = !!endB;
+
+    if (!hasEndA && !hasEndB) return 0;
+    if (!hasEndA) return 1;
+    if (!hasEndB) return -1;
+    return String(endA).localeCompare(String(endB));
+}
+
 function compareProjectByCriterion(
     a: any,
     b: any,
@@ -162,7 +174,11 @@ function compareProjectByCriterion(
             break;
         }
         case 'time':
+        case 'startDate':
             result = compareProjectBySetTime(a, b);
+            break;
+        case 'endDate':
+            result = compareProjectByEndTime(a, b);
             break;
         case 'created':
             result = compareProjectByCreatedAt(a, b);
@@ -641,7 +657,8 @@ export class ProjectPanel {
         return [
             { key: 'category', label: () => i18n("sortByCategory") || '分类', icon: '🏷️' },
             { key: 'priority', label: () => i18n("sortByPriority") || '优先级', icon: '🎯' },
-            { key: 'time', label: () => i18n("sortBySetTime") || i18n("sortByTime") || '设定时间', icon: '🕐' },
+            { key: 'time', label: () => i18n("sortByTime") || i18n("sortByStartDate") || '按开始日期排序', icon: '🕐' },
+            { key: 'endDate', label: () => i18n("sortByEndDate") || '按结束日期排序', icon: '🗓' },
             { key: 'created', label: () => i18n("sortByCreated") || '创建时间', icon: '📅' },
             { key: 'title', label: () => i18n("sortByTitle") || '标题', icon: '📝' }
         ];

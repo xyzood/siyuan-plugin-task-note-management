@@ -7584,7 +7584,7 @@ export class QuickReminderDialog {
                         }
 
                         // 处理块绑定变更
-                        const oldBlockId = this.reminder.blockId;
+                        const oldBlockId = this.reminder?.blockId || this.defaultBlockId;
                         const newBlockId = reminder.blockId;
 
                         // 如果原来有绑定块，但编辑后删除了绑定，需要更新原块的书签状态
