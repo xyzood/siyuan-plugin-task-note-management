@@ -201,6 +201,7 @@ export const DEFAULT_SETTINGS = {
     showCalendarEventCheckbox: true, // 是否显示日历事件前的复选框
     calendarHolidayIcsUrl: 'https://www.shuyz.com/githubfiles/china-holiday-calender/master/holidayCal.ics?token=cb429c2a-81a6-4c26-8f35-4f4bf0c84b2c&compStart=*&compEnd=*', // 节假日ICS URL
     calendarMultiDaysCount: 3, // 多天视图默认显示天数
+    calendarEventMaxStack: 3, // 同一时段最多显示任务数，默认为3
     weekStartDay: 1, // 新增：周视图的一周开始日 (0=周日, 1=周一，默认周一)
     // 日历摘要设置
     showPomodoroInSummary: true,
