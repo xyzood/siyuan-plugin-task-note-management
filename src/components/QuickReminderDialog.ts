@@ -2347,6 +2347,80 @@ export class QuickReminderDialog {
     /**
      * 更新番茄钟入口显示
      */
+    /**
+     * 获取指定任务及其所有子任务的 ID 列表（含自身及关联的各层子任务）
+     */
+    private async getSubtaskIdsForReminder(targetId: string): Promise<string[]> {
+        const resultIds: string[] = [];
+        if (!targetId) return resultIds;
+
+        const getSeriesBaseId = (id: string): string => {
+            const m = id.match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+            return m ? m[1] : id;
+        };
+
+        const rootBaseId = getSeriesBaseId(targetId);
+        resultIds.push(rootBaseId);
+
+        try {
+            const reminderData = await this.plugin.loadReminderData();
+            if (reminderData && typeof reminderData === 'object') {
+                const childrenByParentId = new Map<string, string[]>();
+                for (const rem of Object.values(reminderData) as any[]) {
+                    if (!rem || !rem.parentId || !rem.id) continue;
+                    const parentBase = getSeriesBaseId(String(rem.parentId));
+                    if (!childrenByParentId.has(parentBase)) childrenByParentId.set(parentBase, []);
+                    childrenByParentId.get(parentBase)!.push(rem.id);
+                }
+
+                const collectChildTaskIds = (ids: string[], depth: number) => {
+                    if (depth > 2) return;
+                    for (const id of ids) {
+                        if (!id) continue;
+                        const baseId = getSeriesBaseId(id);
+                        const childIds = childrenByParentId.get(baseId);
+                        if (childIds?.length) {
+                            for (const childId of childIds) {
+                                const childBase = getSeriesBaseId(childId);
+                                if (!resultIds.includes(childBase)) {
+                                    resultIds.push(childBase);
+                                }
+                                collectChildTaskIds([childBase], depth + 1);
+                            }
+                        }
+                    }
+                };
+                collectChildTaskIds([rootBaseId], 0);
+            }
+        } catch (err) {
+            console.warn('加载 reminderData 查找子任务失败:', err);
+        }
+
+        return resultIds;
+    }
+
+    /**
+     * 获取指定任务及其所有子任务的番茄钟统计数据
+     */
+    private async getPomodoroStatsWithSubtasks(targetId: string): Promise<{ count: number; duration: number; allIds: string[] }> {
+        const allIds = await this.getSubtaskIdsForReminder(targetId);
+        let totalCount = 0;
+        let totalDuration = 0;
+        const processedTaskSeries = new Set<string>();
+
+        for (const seriesId of allIds) {
+            if (processedTaskSeries.has(seriesId)) continue;
+            processedTaskSeries.add(seriesId);
+            totalCount += this.pomodoroRecordManager.getRepeatingEventTotalPomodoroCount(seriesId);
+            totalDuration += this.pomodoroRecordManager.getRepeatingEventTotalFocusTime(seriesId);
+        }
+
+        return { count: totalCount, duration: totalDuration, allIds };
+    }
+
+    /**
+     * 更新番茄钟入口显示
+     */
     private async updatePomodorosDisplay() {
         const pomodorosGroup = this.dialog.element.querySelector('#quickPomodorosGroup') as HTMLElement;
         const pomodorosCountText = this.dialog.element.querySelector('#quickPomodorosCountText') as HTMLElement;
@@ -2367,15 +2441,15 @@ export class QuickReminderDialog {
         const isInstanceEditMode = this.isInstanceEdit && this.reminder.originalId;
 
         if (pomodorosCountText) {
-            // 如果是实例编辑模式，显示当前实例和系列总数量
+            // 如果是实例编辑模式，显示当前实例和系列总数量（含子任务）
             if (isInstanceEditMode) {
-                // 获取当前实例的番茄钟数量
-                const instanceCount = this.pomodoroRecordManager.getRepeatingEventTotalPomodoroCount(this.reminder.id);
-                const instanceMinutes = this.pomodoroRecordManager.getRepeatingEventTotalFocusTime(this.reminder.id);
+                const instanceStats = await this.getPomodoroStatsWithSubtasks(this.reminder.id);
+                const seriesStats = await this.getPomodoroStatsWithSubtasks(originalId);
 
-                // 获取系列总番茄钟数量（原始任务+所有实例）
-                const seriesCount = this.pomodoroRecordManager.getRepeatingEventTotalPomodoroCount(originalId);
-                const seriesMinutes = this.pomodoroRecordManager.getRepeatingEventTotalFocusTime(originalId);
+                const instanceCount = instanceStats.count;
+                const instanceMinutes = instanceStats.duration;
+                const seriesCount = seriesStats.count;
+                const seriesMinutes = seriesStats.duration;
 
                 const instanceTimeStr = instanceMinutes > 0 ? `(${Math.floor(instanceMinutes / 60)}h${instanceMinutes % 60}m)` : '';
                 const seriesTimeStr = seriesMinutes > 0 ? `(${Math.floor(seriesMinutes / 60)}h${seriesMinutes % 60}m)` : '';
@@ -2386,9 +2460,10 @@ export class QuickReminderDialog {
                     pomodorosCountText.textContent = `${i18n("viewPomodoros")}`;
                 }
             } else if (isModifyAllInstances) {
-                // 修改全部实例模式，显示系列总数
-                const seriesCount = this.pomodoroRecordManager.getRepeatingEventTotalPomodoroCount(originalId);
-                const seriesMinutes = this.pomodoroRecordManager.getRepeatingEventTotalFocusTime(originalId);
+                // 修改全部实例模式，显示系列总数（含子任务）
+                const seriesStats = await this.getPomodoroStatsWithSubtasks(originalId);
+                const seriesCount = seriesStats.count;
+                const seriesMinutes = seriesStats.duration;
                 const seriesTimeStr = seriesMinutes > 0 ? ` (${Math.floor(seriesMinutes / 60)}h${seriesMinutes % 60}m)` : '';
 
                 if (seriesCount > 0 || seriesMinutes > 0) {
@@ -2397,9 +2472,10 @@ export class QuickReminderDialog {
                     pomodorosCountText.textContent = `${i18n("viewPomodoros")}`;
                 }
             } else {
-                // 普通任务，只显示当前任务的番茄钟
-                const count = this.pomodoroRecordManager.getRepeatingEventTotalPomodoroCount(this.reminder.id);
-                const totalMinutes = this.pomodoroRecordManager.getRepeatingEventTotalFocusTime(this.reminder.id);
+                // 普通任务，显示任务自身及其子任务汇总的番茄钟
+                const stats = await this.getPomodoroStatsWithSubtasks(this.reminder.id);
+                const count = stats.count;
+                const totalMinutes = stats.duration;
                 const timeStr = totalMinutes > 0 ? ` (${Math.floor(totalMinutes / 60)}h${totalMinutes % 60}m)` : '';
 
                 if (count > 0 || totalMinutes > 0) {
@@ -5350,7 +5426,7 @@ export class QuickReminderDialog {
         });
 
         // 查看番茄钟
-        viewPomodorosBtn?.addEventListener('click', () => {
+        viewPomodorosBtn?.addEventListener('click', async () => {
             if (this.reminder && this.reminder.id) {
                 // 判断是否为"修改全部实例"模式
                 // 如果是修改全部实例（非实例编辑模式且是重复任务），显示原始任务及所有实例的番茄钟
@@ -5369,9 +5445,21 @@ export class QuickReminderDialog {
                 }
                 // 注意：实例编辑模式保持使用 this.reminder.id（实例ID）
 
-                const pomodorosDialog = new PomodoroSessionsDialog(targetId, this.plugin, () => {
-                    this.updatePomodorosDisplay();
-                }, isModifyAllInstances); // 传递 includeInstances 参数
+                const subtaskIds = await this.getSubtaskIdsForReminder(targetId);
+                const includeEventIds = subtaskIds.filter(id => id !== targetId);
+
+                const pomodorosDialog = new PomodoroSessionsDialog(
+                    targetId,
+                    this.plugin,
+                    () => {
+                        this.updatePomodorosDisplay();
+                    },
+                    isModifyAllInstances,
+                    {
+                        includeEventIds,
+                        defaultAddEventId: targetId
+                    }
+                );
                 pomodorosDialog.show();
             }
         });
