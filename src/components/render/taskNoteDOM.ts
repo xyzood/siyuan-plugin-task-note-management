@@ -1110,29 +1110,32 @@ export class TaskNoteDOMManager {
         const pomodoroTotalMinutes = selfPomodoroStats.minutes + linkedPomodoroStats.minutes;
         const hasPomodoroSummary = pomodoroTotalCount > 0 || pomodoroTotalMinutes > 0;
         const existingPomodoroBtn = container.querySelector(`.block-pomodoro-summary[data-block-id="${blockId}"]`) as HTMLElement | null;
-        if (hasPomodoroSummary) {
-            if (!existingPomodoroBtn) {
-                const pomodoroBtn = this._createPomodoroSummaryButton(blockId, pomodoroTotalCount, pomodoroTotalMinutes, linkedReminderIds);
-                container.appendChild(pomodoroBtn);
-            } else {
-                const prevCount = this.parsePomodoroMetric(existingPomodoroBtn.dataset.pomodoroTotalCount);
-                const prevMinutes = this.parsePomodoroMetric(existingPomodoroBtn.dataset.pomodoroTotalMinutes);
-                const prevReminderIdsKey = this.getReminderIdsKey(existingPomodoroBtn.dataset.pomodoroIncludeEventIds);
-                const nextReminderIdsKey = this.getReminderIdsKey(linkedReminderIds);
-                if (prevCount !== pomodoroTotalCount || prevMinutes !== pomodoroTotalMinutes || prevReminderIdsKey !== nextReminderIdsKey) {
-                    this._updatePomodoroSummaryButton(existingPomodoroBtn, pomodoroTotalCount, pomodoroTotalMinutes, linkedReminderIds);
+        const isDocumentBlock = info.element?.classList?.contains('protyle-wysiwyg');
+
+        // 普通块在同步阶段更新番茄按钮；文档块完全由异步 refreshPomodoroSummaryWithMergedSessions 统一算全量并更新，避免数据竞争引发交替闪烁
+        if (!isDocumentBlock) {
+            if (hasPomodoroSummary) {
+                if (!existingPomodoroBtn) {
+                    const pomodoroBtn = this._createPomodoroSummaryButton(blockId, pomodoroTotalCount, pomodoroTotalMinutes, linkedReminderIds);
+                    container.appendChild(pomodoroBtn);
+                } else {
+                    const prevCount = this.parsePomodoroMetric(existingPomodoroBtn.dataset.pomodoroTotalCount);
+                    const prevMinutes = this.parsePomodoroMetric(existingPomodoroBtn.dataset.pomodoroTotalMinutes);
+                    const prevReminderIdsKey = this.getReminderIdsKey(existingPomodoroBtn.dataset.pomodoroIncludeEventIds);
+                    const nextReminderIdsKey = this.getReminderIdsKey(linkedReminderIds);
+                    if (prevCount !== pomodoroTotalCount || prevMinutes !== pomodoroTotalMinutes || prevReminderIdsKey !== nextReminderIdsKey) {
+                        this._updatePomodoroSummaryButton(existingPomodoroBtn, pomodoroTotalCount, pomodoroTotalMinutes, linkedReminderIds);
+                    }
+                    if (existingPomodoroBtn.parentElement !== container) {
+                        container.appendChild(existingPomodoroBtn);
+                    }
                 }
-                if (existingPomodoroBtn.parentElement !== container) {
-                    container.appendChild(existingPomodoroBtn);
-                }
+            } else if (existingPomodoroBtn) {
+                existingPomodoroBtn.remove();
             }
-        } else if (existingPomodoroBtn) {
-            existingPomodoroBtn.remove();
         }
 
-        // 异步刷新（含子任务/文档内子块聚合）
-        // 文档块无论是否有自身番茄数据，均调用异步方法（由其扫描子块后决定是否显示）
-        const isDocumentBlock = info.element?.classList?.contains('protyle-wysiwyg');
+        // 异步刷新（含子任务/文档内子块全量聚合）
         if (hasPomodoroSummary || isDocumentBlock) {
             void this.refreshPomodoroSummaryWithMergedSessions(
                 protyle,
