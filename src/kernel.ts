@@ -2,14 +2,14 @@
 
 import type { IMcp, ILogger, IStorage, IRpc } from "siyuan/kernel";
 import { createKernelStorage, type KernelStorage } from "./kernel/storageAdapter";
-import { ReminderManager } from "./utils/reminderManager";
-import { ProjectManager } from "./utils/projectManager";
-import { ProjectColumnsManager } from "./utils/projectColumnsManager";
-import { ProjectFolderManager } from "./utils/projectFolderManager";
-import { CategoryManager } from "./utils/categoryManager";
-import { HabitManager } from "./utils/habitManager";
-import { PomodoroManager } from "./utils/pomodoroRecord";
-import { SummaryManager } from "./utils/summaryManager";
+import { ReminderManager } from "./components/dataManager/reminderManager";
+import { ProjectManager } from "./components/dataManager/projectManager";
+import { ProjectColumnsManager } from "./components/dataManager/projectColumnsManager";
+import { ProjectFolderManager } from "./components/dataManager/projectFolderManager";
+import { CategoryManager } from "./components/dataManager/categoryManager";
+import { HabitManager } from "./components/dataManager/habitManager";
+import { PomodoroManager } from "./components/dataManager/pomodoroRecord";
+import { SummaryManager } from "./components/dataManager/summaryManager";
 import { createMcpRegistry, type ToolDefinition } from "./kernel/tools/index";
 import { STATUSES_DATA_FILE } from "./kernel/constants";
 

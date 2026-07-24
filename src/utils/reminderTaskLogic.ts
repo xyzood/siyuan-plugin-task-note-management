@@ -1,6 +1,6 @@
 import { getEnvironmentSafeAllReminders } from "./reminderLoadUtils";
 import { getLogicalDateString, compareDateStrings, getLocalDateTimeString } from "./dateUtils";
-import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted } from "./repeatUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted } from "../components/dataManager/repeatUtils";
 import { isOpenEndedStartDateTask, shouldTreatStartDateOnlyAsOverdue } from "./startDateOverdue";
 import { shouldSkipReminderOnDate, type HolidayData } from "./reminderSkipDate";
 

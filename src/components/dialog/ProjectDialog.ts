@@ -1,8 +1,8 @@
 import { Dialog, showMessage, openEmoji } from "siyuan";
-import { ProjectFolderManager, ProjectFolder } from "../../utils/projectFolderManager";
+import { ProjectFolderManager, ProjectFolder } from "../dataManager/projectFolderManager";
 import { getBlockByID, addBlockProjectId, removeBlockProjectId } from "../../api";
-import { CategoryManager } from "../../utils/categoryManager";
-import { StatusManager } from "../../utils/statusManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { StatusManager } from "../dataManager/statusManager";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { i18n } from "../../pluginInstance";
 import { generateRandomColor } from "../../utils/uiUtils";

@@ -5,10 +5,10 @@ import { showStatsDialog } from "../stats/ShowStatsDialog";
 // 添加四象限面板常量
 import { getBlockByID, openBlock } from "../../api";
 import { PROJECT_KANBAN_TAB_TYPE } from "../../index";
-import { ProjectManager } from "../../utils/projectManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import { compareDateStrings, getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
-import { CategoryManager } from "../../utils/categoryManager";
-import { StatusManager } from "../../utils/statusManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { StatusManager } from "../dataManager/statusManager";
 import { ProjectDialog } from "../dialog/ProjectDialog";
 import { CategoryManageDialog } from "../dialog/CategoryManageDialog";
 import { StatusManageDialog } from "../dialog/ProjectStatusManageDialog";
@@ -20,7 +20,7 @@ import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
 import { SortMenuDialog } from "../dialog/SortMenuDialog";
 import { SortCriterion, getSortCriterionName } from "../../utils/sortConfig";
 import { generateRandomColor } from "../../utils/uiUtils";
-import { ProjectFolderManager, ProjectFolder } from "../../utils/projectFolderManager";
+import { ProjectFolderManager, ProjectFolder } from "../dataManager/projectFolderManager";
 import { ProjectFolderManageDialog } from "../dialog/ProjectFolderManageDialog";
 import { ProjectSelectorPopup } from "../dialog/ProjectSelectorPopup";
 import { showProjectStatsDialog, showFolderStatsDialog } from "../dialog/ProjectStatsDialog";
@@ -1395,7 +1395,7 @@ export class ProjectPanel {
                 this.reminderDataCache = reminderData;
             }
 
-            const { ProjectManager } = await import("../../utils/projectManager");
+            const { ProjectManager } = await import("../dataManager/projectManager");
             const projectManager = ProjectManager.getInstance(this.plugin);
             const statuses = await projectManager.getProjectKanbanStatuses(projectId);
             const settings = await this.plugin?.loadSettings?.() || this.plugin?.settings || {};
@@ -1533,7 +1533,7 @@ export class ProjectPanel {
         const allReminders = reminderData && typeof reminderData === 'object' ? Object.values(reminderData) : [];
         let totalPomodoro = 0;
         try {
-            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../dataManager/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(this.plugin);
             const reminderMap = new Map(allReminders.map((r: any) => [r.id, r]));
             // Only sum aggregated count for top-level reminders in the project to avoid double counting
@@ -1569,7 +1569,7 @@ export class ProjectPanel {
     private async countProjectTotalFocusTime(projectId: string, reminderData: any): Promise<number> {
         let totalMinutes = 0;
         try {
-            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../dataManager/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(this.plugin);
             if (!pomodoroManager) return 0;
             if ((pomodoroManager as any).initialize && typeof (pomodoroManager as any).initialize === 'function') {

@@ -1,5 +1,5 @@
 import { Plugin } from "siyuan";
-import { getFile, removeFile } from "../api";
+import { getFile, removeFile } from "../../api";
 
 const CALENDAR_CONFIG_FILE = '/data/storage/petal/siyuan-plugin-task-note-management/calendar-config.json';
 export const CALENDAR_CONFIG_UPDATED_EVENT = 'calendarConfigUpdated';

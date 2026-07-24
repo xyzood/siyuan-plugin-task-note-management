@@ -6,11 +6,11 @@ import { showMessage, confirm, Menu, Dialog, Constants, openEmoji, platformUtils
 import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, addBlockProjectId, pushMsg } from "../../api";
 import { i18n } from "../../pluginInstance";
 import { getLocalDateString, getLocalDateTimeString, compareDateStrings, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../../utils/dateUtils";
-import { CategoryManager } from "../../utils/categoryManager";
-import { ProjectManager } from "../../utils/projectManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import { PomodoroTimer } from "./PomodoroTimer";
-import { PomodoroManager } from "../../utils/pomodoroManager";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord"; // Add import
+import { PomodoroManager } from "../dataManager/pomodoroManager";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord"; // Add import
 import {
     generateRepeatInstances,
     generateRepeatInstancesWithFutureGuarantee,
@@ -26,7 +26,7 @@ import {
     patchRepeatInstanceState,
     getRepeatInstanceState,
     getInstanceField
-} from "../../utils/repeatUtils";
+} from "../dataManager/repeatUtils";
 import { getSolarDateLunarString } from "../../utils/lunarUtils";
 import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
 import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
@@ -48,7 +48,7 @@ import { SortCriterion, getSortCriterionName } from "../../utils/sortConfig";
 import { shouldTreatStartDateOnlyAsOverdue } from "../../utils/startDateOverdue";
 import { shouldSkipReminderOnDate, type HolidayData } from "../../utils/reminderSkipDate";
 import { TaskRenderer } from "../render/TaskRenderer";
-import { ProjectFolderManager, FolderKanbanSettings } from "../../utils/projectFolderManager";
+import { ProjectFolderManager, FolderKanbanSettings } from "../dataManager/projectFolderManager";
 interface KanbanSortConfigProjectData {
     sortRule?: string;
     sortOrder?: 'asc' | 'desc';
@@ -169,7 +169,7 @@ export class ProjectKanbanView {
     private _defaultCollapseApplied: boolean = false;
 
     // 当前项目的看板状态配置
-    public kanbanStatuses: import('../../utils/projectManager').KanbanStatus[] = [];
+    public kanbanStatuses: import('../dataManager/projectManager').KanbanStatus[] = [];
 
     // 看板列宽度记忆（key 为列标识，value 为宽度 px）
     private columnWidths: Map<string, number> = new Map();
@@ -520,7 +520,7 @@ export class ProjectKanbanView {
         return normalized;
     }
 
-    private getVisibleStatusesForGroup(group: any): import('../../utils/projectManager').KanbanStatus[] {
+    private getVisibleStatusesForGroup(group: any): import('../dataManager/projectManager').KanbanStatus[] {
         // 未分组始终显示所有状态
         if (!group || group.id === 'ungrouped') {
             return this.kanbanStatuses;
@@ -846,7 +846,7 @@ export class ProjectKanbanView {
                 this.kanbanMode = folderKanbanMode
                     || (firstProjectId ? await projectManager.getProjectKanbanMode(firstProjectId) : 'status');
 
-                const statusMap = new Map<string, import('../../utils/projectManager').KanbanStatus>();
+                const statusMap = new Map<string, import('../dataManager/projectManager').KanbanStatus>();
                 for (const projectId of this.aggregateProjectIds) {
                     const statuses = await projectManager.getProjectKanbanStatuses(projectId);
                     statuses.forEach(status => {
@@ -9379,7 +9379,7 @@ export class ProjectKanbanView {
 
             // 设置分组子菜单（仅在项目有自定义分组时显示）
             try {
-                const { ProjectManager } = await import('../../utils/projectManager');
+                const { ProjectManager } = await import('../dataManager/projectManager');
                 const projectManager = ProjectManager.getInstance(this.plugin);
                 const projectGroups = await projectManager.getProjectCustomGroups(this.projectId);
 
@@ -16149,7 +16149,7 @@ export class ProjectKanbanView {
         if (selectedIds.length === 0) return;
 
         try {
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             const groups = await projectManager.getProjectCustomGroups(this.projectId);
 

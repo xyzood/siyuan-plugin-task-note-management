@@ -2,7 +2,7 @@
 import type { Habit, HabitCheckInEmoji } from "../panel/HabitPanel";
 import { getLocalDateTimeString, getLogicalDateString } from "../../utils/dateUtils";
 import { i18n } from "../../pluginInstance";
-import { deleteHabitMemoBlockForEntry, syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../../utils/habitMemoBlockSync";
+import { deleteHabitMemoBlockForEntry, syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../dataManager/habitMemoBlockSync";
 
 type HabitHistoryEntry = {
     emoji: string;

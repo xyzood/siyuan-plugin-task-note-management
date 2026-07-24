@@ -256,7 +256,7 @@ export async function updateBindBlockAtrrs(blockId: string, bridge: any): Promis
                 };
 
                 try {
-                    const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+                    const { PomodoroRecordManager } = await import("../../components/dataManager/pomodoroRecord");
                     const pomodoroManager = PomodoroRecordManager.getInstance(bridge);
                     if (pomodoroManager) {
                         await pomodoroManager.initialize();
@@ -300,7 +300,7 @@ export async function updateBindBlockAtrrs(blockId: string, bridge: any): Promis
         attrs['custom-task-projectId'] = projectIds.length > 0 ? projectIds.join(',') : '';
 
         try {
-            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../../components/dataManager/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(bridge);
             if (pomodoroManager) {
                 await pomodoroManager.initialize();

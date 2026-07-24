@@ -5,9 +5,9 @@ import { HabitDayDialog } from "../dialog/HabitDayDialog";
 import { HabitStatsDialog } from "./HabitStatsDialog";
 import { HabitEditDialog } from "../dialog/HabitEditDialog";
 import { DEFAULT_SETTINGS } from "../../index";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
 import { getLogicalDateString } from "../../utils/dateUtils";
-import { HabitGroupManager, type HabitGroup } from "../../utils/habitGroupManager";
+import { HabitGroupManager, type HabitGroup } from "../dataManager/habitGroupManager";
 import { i18n } from "../../pluginInstance";
 import {
     buildLinkedHabitPomodoroData,

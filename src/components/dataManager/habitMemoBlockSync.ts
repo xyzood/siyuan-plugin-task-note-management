@@ -1,7 +1,7 @@
-import { appendBlock, deleteBlock, getBlockByID, insertBlock, setBlockAttrs, updateBlock } from "../api";
-import { getPluginInstance } from "../pluginInstance";
-import { normalizeHabitMemoTimestamp, renderHabitMemoSyncTemplate } from "./habitMemoTemplate";
-import type { Habit, HabitCheckInEntry, HabitEmojiConfig } from "./habitUtils";
+import { appendBlock, deleteBlock, getBlockByID, insertBlock, setBlockAttrs, updateBlock } from "../../api";
+import { getPluginInstance } from "../../pluginInstance";
+import { normalizeHabitMemoTimestamp, renderHabitMemoSyncTemplate } from "../../utils/habitMemoTemplate";
+import type { Habit, HabitCheckInEntry, HabitEmojiConfig } from "../../utils/habitUtils";
 
 
 export type HabitMemoCheckInEntry = HabitCheckInEntry & {

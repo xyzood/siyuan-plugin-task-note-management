@@ -1,6 +1,6 @@
-import { setBlockAttrs } from "../api";
-import { normalizeReminderSkipWeekendMode } from "./reminderSkipDate";
-import { RepeatInstanceState } from "../components/dialog/RepeatSettingsDialog";
+import { setBlockAttrs } from "../../api";
+import { normalizeReminderSkipWeekendMode } from "../../utils/reminderSkipDate";
+import { RepeatInstanceState } from "../dialog/RepeatSettingsDialog";
 
 interface AudioFileItemLike {
     path: string;
@@ -19,7 +19,7 @@ interface MigrationPlugin {
     saveReminderData(data: any): Promise<void>;
 }
 
-import { readDir } from "../api";
+import { readDir } from "../../api";
 
 const HABIT_DATA_FILE = "habit.json";
 const HABIT_CHECKIN_DIR = "habitCheckin";

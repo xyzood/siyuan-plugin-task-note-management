@@ -1,4 +1,4 @@
-import type { Habit, HabitCheckIn, HabitCheckInEntry, HabitEmojiConfig } from "./habitUtils";
+import type { Habit, HabitCheckIn, HabitCheckInEntry, HabitEmojiConfig } from "../../utils/habitUtils";
 
 export interface CreateHabitInput {
     title: string;

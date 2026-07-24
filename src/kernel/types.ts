@@ -4,10 +4,10 @@ export type {
     ProjectGroup,
     Milestone,
     KanbanStatus,
-} from "../utils/projectManager";
-export type { Category } from "../utils/categoryManager";
-export type { Status } from "../utils/statusManager";
-export type { ProjectFolder } from "../utils/projectFolderManager";
+} from "../components/dataManager/projectManager";
+export type { Category } from "../components/dataManager/categoryManager";
+export type { Status } from "../components/dataManager/statusManager";
+export type { ProjectFolder } from "../components/dataManager/projectFolderManager";
 export type {
     Habit,
     HabitCheckIn,
@@ -17,4 +17,4 @@ export type {
     HabitGoalType,
     HabitFrequencyType,
 } from "../utils/habitUtils";
-export type { PomodoroSession, PomodoroRecord, PomodoroStats } from "../utils/pomodoroRecord";
+export type { PomodoroSession, PomodoroRecord, PomodoroStats } from "../components/dataManager/pomodoroRecord";

@@ -1,12 +1,12 @@
 import { Dialog, showMessage, confirm, Menu } from "siyuan";
 import { getBlockByID, updateBindBlockAtrrs, getBlockReminderIds, openBlock } from "../../api";
 import { getLocaleTag, getLogicalDateString } from "../../utils/dateUtils";
-import { CategoryManager } from "../../utils/categoryManager";
-import { ProjectManager } from "../../utils/projectManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import { i18n } from "../../pluginInstance";
 import { TaskRenderer } from "../render/TaskRenderer";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
-import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion } from "../../utils/repeatUtils";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
+import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion } from "../dataManager/repeatUtils";
 
 /**
  * 块绑定任务查看对话框

@@ -1,5 +1,5 @@
 ﻿import { Dialog, showMessage } from "siyuan";
-import { HabitGroupManager, HabitGroup } from "../../utils/habitGroupManager";
+import { HabitGroupManager, HabitGroup } from "../dataManager/habitGroupManager";
 import { confirm } from "siyuan";
 import { getLocaleTag } from "../../utils/dateUtils";
 import { i18n } from "../../pluginInstance";

@@ -1,11 +1,11 @@
 import { Dialog, showMessage, confirm } from "siyuan";
 import { updateBindBlockAtrrs, getBlockByID, openBlock } from "../../api";
 import { getLocalDateString, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../../utils/dateUtils";
-import { CategoryManager } from "../../utils/categoryManager";
-import { ProjectManager } from "../../utils/projectManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import { QuickReminderDialog } from "./QuickReminderDialog";
 import { TaskRenderer } from "../render/TaskRenderer";
-import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, setRepeatInstanceCompletion, deleteRepeatInstanceState, addDaysToDate, getDaysDifference, resolveRepeatReminderTimes } from "../../utils/repeatUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, setRepeatInstanceCompletion, deleteRepeatInstanceState, addDaysToDate, getDaysDifference, resolveRepeatReminderTimes } from "../dataManager/repeatUtils";
 import { i18n } from "../../pluginInstance";
 
 export class DocumentReminderDialog {

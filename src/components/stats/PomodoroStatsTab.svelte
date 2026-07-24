@@ -8,7 +8,7 @@ let statsView: any = null;
 import { Dialog } from "siyuan";
 import { showMessage } from "siyuan";
 import { confirm } from "siyuan";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
 import { i18n } from "../../pluginInstance";
 import { getLocalDateString, getLogicalDateString, getDayStartMinutes, getLocaleTag } from "../../utils/dateUtils";
 import { init, use } from 'echarts/core';

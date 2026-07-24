@@ -1,5 +1,5 @@
 import { getFileStat } from "../api";
-import { uploadIcsToCloud } from "./icsUtils";
+import { uploadIcsToCloud } from "./icsExport";
 
 type IcsSyncInterval = "manual" | "15min" | "hourly" | "4hour" | "12hour" | "daily" | "dailyAt";
 

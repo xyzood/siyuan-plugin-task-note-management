@@ -151,7 +151,7 @@ export async function showManageGroupsDialog(view: any) {
 
         try {
             // 获取当前项目的分组列表
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(view.plugin);
             const currentGroups = await projectManager.getProjectCustomGroups(view.projectId);
 
@@ -1168,7 +1168,7 @@ export function addGroupDragAndDrop(view: any, groupItem: HTMLElement, group: an
         if (!draggedId || draggedId === group.id) return;
 
         try {
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(view.plugin);
             const currentGroups = await projectManager.getProjectCustomGroups(view.projectId);
 

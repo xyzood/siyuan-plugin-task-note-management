@@ -1,5 +1,5 @@
 import { Dialog, showMessage, confirm, openEmoji } from "siyuan";
-import { ProjectFolderManager, ProjectFolder } from "../../utils/projectFolderManager";
+import { ProjectFolderManager, ProjectFolder } from "../dataManager/projectFolderManager";
 import { i18n } from "../../pluginInstance";
 
 interface FolderTreeNode {

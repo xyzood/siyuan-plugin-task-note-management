@@ -1,12 +1,12 @@
 import { Dialog, showMessage } from "siyuan";
 import { i18n } from "../../pluginInstance";
 import { updateBindBlockAtrrs, getBlockByID } from "../../api";
-import { getRepeatDescription } from "../../utils/repeatUtils";
+import { getRepeatDescription } from "../dataManager/repeatUtils";
 import { getLogicalDateString, parseNaturalDateTime, autoDetectDateTimeFromTitle, getLocaleTag } from "../../utils/dateUtils";
 import { RepeatConfig, RepeatSettingsDialog } from "./RepeatSettingsDialog";
 import { QuickReminderDialog } from "./QuickReminderDialog";
-import { CategoryManager } from "../../utils/categoryManager";
-import { ProjectManager } from "../../utils/projectManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import LoadingDialog from './LoadingDialog.svelte';
 
 export interface ListItemNode {
@@ -1691,7 +1691,7 @@ class SmartBatchDialog {
 
                 // 如果是周期任务，自动完成所有过去的实例
                 if (setting.repeatConfig?.enabled && setting.date) {
-                    const { generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey } = await import("../../utils/repeatUtils");
+                    const { generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey } = await import("../dataManager/repeatUtils");
 
                     const today = getLogicalDateString();
 

@@ -2,7 +2,7 @@
  * Copyright (c) 2024 by [author]. All Rights Reserved.
  * @Author       : [author]
  * @Date         : [date]
- * @FilePath     : /src/utils/icsUtils.ts
+ * @FilePath     : /src/utils/icsExport.ts
  * @LastEditTime : [date]
  * @Description  : ICS export and upload utilities
  */
@@ -17,7 +17,7 @@ import { Constants } from 'siyuan';
 import { getLocalDateString } from './dateUtils';
 import { shouldSkipReminderOnDate, type HolidayData } from './reminderSkipDate';
 import { loadHolidays } from './icsSubscription';
-import { generateRepeatInstances, getMonthlyWeekRules } from './repeatUtils';
+import { generateRepeatInstances, getMonthlyWeekRules } from '../components/dataManager/repeatUtils';
 
 const useShell = async (cmd: 'showItemInFolder' | 'openPath', filePath: string) => {
     try {

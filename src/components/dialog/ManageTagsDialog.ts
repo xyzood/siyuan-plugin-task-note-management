@@ -210,7 +210,7 @@ export async function showManageTagsDialog(view: any) {
             }
 
             if (!isEdit || tagName !== existingTag.name) {
-                const { ProjectManager } = await import('../../utils/projectManager');
+                const { ProjectManager } = await import('../dataManager/projectManager');
                 const projectManager = ProjectManager.getInstance(view.plugin);
                 const projectTags = await projectManager.getProjectTags(view.projectId);
 

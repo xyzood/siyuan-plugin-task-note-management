@@ -1,7 +1,7 @@
-import type { ReminderManager } from "../../utils/reminderManager";
-import type { ProjectManager } from "../../utils/projectManager";
-import type { ProjectColumnsManager } from "../../utils/projectColumnsManager";
-import type { ProjectFolderManager } from "../../utils/projectFolderManager";
+import type { ReminderManager } from "../../components/dataManager/reminderManager";
+import type { ProjectManager } from "../../components/dataManager/projectManager";
+import type { ProjectColumnsManager } from "../../components/dataManager/projectColumnsManager";
+import type { ProjectFolderManager } from "../../components/dataManager/projectFolderManager";
 import type { ToolDefinition } from "./common";
 import {
     objectSchema,

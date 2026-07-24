@@ -1,7 +1,7 @@
 import { showMessage } from "siyuan";
 import { i18n } from "../../pluginInstance";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
-import { ProjectManager, type MilestoneDateDisplayInfo } from "../../utils/projectManager";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
+import { ProjectManager, type MilestoneDateDisplayInfo } from "../dataManager/projectManager";
 
 const PROJECT_KANBAN_TAB_TYPE = "TN_project_kanban_tab";
 const BLOCK_POMODORO_COUNT_ATTR = "custom-task-pomodoro-count";

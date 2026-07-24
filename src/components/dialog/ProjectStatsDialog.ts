@@ -30,7 +30,7 @@ export async function countProjectTotalPomodoro(plugin: any, projectId: string, 
     const allReminders = reminderData && typeof reminderData === 'object' ? Object.values(reminderData) : [];
     let totalPomodoro = 0;
     try {
-        const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+        const { PomodoroRecordManager } = await import("../dataManager/pomodoroRecord");
         const pomodoroManager = PomodoroRecordManager.getInstance(plugin);
         const reminderMap = new Map(allReminders.map((r: any) => [r.id, r]));
         const topLevelReminders = allReminders.filter((r: any) => {
@@ -63,7 +63,7 @@ export async function countProjectTotalPomodoro(plugin: any, projectId: string, 
 export async function countProjectTotalFocusTime(plugin: any, projectId: string, reminderData: any): Promise<number> {
     let totalMinutes = 0;
     try {
-        const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+        const { PomodoroRecordManager } = await import("../dataManager/pomodoroRecord");
         const pomodoroManager = PomodoroRecordManager.getInstance(plugin);
         if (!pomodoroManager) return 0;
         if ((pomodoroManager as any).initialize && typeof (pomodoroManager as any).initialize === 'function') {
@@ -178,7 +178,7 @@ export async function showStatsDialogForProjects(plugin: any, titleIcon: string,
             reminderData = await getAllReminders(plugin);
         }
 
-        const { ProjectManager } = await import("../../utils/projectManager");
+        const { ProjectManager } = await import("../dataManager/projectManager");
         const projectManager = ProjectManager.getInstance(plugin);
         const settings = await plugin?.loadSettings?.() || plugin?.settings || {};
         const holidayData = await plugin?.loadHolidayData?.() || {};

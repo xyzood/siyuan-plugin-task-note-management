@@ -400,7 +400,7 @@ export async function resolveDefaultKanbanStatus(
 ): Promise<string> {
     if (!projectId) return 'doing';
     try {
-        const { ProjectManager } = await import('./projectManager');
+        const { ProjectManager } = await import('../components/dataManager/projectManager');
         const projectManager = ProjectManager.getInstance(plugin);
         const kanbanStatuses = await projectManager.getProjectKanbanStatuses(projectId);
         // 找出第一个非固定（非 doing/completed/abandoned）的状态

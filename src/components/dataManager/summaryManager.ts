@@ -1,4 +1,4 @@
-import type { ReminderItem, Project, Habit } from "../kernel/types";
+import type { ReminderItem, Project, Habit } from "../../kernel/types";
 import { isRepeatInstanceCompleted } from "./repeatUtils";
 import { ReminderManager } from "./reminderManager";
 import { ProjectManager } from "./projectManager";

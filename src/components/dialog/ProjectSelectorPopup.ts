@@ -1,5 +1,5 @@
-import { ProjectManager, Project } from "../../utils/projectManager";
-import { ProjectFolderManager } from "../../utils/projectFolderManager";
+import { ProjectManager, Project } from "../dataManager/projectManager";
+import { ProjectFolderManager } from "../dataManager/projectFolderManager";
 import { i18n } from "../../pluginInstance";
 
 export interface ProjectSelectorPopupOptions {

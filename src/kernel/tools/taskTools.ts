@@ -1,6 +1,6 @@
-import type { ReminderManager } from "../../utils/reminderManager";
-import type { CategoryManager } from "../../utils/categoryManager";
-import type { ProjectManager } from "../../utils/projectManager";
+import type { ReminderManager } from "../../components/dataManager/reminderManager";
+import type { CategoryManager } from "../../components/dataManager/categoryManager";
+import type { ProjectManager } from "../../components/dataManager/projectManager";
 import type { ToolDefinition } from "./common";
 import {
     getBlockByID,

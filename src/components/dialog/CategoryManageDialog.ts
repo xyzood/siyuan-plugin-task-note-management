@@ -1,5 +1,5 @@
 import { Dialog, showMessage, confirm, openEmoji } from "siyuan";
-import { CategoryManager, Category } from "../../utils/categoryManager";
+import { CategoryManager, Category } from "../dataManager/categoryManager";
 import { i18n } from "../../pluginInstance";
 export class CategoryManageDialog {
     private dialog: Dialog;

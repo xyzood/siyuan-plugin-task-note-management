@@ -8,7 +8,7 @@ import { colorWithOpacity } from "../../utils/uiUtils";
 import { getLuteInstance } from "../../utils/luteSingleton";
 import { i18n } from "../../pluginInstance";
 import { getLocalDateString, getLocalDateTimeString, compareDateStrings, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../../utils/dateUtils";
-import { getRepeatDescription } from "../../utils/repeatUtils";
+import { getRepeatDescription } from "../dataManager/repeatUtils";
 import { getSolarDateLunarString } from "../../utils/lunarUtils";
 import { shouldTreatStartDateOnlyAsOverdue, isOpenEndedStartDateTask } from "../../utils/startDateOverdue";
 import { getReminderSkipWeekendsEffective, getReminderSkipHolidaysEffective, shouldSkipReminderOnDate } from "../../utils/reminderSkipDate";
@@ -1602,7 +1602,7 @@ export class TaskRenderer {
 
             (async () => {
                 try {
-                    const { ProjectManager } = await import('../../utils/projectManager');
+                    const { ProjectManager } = await import('../dataManager/projectManager');
                     const projectManager = ProjectManager.getInstance(context.plugin);
                     const projectTags = await projectManager.getProjectTags(task.projectId);
                     const tagMap = new Map(projectTags.map(t => [t.id, t]));

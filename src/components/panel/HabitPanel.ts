@@ -1,15 +1,15 @@
 import { showMessage, Dialog, Menu, confirm, getBackend, getFrontend } from "siyuan";
 import { openBlock, pushMsg } from "../../api";
 import { getLocalDateTimeString, getLogicalDateString, getRelativeDateString } from "../../utils/dateUtils";
-import { HabitGroupManager } from "../../utils/habitGroupManager";
+import { HabitGroupManager } from "../dataManager/habitGroupManager";
 import { i18n } from "../../pluginInstance";
 import { HabitEditDialog } from "../dialog/HabitEditDialog";
 import { HabitStatsDialog } from "../stats/HabitStatsDialog";
 import { HabitGroupManageDialog } from "../dialog/HabitGroupManageDialog";
 import { HabitCheckInEmojiDialog } from "../dialog/HabitCheckInEmojiDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
-import { PomodoroManager } from "../../utils/pomodoroManager";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
+import { PomodoroManager } from "../dataManager/pomodoroManager";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
 import { createPomodoroStartSubmenu as createSharedPomodoroStartSubmenu, resolveDefaultPomodoroDuration } from "../../utils/pomodoroPresets";
 import { showStatsDialog } from "../stats/ShowStatsDialog";
 import { HabitDayDialog } from "../dialog/HabitDayDialog";
@@ -33,8 +33,8 @@ import {
     isHabitCompletedOnDate as isHabitCompletedOnDateUtil,
     shouldCheckInOnDate
 } from "../../utils/habitUtils";
-import { syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../../utils/habitMemoBlockSync";
-import { getRepeatInstanceCompletedTime } from "../../utils/repeatUtils";
+import { syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../dataManager/habitMemoBlockSync";
+import { getRepeatInstanceCompletedTime } from "../dataManager/repeatUtils";
 
 interface HabitPomodoroStats {
     totalCount: number;

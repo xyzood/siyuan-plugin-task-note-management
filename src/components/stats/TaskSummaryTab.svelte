@@ -2,9 +2,9 @@
     import { onMount, tick } from "svelte";
     import { i18n } from "../../pluginInstance";
     import { getLocalDateString, getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
-    import { ProjectManager } from "../../utils/projectManager";
-    import { generateRepeatInstances, getRepeatInstanceOriginalKey } from "@/utils/repeatUtils";
-    import { PomodoroRecordManager } from "@/utils/pomodoroRecord";
+    import { ProjectManager } from "../dataManager/projectManager";
+    import { generateRepeatInstances, getRepeatInstanceOriginalKey } from "../dataManager/repeatUtils";
+    import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
     import { getLuteInstance } from "../../utils/luteSingleton";
     import { Dialog, showMessage, platformUtils } from "siyuan";
 

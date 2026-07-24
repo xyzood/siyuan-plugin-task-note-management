@@ -25,17 +25,17 @@
         resetDoingAndAbandonedTaskListMarkers,
         restoreTaskListMarkers,
     } from './api';
-    import { exportIcsFile, uploadIcsToCloud } from './utils/icsUtils';
+    import { exportIcsFile, uploadIcsToCloud } from './utils/icsExport';
     import { importIcsFile } from './utils/icsImport';
     import { syncHolidays } from './utils/icsSubscription';
-    import { PomodoroManager } from './utils/pomodoroManager';
+    import { PomodoroManager } from './components/dataManager/pomodoroManager';
     import { resolveAudioPath } from './utils/audioUtils';
     import { getGlobalReminderSkipWeekendMode } from './utils/reminderSkipDate';
     import VipPanel from './components/vip/VipPanel.svelte';
     import SubscriptionPanel from './components/settings/icsSubscriptionPanel.svelte';
     import HelpPanel from './components/settings/HelpPanel.svelte';
     import SettingSubGroup from './components/settings/SettingSubGroup.svelte';
-    import { ProjectManager } from './utils/projectManager';
+    import { ProjectManager } from './components/dataManager/projectManager';
     import { ProjectSelectorPopup } from './components/dialog/ProjectSelectorPopup';
 
     export let plugin;
@@ -2204,7 +2204,7 @@
                 try {
                     const { setDayStartTime } = await import('./utils/dateUtils');
                     setDayStartTime(newValue as string);
-                    const { PomodoroRecordManager } = await import('./utils/pomodoroRecord');
+                    const { PomodoroRecordManager } = await import('./components/dataManager/pomodoroRecord');
                     const recordManager = PomodoroRecordManager.getInstance(plugin);
                     await recordManager.regenerateRecordsByDate();
                 } catch (error) {
@@ -2569,7 +2569,7 @@
     // ICS导入对话框
     async function showImportDialog(icsContent: string) {
         // 加载项目和标签数据
-        const { ProjectManager } = await import('./utils/projectManager');
+        const { ProjectManager } = await import('./components/dataManager/projectManager');
         const projectManager = ProjectManager.getInstance(plugin);
         await projectManager.initialize();
         const groupedProjects = projectManager.getProjectsGroupedByStatus();
@@ -2665,7 +2665,7 @@
             if (!categorySelector) return;
 
             try {
-                const { CategoryManager } = await import('./utils/categoryManager');
+                const { CategoryManager } = await import('./components/dataManager/categoryManager');
                 const categoryManager = CategoryManager.getInstance(plugin);
                 await categoryManager.initialize();
                 const categories = categoryManager.getCategories();

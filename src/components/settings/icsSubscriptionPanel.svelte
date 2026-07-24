@@ -26,8 +26,8 @@
         if (!silent) loading = true;
         try {
             const { loadSubscriptions } = await import('../../utils/icsSubscription');
-            const { ProjectManager } = await import('../../utils/projectManager');
-            const { CategoryManager } = await import('../../utils/categoryManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
+            const { CategoryManager } = await import('../dataManager/categoryManager');
 
             projectManager = ProjectManager.getInstance(plugin);
             await projectManager.initialize();
@@ -510,7 +510,7 @@
             let projectId = subscription?.projectId || `quick_${Date.now()}`;
 
             // Load and ensure Folder "订阅日历" exists
-            const { ProjectFolderManager } = await import('../../utils/projectFolderManager');
+            const { ProjectFolderManager } = await import('../dataManager/projectFolderManager');
             const folderManager = ProjectFolderManager.getInstance(plugin);
             await folderManager.initialize();
             let folder = folderManager.getFolders().find(f => f.name === '订阅日历');

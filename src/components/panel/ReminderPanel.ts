@@ -5,18 +5,18 @@ import { loadSortConfig, saveSortConfig, getSortCriterionName, SortCriterion, lo
 import { getLuteInstance } from "../../utils/luteSingleton";
 import { SortMenuDialog } from "../dialog/SortMenuDialog";
 import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
-import { CategoryManager } from "../../utils/categoryManager";
+import { CategoryManager } from "../dataManager/categoryManager";
 import { CategoryManageDialog } from "../dialog/CategoryManageDialog";
 import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
 import { showAddTaskReminderTimeDialog } from "../dialog/AddTaskReminderTimeDialog";
 import { i18n } from "../../pluginInstance";
 import { TaskRenderer } from "../render/TaskRenderer";
-import { generateRepeatInstances, generateRepeatInstancesWithFutureGuarantee, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, removeRepeatInstance, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../../utils/repeatUtils";
+import { generateRepeatInstances, generateRepeatInstancesWithFutureGuarantee, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, removeRepeatInstance, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../dataManager/repeatUtils";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { getLastStatsMode } from "../stats/statsMode";
 import { showStatsDialog } from "../stats/ShowStatsDialog";
-import { PomodoroManager } from "../../utils/pomodoroManager";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord"; // Add import
+import { PomodoroManager } from "../dataManager/pomodoroManager";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord"; // Add import
 import { getSolarDateLunarString, getNextLunarMonthlyDate, getNextLunarYearlyDate } from "../../utils/lunarUtils";
 import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
 import { isEventPast } from "../../utils/icsImport";
@@ -24,7 +24,7 @@ import { PasteTaskDialog } from "../dialog/PasteTaskDialog";
 import LoadingDialog from '../dialog/LoadingDialog.svelte';
 import { createPomodoroStartSubmenu as createSharedPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
 import { buildProjectCategoryOrderMap, buildProjectStatusOrderMap, compareProjectsByPanelSort, normalizeProjectPanelSortCriteria } from "./ProjectPanel";
-import type { KanbanStatus } from "../../utils/projectManager";
+import type { KanbanStatus } from "../dataManager/projectManager";
 import { isOpenEndedStartDateTask, shouldTreatStartDateOnlyAsOverdue } from "../../utils/startDateOverdue";
 import {
     getReminderSkipHolidaysEffective,
@@ -3383,7 +3383,7 @@ export class ReminderPanel {
 
             // 获取所有项目的分组信息，构建已归档分组的ID集合
             const archivedGroupIds = new Set<string>();
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
 
             for (const projectId of projectIds) {
@@ -4029,7 +4029,7 @@ export class ReminderPanel {
                 )
             );
 
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             this.defaultKanbanStatusCache = new Map(
                 projectManager.getDefaultKanbanStatuses()
@@ -7421,7 +7421,7 @@ export class ReminderPanel {
         const currentStatus = this.getReminderKanbanStatusId(reminder);
         const projectId = reminder.projectId;
 
-        const { ProjectManager } = await import('../../utils/projectManager');
+        const { ProjectManager } = await import('../dataManager/projectManager');
         const projectManager = ProjectManager.getInstance(this.plugin);
 
         let statuses: KanbanStatus[] = [];

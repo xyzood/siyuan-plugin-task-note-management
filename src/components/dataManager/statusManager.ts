@@ -1,5 +1,5 @@
 
-import { i18n } from '../pluginInstance';
+import { i18n } from '../../pluginInstance';
 
 export interface Status {
     id: string;

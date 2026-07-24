@@ -1,10 +1,10 @@
 import { Dialog, showMessage, confirm } from "siyuan";
 import type { Habit, HabitCheckInEmoji } from "../panel/HabitPanel";
 import { getLocalDateTimeString, getLogicalDateString } from "../../utils/dateUtils";
-import { PomodoroRecordManager, type PomodoroSession } from "../../utils/pomodoroRecord";
+import { PomodoroRecordManager, type PomodoroSession } from "../dataManager/pomodoroRecord";
 import { i18n, getPluginInstance } from "../../pluginInstance";
 import { buildLinkedHabitTaskMaps, isEventIdFromTaskWithInstances } from "../../utils/linkedHabitPomodoro";
-import { deleteHabitMemoBlockForEntry, syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../../utils/habitMemoBlockSync";
+import { deleteHabitMemoBlockForEntry, syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../dataManager/habitMemoBlockSync";
 
 type HabitDayEntry = {
     emoji: string;

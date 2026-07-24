@@ -1,4 +1,4 @@
-import type { HabitManager } from "../../utils/habitManager";
+import type { HabitManager } from "../../components/dataManager/habitManager";
 import type { ToolDefinition } from "./common";
 import {
     objectSchema,

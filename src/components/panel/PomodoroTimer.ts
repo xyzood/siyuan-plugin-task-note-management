@@ -1,5 +1,5 @@
 import { showMessage, confirm, getFrontend, getBackend, Dialog } from "siyuan";
-import { PomodoroRecordManager, type PomodoroSession } from "../../utils/pomodoroRecord";
+import { PomodoroRecordManager, type PomodoroSession } from "../dataManager/pomodoroRecord";
 import { getBlockByID, getBlockAttrs, setBlockAttrs, openBlock, sendNotification, cancelNotification } from "../../api";
 import { i18n } from "../../pluginInstance";
 import { resolveAudioPath } from "../../utils/audioUtils";

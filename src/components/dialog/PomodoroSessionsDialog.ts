@@ -9,9 +9,9 @@
 
 import { Dialog, Menu, confirm, showMessage } from "siyuan";
 import { PomodoroTimer } from "../panel/PomodoroTimer";
-import { PomodoroManager } from "../../utils/pomodoroManager";
+import { PomodoroManager } from "../dataManager/pomodoroManager";
 import { createPomodoroStartSubmenu } from "../../utils/pomodoroPresets";
-import { PomodoroRecordManager, PomodoroSession } from "../../utils/pomodoroRecord";
+import { PomodoroRecordManager, PomodoroSession } from "../dataManager/pomodoroRecord";
 import { i18n } from "../../pluginInstance";
 import { getLocaleTag } from "../../utils/dateUtils";
 import { getBlockByID, getBlockAttrs, setBlockAttrs } from "../../api";

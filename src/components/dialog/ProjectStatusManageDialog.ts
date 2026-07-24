@@ -1,5 +1,5 @@
 ﻿import { Dialog, showMessage, confirm, openEmoji } from "siyuan";
-import { StatusManager, Status } from "../../utils/statusManager";
+import { StatusManager, Status } from "../dataManager/statusManager";
 import { i18n } from "../../pluginInstance";
 
 type StatusWithBadge = Status & {

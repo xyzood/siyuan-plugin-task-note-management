@@ -1,5 +1,5 @@
-import type { PomodoroManager } from "../../utils/pomodoroRecord";
-import type { SummaryManager } from "../../utils/summaryManager";
+import type { PomodoroManager } from "../../components/dataManager/pomodoroRecord";
+import type { SummaryManager } from "../../components/dataManager/summaryManager";
 import type { ToolDefinition } from "./common";
 import {
     objectSchema,

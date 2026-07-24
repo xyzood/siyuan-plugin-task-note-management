@@ -1,6 +1,6 @@
-import { getFile, putFile, removeFile } from '../api';
+import { getFile, putFile, removeFile } from '../../api';
 import { StatusManager } from './statusManager';
-import { i18n } from '../pluginInstance';
+import { i18n } from '../../pluginInstance';
 
 const DEFAULT_INBOX_PROJECT_ID = 'inbox';
 const DEFAULT_INBOX_INITIALIZED_KEY = '_initializedDefaultInbox';

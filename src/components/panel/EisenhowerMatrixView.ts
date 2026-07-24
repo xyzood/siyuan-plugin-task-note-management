@@ -1,11 +1,11 @@
 import { getFile, putFile, openBlock, getBlockByID, removeFile } from "../../api";
 import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
-import { ProjectManager } from "../../utils/projectManager";
-import { CategoryManager } from "../../utils/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
+import { CategoryManager } from "../dataManager/categoryManager";
 import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
 import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
-import { PomodoroManager } from "../../utils/pomodoroManager";
+import { PomodoroManager } from "../dataManager/pomodoroManager";
 import { colorWithOpacity } from "../../utils/uiUtils";
 import { getLuteInstance } from "../../utils/luteSingleton";
 import { showMessage, confirm, Menu, Dialog, platformUtils, getBackend, getFrontend } from "siyuan";
@@ -13,7 +13,7 @@ import { i18n } from "../../pluginInstance";
 import { TaskRenderer } from "../render/TaskRenderer";
 import { getLocalDateTimeString, getLocalDateString, compareDateStrings, getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
 import { getSolarDateLunarString } from "../../utils/lunarUtils";
-import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, getRepeatInstanceState, getRepeatDescription, generateSubtreeInstances } from "../../utils/repeatUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, getRepeatInstanceState, getRepeatDescription, generateSubtreeInstances } from "../dataManager/repeatUtils";
 import { createPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
 import { shouldTreatStartDateOnlyAsOverdue } from "../../utils/startDateOverdue";
 import { shouldSkipReminderOnDate, type HolidayData } from "../../utils/reminderSkipDate";
@@ -612,7 +612,7 @@ export class EisenhowerMatrixView {
      */
     private async getReminderPomodoroCount(reminderId: string, reminder?: any, reminderData?: any): Promise<number> {
         try {
-            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../dataManager/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(this.plugin);
             if (reminder && reminder.isRepeatInstance) {
                 return await pomodoroManager.getReminderPomodoroCount(reminderId);
@@ -655,7 +655,7 @@ export class EisenhowerMatrixView {
 
     private async getReminderFocusTime(reminderId: string, reminder?: any, reminderData?: any): Promise<number> {
         try {
-            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../dataManager/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(this.plugin);
             if (reminder && reminder.isRepeatInstance) {
                 if (typeof pomodoroManager.getEventTotalFocusTime === 'function') {

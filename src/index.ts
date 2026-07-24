@@ -19,30 +19,30 @@ import { HabitPanel } from "./components/panel/HabitPanel";
 import { BatchReminderDialog, ListItemNode } from "./components/dialog/BatchReminderDialog";
 import { CalendarView } from "./components/panel/CalendarView";
 import { EisenhowerMatrixView } from "./components/panel/EisenhowerMatrixView";
-import { CategoryManager } from "./utils/categoryManager";
-import { ProjectManager } from "./utils/projectManager";
+import { CategoryManager } from "./components/dataManager/categoryManager";
+import { ProjectManager } from "./components/dataManager/projectManager";
 import { readDir } from "./api";
 import { getLocalTimeString, getLocalDateString, getLocalDateTimeString, compareDateStrings, getLogicalDateString, setDayStartTime, setSingleDateDefaultRole } from "./utils/dateUtils";
 import { i18n, setPluginInstance } from "./pluginInstance";
 import { SettingUtils } from "./libs/setting-utils";
-import { PomodoroRecordManager } from "./utils/pomodoroRecord";
-import { HabitGroupManager } from "./utils/habitGroupManager";
+import { PomodoroRecordManager } from "./components/dataManager/pomodoroRecord";
+import { HabitGroupManager } from "./components/dataManager/habitGroupManager";
 import { NotificationDialog } from "./components/dialog/NotificationDialog";
 import { DocumentReminderDialog } from "./components/dialog/DocumentReminderDialog";
 import { ProjectDialog } from "./components/dialog/ProjectDialog";
 import { ProjectPanel } from "./components/panel/ProjectPanel";
 import { ProjectKanbanView } from "./components/panel/ProjectKanbanView";
-import { PomodoroManager } from "./utils/pomodoroManager";
+import { PomodoroManager } from "./components/dataManager/pomodoroManager";
 import SettingPanelComponent from "./SettingPanel.svelte";
-import { exportIcsFile } from "./utils/icsUtils";
+import { exportIcsFile } from "./utils/icsExport";
 import { getFile, sendNotification, cancelNotification, pushErrMsg, pushMsg, isInMobileApp, batchUpdateTaskListItemMarker, isTaskListLikeBlock, type TaskListItemMarker } from "./api";
 import { resolveAudioPath, playTaskCompleteSound as playTaskCompleteSoundUtil, playNotificationSound as playNotificationSoundUtil, getNotificationSound as getNotificationSoundUtil } from "./utils/audioUtils";
 import { showVipDialog } from "./components/vip/VipDialog";
-import { performDataMigration } from "./utils/dataMigration";
+import { performDataMigration } from "./components/dataManager/dataMigration";
 import { initIcsSync, initIcsSubscriptionSync, handleIcsSyncSettingsChange, cleanupIcsSync } from "./utils/icsSync";
 import { cleanReminderItem } from "./utils/reminderLoadUtils";
 import { TaskNoteDOMManager } from "./components/render/taskNoteDOM";
-import { addDaysToDate, generateRepeatInstances, getDaysDifference, getRelativeReminderWindow, resolveRepeatReminderTimes } from "./utils/repeatUtils";
+import { addDaysToDate, generateRepeatInstances, getDaysDifference, getRelativeReminderWindow, resolveRepeatReminderTimes } from "./components/dataManager/repeatUtils";
 import { getDockItemSelector, setDockBadgeByType as applyDockBadgeByType } from "./utils/addDockBadge";
 import { shouldTreatStartDateOnlyAsOverdue, isOpenEndedStartDateTask } from "./utils/startDateOverdue";
 import {
@@ -4175,7 +4175,7 @@ export default class ReminderPlugin extends Plugin {
 
     private async checkReminders() {
         try {
-            const { generateRepeatInstances } = await import("./utils/repeatUtils");
+            const { generateRepeatInstances } = await import("./components/dataManager/repeatUtils");
             let reminderData = await this.loadReminderData();
 
             // 检查数据是否有效，如果数据被损坏（包含错误信息），重新初始化
@@ -4485,7 +4485,7 @@ export default class ReminderPlugin extends Plugin {
     private async checkTimeReminders(reminderData: any, today: string, currentTime: string, holidayData: HolidayData = this.getReminderSkipHolidayDataSnapshot()) {
         try {
 
-            const { generateRepeatInstances } = await import("./utils/repeatUtils");
+            const { generateRepeatInstances } = await import("./components/dataManager/repeatUtils");
 
             for (const [reminderId, reminder] of Object.entries(reminderData)) {
                 if (!reminder || typeof reminder !== 'object') continue;

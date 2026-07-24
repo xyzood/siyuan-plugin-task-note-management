@@ -2,10 +2,10 @@
     import { onMount, onDestroy } from "svelte";
     import { Menu, showMessage } from "siyuan";
     import { i18n } from "../../pluginInstance";
-    import { ProjectManager } from "../../utils/projectManager";
-    import { CategoryManager } from "../../utils/categoryManager";
-    import { ProjectFolderManager } from "../../utils/projectFolderManager";
-    import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
+    import { ProjectManager } from "../dataManager/projectManager";
+    import { CategoryManager } from "../dataManager/categoryManager";
+    import { ProjectFolderManager } from "../dataManager/projectFolderManager";
+    import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
     import { ProjectKanbanView } from "../panel/ProjectKanbanView";
     import { ProjectDialog } from "../dialog/ProjectDialog";
     import { getAllReminders } from "../../utils/icsSubscription";

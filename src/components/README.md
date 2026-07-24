@@ -2,6 +2,25 @@
 
 `src/components` 按功能拆分为以下目录：
 
+## dataManager/ 数据管理
+集中管理业务数据持久化与状态管理，提供单例管理器供面板、对话框和工具函数使用。
+
+- **calendarConfigManager.ts**：日历视图配置管理器
+- **categoryManager.ts**：任务分类数据管理器
+- **dataMigration.ts**：历史数据迁移逻辑
+- **habitGroupManager.ts**：习惯分组数据管理器
+- **habitManager.ts**：习惯数据管理器
+- **habitMemoBlockSync.ts**：习惯打卡笔记块同步
+- **pomodoroManager.ts**：全局番茄钟实例管理器
+- **pomodoroRecord.ts**：番茄钟记录数据管理器
+- **repeatUtils.ts**：提醒重复规则与实例状态处理
+- **projectColumnsManager.ts**：项目自定义列（分组）管理器
+- **projectFolderManager.ts**：项目文件夹数据管理器
+- **projectManager.ts**：项目数据管理器
+- **reminderManager.ts**：提醒任务数据管理器
+- **statusManager.ts**：项目状态数据管理器
+- **summaryManager.ts**：任务摘要数据汇总
+
 ## panel/ 面板与核心视图
 提供插件 Dock 面板和主要任务管理视图。
 

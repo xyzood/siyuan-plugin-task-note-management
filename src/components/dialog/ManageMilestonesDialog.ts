@@ -1,7 +1,7 @@
 import { Dialog, showMessage, confirm, openEmoji, openBlock, platformUtils } from "siyuan";
 import { i18n } from "../../pluginInstance";
 import { getLogicalDateString, getLocalDateTimeString } from "../../utils/dateUtils";
-import { ProjectManager } from "../../utils/projectManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import { saveReminders } from "../../utils/icsSubscription";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { TaskRenderer } from "../render/TaskRenderer";

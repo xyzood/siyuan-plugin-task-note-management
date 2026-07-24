@@ -1125,7 +1125,7 @@ export async function updateBindBlockAtrrs(blockId: string, plugin: any, provide
                 };
 
                 try {
-                    const { PomodoroRecordManager } = await import("./utils/pomodoroRecord");
+                    const { PomodoroRecordManager } = await import("./components/dataManager/pomodoroRecord");
                     const pomodoroManager = PomodoroRecordManager.getInstance(plugin);
                     if (pomodoroManager) {
                         await pomodoroManager.initialize();
@@ -1176,7 +1176,7 @@ export async function updateBindBlockAtrrs(blockId: string, plugin: any, provide
 
         // ----- 4. 计算 custom-task-pomodoro-count 和 custom-task-pomodoro-minutes -----
         try {
-            const { PomodoroRecordManager } = await import("./utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("./components/dataManager/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(plugin);
             if (pomodoroManager) {
                 await pomodoroManager.initialize();

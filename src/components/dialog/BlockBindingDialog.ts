@@ -438,7 +438,7 @@ export class BlockBindingDialog {
                     const milestoneId = this.reminder?.milestoneId || this.reminder?.milestone;
                     if (milestoneId && this.defaultProjectId) {
                         try {
-                            const { ProjectManager } = await import('../../utils/projectManager');
+                            const { ProjectManager } = await import('../dataManager/projectManager');
                             const projectManager = ProjectManager.getInstance(this.plugin);
                             const milestone = await projectManager.getMilestoneById(this.defaultProjectId, milestoneId);
                             if (milestone?.blockId) {
@@ -468,7 +468,7 @@ export class BlockBindingDialog {
                     // 2. 项目自定义分组或项目绑定（参考 initHeadingTabDefaults 的逻辑）
                     if (!boundDocBlockId && this.defaultProjectId) {
                         try {
-                            const { ProjectManager } = await import('../../utils/projectManager');
+                            const { ProjectManager } = await import('../dataManager/projectManager');
                             const projectManager = ProjectManager.getInstance(this.plugin);
                             await projectManager.initialize();
 
@@ -739,7 +739,7 @@ export class BlockBindingDialog {
                 : (this.reminder?.milestoneId || this.reminder?.milestone);
             if (milestoneId && this.defaultProjectId) {
                 try {
-                    const { ProjectManager } = await import('../../utils/projectManager');
+                    const { ProjectManager } = await import('../dataManager/projectManager');
                     const projectManager = ProjectManager.getInstance(this.plugin);
                     const milestone = await projectManager.getMilestoneById(this.defaultProjectId, milestoneId);
                     if (milestone?.blockId) {
@@ -770,7 +770,7 @@ export class BlockBindingDialog {
 
             // 2. 检查项目自定义分组绑定
             if (!autoFillBlockId && this.defaultProjectId) {
-                const { ProjectManager } = await import('../../utils/projectManager');
+                const { ProjectManager } = await import('../dataManager/projectManager');
                 const projectManager = ProjectManager.getInstance(this.plugin);
                 await projectManager.initialize();
 

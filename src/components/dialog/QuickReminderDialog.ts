@@ -1,18 +1,18 @@
 import { showMessage, Dialog, platformUtils, confirm, Menu } from "siyuan";
 import { getBlockByID, getBlockDOM, refreshSql, renameDocByID, updateBindBlockAtrrs, updateBlock } from "../../api";
 import { compareDateStrings, getLogicalDateString, autoDetectDateTimeFromTitle, type SingleDateRole } from "../../utils/dateUtils";
-import { CategoryManager } from "../../utils/categoryManager";
-import { ProjectManager } from "../../utils/projectManager";
-import { HabitGroupManager } from "../../utils/habitGroupManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
+import { HabitGroupManager } from "../dataManager/habitGroupManager";
 import { i18n } from "../../pluginInstance";
 import { RepeatSettingsDialog, RepeatConfig } from "./RepeatSettingsDialog";
 import { solarToLunar } from "../../utils/lunarUtils";
 import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
-import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField, parseReminderInstanceId } from "../../utils/repeatUtils";
+import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField, parseReminderInstanceId } from "../dataManager/repeatUtils";
 import { CategoryManageDialog } from "./CategoryManageDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { SubtasksDialog } from "./SubtasksDialog";
-import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
+import { PomodoroRecordManager } from "../dataManager/pomodoroRecord";
 import { PomodoroSessionsDialog } from "./PomodoroSessionsDialog";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, prosePluginsCtx, parserCtx } from "@milkdown/kit/core";
 import { Plugin, NodeSelection } from "@milkdown/prose/state";
@@ -557,8 +557,8 @@ export class QuickReminderDialog {
     private existingReminders: any[] = [];
     private selectedCategoryIds: string[] = [];
     private isMultiSelectCategory: boolean = false; // 分类是否多选
-    private currentKanbanStatuses: import('../../utils/projectManager').KanbanStatus[] = []; // 当前项目的kanbanStatuses
-    private currentActiveProjectGroups: import('../../utils/projectManager').ProjectGroup[] = []; // 当前项目未归档分组
+    private currentKanbanStatuses: import('../dataManager/projectManager').KanbanStatus[] = []; // 当前项目的kanbanStatuses
+    private currentActiveProjectGroups: import('../dataManager/projectManager').ProjectGroup[] = []; // 当前项目未归档分组
     private durationManuallyChanged: boolean = false; // 标记用户是否手动修改了持续天数
     private isApplyingNaturalLanguageResult: boolean = false; // 标记当前是否正在应用自然语言识别结果
     private tempSubtasks: any[] = []; // 新建模式下的临时子任务列表
@@ -4005,7 +4005,7 @@ export class QuickReminderDialog {
         return normalized;
     }
 
-    private filterKanbanStatusesBySelectedGroup(statuses: import('../../utils/projectManager').KanbanStatus[]): import('../../utils/projectManager').KanbanStatus[] {
+    private filterKanbanStatusesBySelectedGroup(statuses: import('../dataManager/projectManager').KanbanStatus[]): import('../dataManager/projectManager').KanbanStatus[] {
         const groupSelector = this.dialog?.element?.querySelector('#quickCustomGroupSelector') as HTMLInputElement;
         const selectedGroupId = groupSelector?.value || '';
         if (!selectedGroupId) return statuses;
@@ -4244,7 +4244,7 @@ export class QuickReminderDialog {
         }
 
         try {
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             const projectTags = await projectManager.getProjectTags(projectId);
 
@@ -6579,7 +6579,7 @@ export class QuickReminderDialog {
 
             // 检查项目是否有自定义分组
             try {
-                const { ProjectManager } = await import('../../utils/projectManager');
+                const { ProjectManager } = await import('../dataManager/projectManager');
                 const projectManager = ProjectManager.getInstance(this.plugin);
                 const projectGroups = await projectManager.getProjectCustomGroups(projectId);
                 // 过滤掉已归档的分组
@@ -6614,7 +6614,7 @@ export class QuickReminderDialog {
             this.currentActiveProjectGroups = [];
             customGroupContainer.style.display = 'none';
             // 使用默认kanbanStatuses
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             this.currentKanbanStatuses = projectManager.getDefaultKanbanStatuses();
             this.updateKanbanStatusSelector();
@@ -6635,7 +6635,7 @@ export class QuickReminderDialog {
         if (!searchInput || !hiddenInput || !dropdown) return;
 
         try {
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             const projectGroups = await projectManager.getProjectCustomGroups(projectId);
             // 过滤掉已归档的分组
@@ -6750,7 +6750,7 @@ export class QuickReminderDialog {
         if (!projectId) return;
 
         try {
-            const { ProjectManager } = await import('../../utils/projectManager');
+            const { ProjectManager } = await import('../dataManager/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             let milestones: any[] = [];
 
@@ -7821,7 +7821,7 @@ export class QuickReminderDialog {
 
                     // 如果是周期任务，自动完成所有过去的实例
                     if (this.repeatConfig.enabled && date) {
-                        const { generateRepeatInstances } = await import("../../utils/repeatUtils");
+                        const { generateRepeatInstances } = await import("../dataManager/repeatUtils");
                         const today = getLogicalDateString();
 
                         // 计算从开始日期到今天的天数，用于设置 maxInstances

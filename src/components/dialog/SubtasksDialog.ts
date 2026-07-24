@@ -5,11 +5,11 @@ import { QuickReminderDialog } from "./QuickReminderDialog";
 import { PasteTaskDialog } from "./PasteTaskDialog";
 import { SortMenuDialog } from "./SortMenuDialog";
 import { TaskRenderer, type TaskRenderCallbacks, type TaskRenderContext } from "../render/TaskRenderer";
-import { CategoryManager } from "../../utils/categoryManager";
-import { ProjectManager } from "../../utils/projectManager";
+import { CategoryManager } from "../dataManager/categoryManager";
+import { ProjectManager } from "../dataManager/projectManager";
 import { getLogicalDateString } from "../../utils/dateUtils";
 import { getSortCriterionName, loadSortConfig, saveSortConfig, type SortCriterion } from "../../utils/sortConfig";
-import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, getRepeatInstanceState } from "../../utils/repeatUtils";
+import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, getRepeatInstanceState } from "../dataManager/repeatUtils";
 import { getLuteInstance } from "../../utils/luteSingleton";
 
 export class SubtasksDialog {
