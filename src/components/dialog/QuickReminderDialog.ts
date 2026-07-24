@@ -8031,11 +8031,11 @@ export class QuickReminderDialog {
                 else delete updatedState.url;
             }
             if (hasInstanceField('completed')) {
-                if (newCompleted !== undefined) updatedState.completed = newCompleted;
+                if (instanceData.completed !== undefined) updatedState.completed = instanceData.completed;
                 else delete updatedState.completed;
             }
             if (hasInstanceField('completedTime')) {
-                if (newCompletedTime !== undefined) updatedState.completedTime = newCompletedTime;
+                if (instanceData.completedTime !== undefined) updatedState.completedTime = instanceData.completedTime;
                 else delete updatedState.completedTime;
             }
 
