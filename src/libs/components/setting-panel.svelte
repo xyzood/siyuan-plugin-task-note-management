@@ -8,7 +8,7 @@
 -->
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
-    import Form from './Form';
+    import Form from './Form/index';
 
     export let group: string;
     export let settingItems: ISettingItem[];

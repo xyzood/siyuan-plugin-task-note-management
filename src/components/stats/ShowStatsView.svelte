@@ -1,10 +1,10 @@
 <script lang="ts">
-    import PomodoroStatsTab from "./stats/PomodoroStatsTab.svelte";
-    import TaskStatsTab from "./stats/TaskStatsTab.svelte";
-    import HabitStatsTab from "./stats/HabitStatsTab.svelte";
-    import TaskSummaryTab from "./stats/TaskSummaryTab.svelte";
-    import ProjectStatsTab from "./stats/ProjectStatsTab.svelte";
-    import { setLastStatsMode } from "./stats/statsMode";
+    import PomodoroStatsTab from "./PomodoroStatsTab.svelte";
+    import TaskStatsTab from "./TaskStatsTab.svelte";
+    import HabitStatsTab from "./HabitStatsTab.svelte";
+    import TaskSummaryTab from "./TaskSummaryTab.svelte";
+    import ProjectStatsTab from "./ProjectStatsTab.svelte";
+    import { setLastStatsMode } from "./statsMode";
 
     export let plugin: any;
     export let initialTab: "pomodoro" | "task" | "habit" | "summary" | "project" = "pomodoro";

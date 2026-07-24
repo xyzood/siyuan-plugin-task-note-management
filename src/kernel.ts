@@ -10,7 +10,7 @@ import { CategoryManager } from "./utils/categoryManager";
 import { HabitManager } from "./utils/habitManager";
 import { PomodoroManager } from "./utils/pomodoroRecord";
 import { SummaryManager } from "./utils/summaryManager";
-import { createMcpRegistry, type ToolDefinition } from "./kernel/tools";
+import { createMcpRegistry, type ToolDefinition } from "./kernel/tools/index";
 import { STATUSES_DATA_FILE } from "./kernel/constants";
 
 class KernelPluginBridge {

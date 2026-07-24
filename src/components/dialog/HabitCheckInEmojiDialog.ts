@@ -1,7 +1,7 @@
 import { Dialog, openEmoji, showMessage, confirm } from "siyuan";
-import { Habit, HabitCheckInEmoji } from "./panel/HabitPanel";
-import { i18n } from "../pluginInstance";
-import { getBlockByID } from "../api";
+import { Habit, HabitCheckInEmoji } from "../panel/HabitPanel";
+import { i18n } from "../../pluginInstance";
+import { getBlockByID } from "../../api";
 
 const DEFAULT_EMOJIS: HabitCheckInEmoji[] = [
     { emoji: "✅", meaning: "完成", promptNote: false, countsAsSuccess: true },

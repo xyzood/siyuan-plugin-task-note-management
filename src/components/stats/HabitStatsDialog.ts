@@ -1,6 +1,6 @@
 ﻿import { Dialog } from "siyuan";
 import type { Habit } from "../panel/HabitPanel";
-import { HabitDayDialog } from "../HabitDayDialog";
+import { HabitDayDialog } from "../dialog/HabitDayDialog";
 import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
 import {
     buildLinkedHabitPomodoroData,

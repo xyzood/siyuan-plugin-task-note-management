@@ -1,22 +1,22 @@
-import { getFile, putFile, openBlock, getBlockByID, removeFile } from "../api";
-import { getAllReminders, saveReminders } from "../utils/icsSubscription";
-import { ProjectManager } from "../utils/projectManager";
-import { CategoryManager } from "../utils/categoryManager";
-import { QuickReminderDialog } from "./QuickReminderDialog";
-import { BlockBindingDialog } from "./BlockBindingDialog";
-import { PomodoroTimer } from "./panel/PomodoroTimer";
-import { PomodoroManager } from "../utils/pomodoroManager";
-import { colorWithOpacity } from "../utils/uiUtils";
-import { getLuteInstance } from "../utils/luteSingleton";
+import { getFile, putFile, openBlock, getBlockByID, removeFile } from "../../api";
+import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
+import { ProjectManager } from "../../utils/projectManager";
+import { CategoryManager } from "../../utils/categoryManager";
+import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
+import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
+import { PomodoroTimer } from "./PomodoroTimer";
+import { PomodoroManager } from "../../utils/pomodoroManager";
+import { colorWithOpacity } from "../../utils/uiUtils";
+import { getLuteInstance } from "../../utils/luteSingleton";
 import { showMessage, confirm, Menu, Dialog, platformUtils, getBackend, getFrontend } from "siyuan";
-import { i18n } from "../pluginInstance";
-import { TaskRenderer } from "./render/TaskRenderer";
-import { getLocalDateTimeString, getLocalDateString, compareDateStrings, getLogicalDateString, getLocaleTag } from "../utils/dateUtils";
-import { getSolarDateLunarString } from "../utils/lunarUtils";
-import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, getRepeatInstanceState, getRepeatDescription, generateSubtreeInstances } from "../utils/repeatUtils";
+import { i18n } from "../../pluginInstance";
+import { TaskRenderer } from "../render/TaskRenderer";
+import { getLocalDateTimeString, getLocalDateString, compareDateStrings, getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
+import { getSolarDateLunarString } from "../../utils/lunarUtils";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, getRepeatInstanceState, getRepeatDescription, generateSubtreeInstances } from "../../utils/repeatUtils";
 import { createPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
-import { shouldTreatStartDateOnlyAsOverdue } from "../utils/startDateOverdue";
-import { shouldSkipReminderOnDate, type HolidayData } from "../utils/reminderSkipDate";
+import { shouldTreatStartDateOnlyAsOverdue } from "../../utils/startDateOverdue";
+import { shouldSkipReminderOnDate, type HolidayData } from "../../utils/reminderSkipDate";
 interface QuadrantTask {
     id: string;
     title: string;
@@ -612,7 +612,7 @@ export class EisenhowerMatrixView {
      */
     private async getReminderPomodoroCount(reminderId: string, reminder?: any, reminderData?: any): Promise<number> {
         try {
-            const { PomodoroRecordManager } = await import("../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(this.plugin);
             if (reminder && reminder.isRepeatInstance) {
                 return await pomodoroManager.getReminderPomodoroCount(reminderId);
@@ -655,7 +655,7 @@ export class EisenhowerMatrixView {
 
     private async getReminderFocusTime(reminderId: string, reminder?: any, reminderData?: any): Promise<number> {
         try {
-            const { PomodoroRecordManager } = await import("../utils/pomodoroRecord");
+            const { PomodoroRecordManager } = await import("../../utils/pomodoroRecord");
             const pomodoroManager = PomodoroRecordManager.getInstance(this.plugin);
             if (reminder && reminder.isRepeatInstance) {
                 if (typeof pomodoroManager.getEventTotalFocusTime === 'function') {
@@ -3248,7 +3248,7 @@ export class EisenhowerMatrixView {
                     if (deletedCount > 0) {
                         await saveReminders(this.plugin, reminderData);
                         if (affectedBlockIds.size > 0) {
-                            const { updateBindBlockAtrrs } = await import('../api');
+                            const { updateBindBlockAtrrs } = await import('../../api');
                             for (const bId of affectedBlockIds) {
                                 try {
                                     await updateBindBlockAtrrs(bId, this.plugin);
@@ -4737,13 +4737,13 @@ export class EisenhowerMatrixView {
                 // 将绑定的块添加项目ID属性 custom-task-projectId
                 const projectId = reminderData[task.id].projectId;
                 if (projectId) {
-                    const { addBlockProjectId } = await import('../api');
+                    const { addBlockProjectId } = await import('../../api');
                     await addBlockProjectId(blockId, projectId);
                     console.debug('EisenhowerMatrixView: bindTaskToBlock - 已为块设置项目ID', blockId, projectId);
                 }
 
                 // 更新块的书签状态（添加⏰书签）
-                const { updateBindBlockAtrrs } = await import('../api');
+                const { updateBindBlockAtrrs } = await import('../../api');
                 await updateBindBlockAtrrs(blockId, this.plugin);
 
                 await this.refresh();

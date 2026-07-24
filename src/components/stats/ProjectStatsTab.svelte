@@ -7,7 +7,7 @@
     import { ProjectFolderManager } from "../../utils/projectFolderManager";
     import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
     import { ProjectKanbanView } from "../panel/ProjectKanbanView";
-    import { ProjectDialog } from "../ProjectDialog";
+    import { ProjectDialog } from "../dialog/ProjectDialog";
     import { getAllReminders } from "../../utils/icsSubscription";
     import ProjectStatCard from "./ProjectStatCard.svelte";
     import {

@@ -1,9 +1,9 @@
 <script lang="ts">
 import { onMount, tick } from "svelte";
 import type { Habit } from "../panel/HabitPanel";
-import { HabitDayDialog } from "../HabitDayDialog";
+import { HabitDayDialog } from "../dialog/HabitDayDialog";
 import { HabitStatsDialog } from "./HabitStatsDialog";
-import { HabitEditDialog } from "../HabitEditDialog";
+import { HabitEditDialog } from "../dialog/HabitEditDialog";
 import { DEFAULT_SETTINGS } from "../../index";
 import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
 import { getLogicalDateString } from "../../utils/dateUtils";

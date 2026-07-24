@@ -1,8 +1,8 @@
 import { Dialog, showMessage } from "siyuan";
-import { i18n } from "../pluginInstance";
-import { solarToLunar } from "../utils/lunarUtils";
-import { getLogicalDateString } from "../utils/dateUtils";
-import { normalizeReminderSkipWeekendMode, type ReminderSkipWeekendMode } from "../utils/reminderSkipDate";
+import { i18n } from "../../pluginInstance";
+import { solarToLunar } from "../../utils/lunarUtils";
+import { getLogicalDateString } from "../../utils/dateUtils";
+import { normalizeReminderSkipWeekendMode, type ReminderSkipWeekendMode } from "../../utils/reminderSkipDate";
 
 export type MonthlyRepeatMode = 'date' | 'weekday';
 export type MonthlyWeekOrder = 1 | 2 | 3 | 4 | 5 | -1;

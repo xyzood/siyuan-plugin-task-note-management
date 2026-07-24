@@ -1,7 +1,7 @@
 import { Dialog, showMessage } from "siyuan";
-import { i18n } from "../pluginInstance";
-import { Project, ProjectManager } from "../utils/projectManager";
-import { StatusManager } from "../utils/statusManager";
+import { i18n } from "../../pluginInstance";
+import { Project, ProjectManager } from "../../utils/projectManager";
+import { StatusManager } from "../../utils/statusManager";
 
 export class ProjectColorDialog {
     private dialog: Dialog;

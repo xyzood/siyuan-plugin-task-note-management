@@ -1,18 +1,18 @@
 import { showMessage, Dialog, platformUtils, confirm, Menu } from "siyuan";
-import { getBlockByID, getBlockDOM, refreshSql, renameDocByID, updateBindBlockAtrrs, updateBlock } from "../api";
-import { compareDateStrings, getLogicalDateString, autoDetectDateTimeFromTitle, type SingleDateRole } from "../utils/dateUtils";
-import { CategoryManager } from "../utils/categoryManager";
-import { ProjectManager } from "../utils/projectManager";
-import { HabitGroupManager } from "../utils/habitGroupManager";
-import { i18n } from "../pluginInstance";
+import { getBlockByID, getBlockDOM, refreshSql, renameDocByID, updateBindBlockAtrrs, updateBlock } from "../../api";
+import { compareDateStrings, getLogicalDateString, autoDetectDateTimeFromTitle, type SingleDateRole } from "../../utils/dateUtils";
+import { CategoryManager } from "../../utils/categoryManager";
+import { ProjectManager } from "../../utils/projectManager";
+import { HabitGroupManager } from "../../utils/habitGroupManager";
+import { i18n } from "../../pluginInstance";
 import { RepeatSettingsDialog, RepeatConfig } from "./RepeatSettingsDialog";
-import { solarToLunar } from "../utils/lunarUtils";
+import { solarToLunar } from "../../utils/lunarUtils";
 import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
-import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField, parseReminderInstanceId } from "../utils/repeatUtils";
+import { getRepeatDescription, getDaysDifference, getReminderTaskDurationDays, generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey, getRepeatInstanceState, getInstanceField, parseReminderInstanceId } from "../../utils/repeatUtils";
 import { CategoryManageDialog } from "./CategoryManageDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
 import { SubtasksDialog } from "./SubtasksDialog";
-import { PomodoroRecordManager } from "../utils/pomodoroRecord";
+import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
 import { PomodoroSessionsDialog } from "./PomodoroSessionsDialog";
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, prosePluginsCtx, parserCtx } from "@milkdown/kit/core";
 import { Plugin, NodeSelection } from "@milkdown/prose/state";
@@ -24,12 +24,12 @@ import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { replaceAll, $view } from "@milkdown/utils";
 import { listItemSchema, imageSchema } from "@milkdown/kit/preset/commonmark";
-import { getHabitGoalType } from "../utils/habitUtils";
+import { getHabitGoalType } from "../../utils/habitUtils";
 import {
     getGlobalStartDateOnlyOverdue,
     getStartDateOnlyOverdueOverrideValue,
     shouldTreatStartDateOnlyAsOverdue,
-} from "../utils/startDateOverdue";
+} from "../../utils/startDateOverdue";
 import {
     getReminderSkipHolidaysEffective,
     getReminderSkipHolidaysOverrideValue,
@@ -42,7 +42,7 @@ import {
     type ReminderSkipWeekendMode,
     isWeekendSkippedDate,
     isHolidayDate,
-} from "../utils/reminderSkipDate";
+} from "../../utils/reminderSkipDate";
 
 type CustomReminderTimeItem = {
     time: string;
@@ -198,7 +198,7 @@ export class QuickReminderDialog {
             const fileName = `${baseName}-${dateStr}-${randomStr}.${ext}`;
             const targetPath = `/data/storage/petal/siyuan-plugin-task-note-management/assets/${fileName}`;
 
-            const { putFile } = await import('../api');
+            const { putFile } = await import('../../api');
             await putFile(targetPath, false, file);
 
             const { state } = view;
@@ -405,7 +405,7 @@ export class QuickReminderDialog {
                         const response = await fetch(src);
                         blob = await response.blob();
                     } else if (src.startsWith("/data/storage/")) {
-                        const { getFileBlob } = await import('../api');
+                        const { getFileBlob } = await import('../../api');
                         blob = await getFileBlob(src);
                     } else {
                         const response = await fetch(src);
@@ -557,8 +557,8 @@ export class QuickReminderDialog {
     private existingReminders: any[] = [];
     private selectedCategoryIds: string[] = [];
     private isMultiSelectCategory: boolean = false; // 分类是否多选
-    private currentKanbanStatuses: import('../utils/projectManager').KanbanStatus[] = []; // 当前项目的kanbanStatuses
-    private currentActiveProjectGroups: import('../utils/projectManager').ProjectGroup[] = []; // 当前项目未归档分组
+    private currentKanbanStatuses: import('../../utils/projectManager').KanbanStatus[] = []; // 当前项目的kanbanStatuses
+    private currentActiveProjectGroups: import('../../utils/projectManager').ProjectGroup[] = []; // 当前项目未归档分组
     private durationManuallyChanged: boolean = false; // 标记用户是否手动修改了持续天数
     private isApplyingNaturalLanguageResult: boolean = false; // 标记当前是否正在应用自然语言识别结果
     private tempSubtasks: any[] = []; // 新建模式下的临时子任务列表
@@ -3652,7 +3652,7 @@ export class QuickReminderDialog {
                     const src = node.attrs.src;
                     const cleanSrc = src ? src.split(/[?#]/)[0] : "";
                     if (cleanSrc && cleanSrc.startsWith("/data/storage/petal/siyuan-plugin-task-note-management/assets/")) {
-                        import('../api').then(({ getFileBlob }) => {
+                        import('../../api').then(({ getFileBlob }) => {
                             getFileBlob(cleanSrc).then(blob => {
                                 if (blob) {
                                     img.src = URL.createObjectURL(blob);
@@ -3675,7 +3675,7 @@ export class QuickReminderDialog {
                             
                             if (newCleanSrc && newCleanSrc.startsWith("/data/storage/petal/siyuan-plugin-task-note-management/assets/")) {
                                 if (newCleanSrc !== oldCleanSrc) {
-                                    import('../api').then(({ getFileBlob }) => {
+                                    import('../../api').then(({ getFileBlob }) => {
                                         getFileBlob(newCleanSrc).then(blob => {
                                             if (blob) {
                                                 img.src = URL.createObjectURL(blob);
@@ -4005,7 +4005,7 @@ export class QuickReminderDialog {
         return normalized;
     }
 
-    private filterKanbanStatusesBySelectedGroup(statuses: import('../utils/projectManager').KanbanStatus[]): import('../utils/projectManager').KanbanStatus[] {
+    private filterKanbanStatusesBySelectedGroup(statuses: import('../../utils/projectManager').KanbanStatus[]): import('../../utils/projectManager').KanbanStatus[] {
         const groupSelector = this.dialog?.element?.querySelector('#quickCustomGroupSelector') as HTMLInputElement;
         const selectedGroupId = groupSelector?.value || '';
         if (!selectedGroupId) return statuses;
@@ -4244,7 +4244,7 @@ export class QuickReminderDialog {
         }
 
         try {
-            const { ProjectManager } = await import('../utils/projectManager');
+            const { ProjectManager } = await import('../../utils/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             const projectTags = await projectManager.getProjectTags(projectId);
 
@@ -6579,7 +6579,7 @@ export class QuickReminderDialog {
 
             // 检查项目是否有自定义分组
             try {
-                const { ProjectManager } = await import('../utils/projectManager');
+                const { ProjectManager } = await import('../../utils/projectManager');
                 const projectManager = ProjectManager.getInstance(this.plugin);
                 const projectGroups = await projectManager.getProjectCustomGroups(projectId);
                 // 过滤掉已归档的分组
@@ -6614,7 +6614,7 @@ export class QuickReminderDialog {
             this.currentActiveProjectGroups = [];
             customGroupContainer.style.display = 'none';
             // 使用默认kanbanStatuses
-            const { ProjectManager } = await import('../utils/projectManager');
+            const { ProjectManager } = await import('../../utils/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             this.currentKanbanStatuses = projectManager.getDefaultKanbanStatuses();
             this.updateKanbanStatusSelector();
@@ -6635,7 +6635,7 @@ export class QuickReminderDialog {
         if (!searchInput || !hiddenInput || !dropdown) return;
 
         try {
-            const { ProjectManager } = await import('../utils/projectManager');
+            const { ProjectManager } = await import('../../utils/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             const projectGroups = await projectManager.getProjectCustomGroups(projectId);
             // 过滤掉已归档的分组
@@ -6750,7 +6750,7 @@ export class QuickReminderDialog {
         if (!projectId) return;
 
         try {
-            const { ProjectManager } = await import('../utils/projectManager');
+            const { ProjectManager } = await import('../../utils/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             let milestones: any[] = [];
 
@@ -7570,7 +7570,7 @@ export class QuickReminderDialog {
 
                         reminderData[reminderId] = reminder;
                         if (reminder.isSubscribed) {
-                            const { saveReminders } = await import('../utils/icsSubscription');
+                            const { saveReminders } = await import('../../utils/icsSubscription');
                             await saveReminders(this.plugin, reminderData);
                         } else {
                             await this.plugin.saveReminderData(reminderData);
@@ -7641,7 +7641,7 @@ export class QuickReminderDialog {
                             // 持久化子任务变更（如果有）
                             if (anyChildChanged) {
                                 if (reminder.isSubscribed) {
-                                    const { saveReminders } = await import('../utils/icsSubscription');
+                                    const { saveReminders } = await import('../../utils/icsSubscription');
                                     await saveReminders(this.plugin, reminderData);
                                 } else {
                                     await this.plugin.saveReminderData(reminderData);
@@ -7650,7 +7650,7 @@ export class QuickReminderDialog {
                                 // 如果有绑定块需要同步 projectId，异步调用 API 处理
                                 if (changedBlockProjects.length > 0) {
                                     try {
-                                        const { addBlockProjectId, setBlockProjectIds } = await import('../api');
+                                        const { addBlockProjectId, setBlockProjectIds } = await import('../../api');
                                         for (const item of changedBlockProjects) {
                                             try {
                                                 if (item.projectId) {
@@ -7698,7 +7698,7 @@ export class QuickReminderDialog {
                         // 将绑定的块添加项目ID属性 custom-task-projectId（支持多项目）
                         if (newBlockId) {
                             try {
-                                const { addBlockProjectId, setBlockProjectIds } = await import('../api');
+                                const { addBlockProjectId, setBlockProjectIds } = await import('../../api');
                                 if (reminder.projectId) {
                                     await addBlockProjectId(newBlockId, reminder.projectId);
                                     console.debug('QuickReminderDialog: addBlockProjectId for block', newBlockId, 'projectId', reminder.projectId);
@@ -7821,7 +7821,7 @@ export class QuickReminderDialog {
 
                     // 如果是周期任务，自动完成所有过去的实例
                     if (this.repeatConfig.enabled && date) {
-                        const { generateRepeatInstances } = await import("../utils/repeatUtils");
+                        const { generateRepeatInstances } = await import("../../utils/repeatUtils");
                         const today = getLogicalDateString();
 
                         // 计算从开始日期到今天的天数，用于设置 maxInstances
@@ -7861,7 +7861,7 @@ export class QuickReminderDialog {
 
                 reminderData[reminderId] = reminder;
                 if (reminder.isSubscribed) {
-                    const { saveReminders } = await import('../utils/icsSubscription');
+                    const { saveReminders } = await import('../../utils/icsSubscription');
                     await saveReminders(this.plugin, reminderData);
                 } else {
                     await this.plugin.saveReminderData(reminderData);
@@ -7882,7 +7882,7 @@ export class QuickReminderDialog {
                         // 更新持久化数据以包含 docId
                         reminderData[reminderId] = reminder;
                         if (reminder.isSubscribed) {
-                            const { saveReminders } = await import('../utils/icsSubscription');
+                            const { saveReminders } = await import('../../utils/icsSubscription');
                             await saveReminders(this.plugin, reminderData);
                         } else {
                             await this.plugin.saveReminderData(reminderData);
@@ -7895,7 +7895,7 @@ export class QuickReminderDialog {
                 // 将绑定的块添加项目ID属性 custom-task-projectId（支持多项目）
                 if (reminder.blockId) {
                     try {
-                        const { addBlockProjectId, setBlockProjectIds } = await import('../api');
+                        const { addBlockProjectId, setBlockProjectIds } = await import('../../api');
                         if (reminder.projectId) {
                             await addBlockProjectId(reminder.blockId, reminder.projectId);
                             console.debug('QuickReminderDialog: addBlockProjectId for block', reminder.blockId, 'projectId', reminder.projectId);
@@ -8197,7 +8197,7 @@ export class QuickReminderDialog {
                 // 如果绑定了块，添加项目 ID 属性
                 if (subtask.blockId && subtask.projectId) {
                     try {
-                        const { addBlockProjectId } = await import('../api');
+                        const { addBlockProjectId } = await import('../../api');
                         await addBlockProjectId(subtask.blockId, subtask.projectId);
                     } catch (error) {
                         console.warn('设置子任务块属性失败:', error);

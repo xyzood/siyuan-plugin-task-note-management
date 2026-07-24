@@ -8,13 +8,13 @@
  */
 
 import { Dialog, Menu, confirm, showMessage } from "siyuan";
-import { PomodoroTimer } from "./panel/PomodoroTimer";
-import { PomodoroManager } from "../utils/pomodoroManager";
-import { createPomodoroStartSubmenu } from "../utils/pomodoroPresets";
-import { PomodoroRecordManager, PomodoroSession } from "../utils/pomodoroRecord";
-import { i18n } from "../pluginInstance";
-import { getLocaleTag } from "../utils/dateUtils";
-import { getBlockByID, getBlockAttrs, setBlockAttrs } from "../api";
+import { PomodoroTimer } from "../panel/PomodoroTimer";
+import { PomodoroManager } from "../../utils/pomodoroManager";
+import { createPomodoroStartSubmenu } from "../../utils/pomodoroPresets";
+import { PomodoroRecordManager, PomodoroSession } from "../../utils/pomodoroRecord";
+import { i18n } from "../../pluginInstance";
+import { getLocaleTag } from "../../utils/dateUtils";
+import { getBlockByID, getBlockAttrs, setBlockAttrs } from "../../api";
 
 const BLOCK_POMODORO_COUNT_ATTR = "custom-task-pomodoro-count";
 const BLOCK_POMODORO_MINUTES_ATTR = "custom-task-pomodoro-minutes";
@@ -669,7 +669,7 @@ export class PomodoroSessionsDialog {
      */
     private async updateAffectedBlockAttrs() {
         try {
-            const { updateBindBlockAtrrs } = await import("../api");
+            const { updateBindBlockAtrrs } = await import("../../api");
             const targetIds = new Set<string>();
 
             if (this.reminderId) targetIds.add(this.reminderId);
@@ -903,7 +903,7 @@ export class PomodoroSessionsDialog {
                 };
 
                 // 手动添加到记录中
-                const { getLogicalDateString } = await import("../utils/dateUtils");
+                const { getLogicalDateString } = await import("../../utils/dateUtils");
                 const logicalDate = getLogicalDateString(startTime);
 
                 // 获取或创建该日期的记录
@@ -1061,7 +1061,7 @@ export class PomodoroSessionsDialog {
                 }
 
                 // 添加新会话
-                const { getLogicalDateString } = await import("../utils/dateUtils");
+                const { getLogicalDateString } = await import("../../utils/dateUtils");
                 const logicalDate = getLogicalDateString(startTime);
 
                 const records = (this.recordManager as any).records;

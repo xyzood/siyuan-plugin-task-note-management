@@ -39,7 +39,7 @@ export async function showStatsDialog(plugin: any, initialTab: StatsTab = "pomod
     };
 
     try {
-        const module = await import("../ShowStatsView.svelte");
+        const module = await import("./ShowStatsView.svelte");
         const ShowStatsView = module.default;
         const target = dialog.element.querySelector("#showStatsViewContainer") as HTMLElement;
         if (!target) {

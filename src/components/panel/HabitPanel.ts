@@ -3,16 +3,16 @@ import { openBlock, pushMsg } from "../../api";
 import { getLocalDateTimeString, getLogicalDateString, getRelativeDateString } from "../../utils/dateUtils";
 import { HabitGroupManager } from "../../utils/habitGroupManager";
 import { i18n } from "../../pluginInstance";
-import { HabitEditDialog } from "../HabitEditDialog";
+import { HabitEditDialog } from "../dialog/HabitEditDialog";
 import { HabitStatsDialog } from "../stats/HabitStatsDialog";
-import { HabitGroupManageDialog } from "../HabitGroupManageDialog";
-import { HabitCheckInEmojiDialog } from "../HabitCheckInEmojiDialog";
+import { HabitGroupManageDialog } from "../dialog/HabitGroupManageDialog";
+import { HabitCheckInEmojiDialog } from "../dialog/HabitCheckInEmojiDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { PomodoroManager } from "../../utils/pomodoroManager";
 import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
 import { createPomodoroStartSubmenu as createSharedPomodoroStartSubmenu, resolveDefaultPomodoroDuration } from "../../utils/pomodoroPresets";
 import { showStatsDialog } from "../stats/ShowStatsDialog";
-import { HabitDayDialog } from "../HabitDayDialog";
+import { HabitDayDialog } from "../dialog/HabitDayDialog";
 import {
     buildLinkedHabitPomodoroData,
     getLinkedTaskIdsForHabit as getLinkedTaskIdsForHabitUtil,
@@ -1777,7 +1777,7 @@ export class HabitPanel {
     }
 
     private async showPomodoroSessions(habit: Habit) {
-        const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
+        const { PomodoroSessionsDialog } = await import("../dialog/PomodoroSessionsDialog");
         const linkedTaskIds = this.getLinkedTaskIdsForHabit(habit.id);
         const dialog = new PomodoroSessionsDialog(
             habit.id,

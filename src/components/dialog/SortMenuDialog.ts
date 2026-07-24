@@ -1,6 +1,6 @@
 ﻿import { Dialog } from "siyuan";
-import { i18n } from "../pluginInstance";
-import { SortCriterion, AVAILABLE_SORT_METHODS, getSortCriterionName } from "../utils/sortConfig";
+import { i18n } from "../../pluginInstance";
+import { SortCriterion, AVAILABLE_SORT_METHODS, getSortCriterionName } from "../../utils/sortConfig";
 
 export interface SortMenuDialogOptions {
     plugin: any;

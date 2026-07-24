@@ -1,4 +1,4 @@
-import { RepeatConfig, RepeatInstanceState } from '../components/RepeatSettingsDialog';
+import { RepeatConfig, RepeatInstanceState } from '../components/dialog/RepeatSettingsDialog';
 import { compareDateStrings, getLocalDateTimeString } from './dateUtils';
 import { i18n } from '../pluginInstance';
 import { solarToLunar, formatLunarMonth, formatLunarDay } from './lunarUtils';

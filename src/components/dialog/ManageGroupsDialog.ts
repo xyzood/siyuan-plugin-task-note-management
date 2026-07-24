@@ -1,7 +1,7 @@
 import { Dialog, showMessage, openEmoji } from "siyuan";
 import { i18n } from "../../pluginInstance";
 import { generateRandomColor } from "../../utils/uiUtils";
-import { BlockBindingDialog } from "../BlockBindingDialog";
+import { BlockBindingDialog } from "./BlockBindingDialog";
 import { saveReminders } from "../../utils/icsSubscription";
 
 export async function showManageGroupsDialog(view: any) {

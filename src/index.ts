@@ -11,14 +11,14 @@ import {
 import { VipManager } from "./components/vip/vip";
 import "./index.scss";
 
-import { QuickReminderDialog } from "./components/QuickReminderDialog";
+import { QuickReminderDialog } from "./components/dialog/QuickReminderDialog";
 import { ReminderPanel } from "./components/panel/ReminderPanel";
 import { MobileTaskShortcut } from "./components/render/MobileTaskShortcut";
 import { registerCustomIcons } from "./components/render/registerIcons";
 import { HabitPanel } from "./components/panel/HabitPanel";
-import { BatchReminderDialog, ListItemNode } from "./components/BatchReminderDialog";
+import { BatchReminderDialog, ListItemNode } from "./components/dialog/BatchReminderDialog";
 import { CalendarView } from "./components/panel/CalendarView";
-import { EisenhowerMatrixView } from "./components/EisenhowerMatrixView";
+import { EisenhowerMatrixView } from "./components/panel/EisenhowerMatrixView";
 import { CategoryManager } from "./utils/categoryManager";
 import { ProjectManager } from "./utils/projectManager";
 import { readDir } from "./api";
@@ -27,9 +27,9 @@ import { i18n, setPluginInstance } from "./pluginInstance";
 import { SettingUtils } from "./libs/setting-utils";
 import { PomodoroRecordManager } from "./utils/pomodoroRecord";
 import { HabitGroupManager } from "./utils/habitGroupManager";
-import { NotificationDialog } from "./components/NotificationDialog";
-import { DocumentReminderDialog } from "./components/DocumentReminderDialog";
-import { ProjectDialog } from "./components/ProjectDialog";
+import { NotificationDialog } from "./components/dialog/NotificationDialog";
+import { DocumentReminderDialog } from "./components/dialog/DocumentReminderDialog";
+import { ProjectDialog } from "./components/dialog/ProjectDialog";
 import { ProjectPanel } from "./components/panel/ProjectPanel";
 import { ProjectKanbanView } from "./components/panel/ProjectKanbanView";
 import { PomodoroManager } from "./utils/pomodoroManager";
@@ -3519,7 +3519,7 @@ export default class ReminderPlugin extends Plugin {
                     iconHTML: "📋",
                     label: "查看绑定任务",
                     click: async () => {
-                        const { BlockRemindersDialog } = await import("./components/BlockRemindersDialog");
+                        const { BlockRemindersDialog } = await import("./components/dialog/BlockRemindersDialog");
                         const dialog = new BlockRemindersDialog(blockId, this);
                         await dialog.show();
                     }

@@ -32,11 +32,11 @@
     import { resolveAudioPath } from './utils/audioUtils';
     import { getGlobalReminderSkipWeekendMode } from './utils/reminderSkipDate';
     import VipPanel from './components/vip/VipPanel.svelte';
-    import SubscriptionPanel from './components/icsSubscriptionPanel.svelte';
-    import HelpPanel from './components/HelpPanel.svelte';
-    import SettingSubGroup from './components/SettingSubGroup.svelte';
+    import SubscriptionPanel from './components/settings/icsSubscriptionPanel.svelte';
+    import HelpPanel from './components/settings/HelpPanel.svelte';
+    import SettingSubGroup from './components/settings/SettingSubGroup.svelte';
     import { ProjectManager } from './utils/projectManager';
-    import { ProjectSelectorPopup } from './components/ProjectSelectorPopup';
+    import { ProjectSelectorPopup } from './components/dialog/ProjectSelectorPopup';
 
     export let plugin;
 
@@ -1062,7 +1062,7 @@
                                 callback: async () => {
                                     try {
                                         const { GlobalProjectStatusDialog } = await import(
-                                            './components/GlobalProjectStatusDialog'
+                                            './components/dialog/GlobalProjectStatusDialog'
                                         );
                                         const dialog = new GlobalProjectStatusDialog(plugin, async () => {
                                             const loadedSettings = await plugin.loadSettings(true);
@@ -2778,7 +2778,7 @@
         createProjectBtn.addEventListener('click', async () => {
             try {
                 // 使用 ProjectDialog 创建项目
-                const { ProjectDialog } = await import('./components/ProjectDialog');
+                const { ProjectDialog } = await import('./components/dialog/ProjectDialog');
                 const projectDialog = new ProjectDialog(undefined, plugin);
                 await projectDialog.show();
 

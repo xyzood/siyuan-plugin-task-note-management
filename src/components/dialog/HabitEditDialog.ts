@@ -1,14 +1,14 @@
 import { Dialog, showMessage, platformUtils, openEmoji } from "siyuan";
-import { getBlockByID, getBlockDOM } from "../api";
-import { Habit } from "./panel/HabitPanel";
-import { getLocalDateTimeString, getLogicalDateString } from "../utils/dateUtils";
-import { HabitGroupManager } from "../utils/habitGroupManager";
-import { i18n } from "../pluginInstance";
+import { getBlockByID, getBlockDOM } from "../../api";
+import { Habit } from "../panel/HabitPanel";
+import { getLocalDateTimeString, getLogicalDateString } from "../../utils/dateUtils";
+import { HabitGroupManager } from "../../utils/habitGroupManager";
+import { i18n } from "../../pluginInstance";
 import { HabitCheckInEmojiDialog } from "./HabitCheckInEmojiDialog";
-import { PomodoroRecordManager } from "../utils/pomodoroRecord";
+import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
 import { PomodoroSessionsDialog } from "./PomodoroSessionsDialog";
-import { generateRandomColor } from "../utils/uiUtils";
-import type { HabitMemoSyncMode } from "../utils/habitUtils";
+import { generateRandomColor } from "../../utils/uiUtils";
+import type { HabitMemoSyncMode } from "../../utils/habitUtils";
 
 export class HabitEditDialog {
     private dialog: Dialog;

@@ -1,16 +1,16 @@
 import { Dialog, showMessage, confirm } from "siyuan";
-import { openBlock } from "../api";
-import { i18n } from "../pluginInstance";
+import { openBlock } from "../../api";
+import { i18n } from "../../pluginInstance";
 import { QuickReminderDialog } from "./QuickReminderDialog";
 import { PasteTaskDialog } from "./PasteTaskDialog";
 import { SortMenuDialog } from "./SortMenuDialog";
-import { TaskRenderer, type TaskRenderCallbacks, type TaskRenderContext } from "./render/TaskRenderer";
-import { CategoryManager } from "../utils/categoryManager";
-import { ProjectManager } from "../utils/projectManager";
-import { getLogicalDateString } from "../utils/dateUtils";
-import { getSortCriterionName, loadSortConfig, saveSortConfig, type SortCriterion } from "../utils/sortConfig";
-import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, getRepeatInstanceState } from "../utils/repeatUtils";
-import { getLuteInstance } from "../utils/luteSingleton";
+import { TaskRenderer, type TaskRenderCallbacks, type TaskRenderContext } from "../render/TaskRenderer";
+import { CategoryManager } from "../../utils/categoryManager";
+import { ProjectManager } from "../../utils/projectManager";
+import { getLogicalDateString } from "../../utils/dateUtils";
+import { getSortCriterionName, loadSortConfig, saveSortConfig, type SortCriterion } from "../../utils/sortConfig";
+import { resolveRepeatReminderTimes, addDaysToDate, getDaysDifference, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, getRepeatInstanceState } from "../../utils/repeatUtils";
+import { getLuteInstance } from "../../utils/luteSingleton";
 
 export class SubtasksDialog {
     private dialog: Dialog;

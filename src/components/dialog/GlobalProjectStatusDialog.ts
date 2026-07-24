@@ -1,5 +1,5 @@
 import { Dialog, showMessage, confirm, openEmoji } from "siyuan";
-import { i18n } from "../pluginInstance";
+import { i18n } from "../../pluginInstance";
 
 interface GlobalKanbanStatusConfig {
     id: string;

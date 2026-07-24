@@ -1,8 +1,8 @@
 ﻿import { Dialog, confirm, showMessage } from "siyuan";
-import type { Habit, HabitCheckInEmoji } from "./panel/HabitPanel";
-import { getLocalDateTimeString, getLogicalDateString } from "../utils/dateUtils";
-import { i18n } from "../pluginInstance";
-import { deleteHabitMemoBlockForEntry, syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../utils/habitMemoBlockSync";
+import type { Habit, HabitCheckInEmoji } from "../panel/HabitPanel";
+import { getLocalDateTimeString, getLogicalDateString } from "../../utils/dateUtils";
+import { i18n } from "../../pluginInstance";
+import { deleteHabitMemoBlockForEntry, syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../../utils/habitMemoBlockSync";
 
 type HabitHistoryEntry = {
     emoji: string;

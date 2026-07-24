@@ -1,11 +1,11 @@
 import { Dialog, showMessage, openEmoji } from "siyuan";
-import { ProjectFolderManager, ProjectFolder } from "../utils/projectFolderManager";
-import { getBlockByID, addBlockProjectId, removeBlockProjectId } from "../api";
-import { CategoryManager } from "../utils/categoryManager";
-import { StatusManager } from "../utils/statusManager";
+import { ProjectFolderManager, ProjectFolder } from "../../utils/projectFolderManager";
+import { getBlockByID, addBlockProjectId, removeBlockProjectId } from "../../api";
+import { CategoryManager } from "../../utils/categoryManager";
+import { StatusManager } from "../../utils/statusManager";
 import { BlockBindingDialog } from "./BlockBindingDialog";
-import { i18n } from "../pluginInstance";
-import { generateRandomColor } from "../utils/uiUtils";
+import { i18n } from "../../pluginInstance";
+import { generateRandomColor } from "../../utils/uiUtils";
 import { CategoryManageDialog } from "./CategoryManageDialog";
 import { StatusManageDialog } from "./ProjectStatusManageDialog";
 import { ProjectFolderManageDialog } from "./ProjectFolderManageDialog";

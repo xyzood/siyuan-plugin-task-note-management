@@ -9,20 +9,20 @@ import { ProjectManager } from "../../utils/projectManager";
 import { compareDateStrings, getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
 import { CategoryManager } from "../../utils/categoryManager";
 import { StatusManager } from "../../utils/statusManager";
-import { ProjectDialog } from "../ProjectDialog";
-import { CategoryManageDialog } from "../CategoryManageDialog";
-import { StatusManageDialog } from "../ProjectStatusManageDialog";
-import { GlobalProjectStatusDialog } from "../GlobalProjectStatusDialog";
+import { ProjectDialog } from "../dialog/ProjectDialog";
+import { CategoryManageDialog } from "../dialog/CategoryManageDialog";
+import { StatusManageDialog } from "../dialog/ProjectStatusManageDialog";
+import { GlobalProjectStatusDialog } from "../dialog/GlobalProjectStatusDialog";
 import { ProjectKanbanView } from "./ProjectKanbanView";
-import { BlockBindingDialog } from "../BlockBindingDialog";
+import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
 import { i18n } from "../../pluginInstance";
 import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
-import { SortMenuDialog } from "../SortMenuDialog";
+import { SortMenuDialog } from "../dialog/SortMenuDialog";
 import { SortCriterion, getSortCriterionName } from "../../utils/sortConfig";
 import { generateRandomColor } from "../../utils/uiUtils";
 import { ProjectFolderManager, ProjectFolder } from "../../utils/projectFolderManager";
-import { ProjectFolderManageDialog } from "../ProjectFolderManageDialog";
-import { ProjectSelectorPopup } from "../ProjectSelectorPopup";
+import { ProjectFolderManageDialog } from "../dialog/ProjectFolderManageDialog";
+import { ProjectSelectorPopup } from "../dialog/ProjectSelectorPopup";
 import { showProjectStatsDialog, showFolderStatsDialog } from "../dialog/ProjectStatsDialog";
 
 

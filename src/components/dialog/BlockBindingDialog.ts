@@ -1,5 +1,5 @@
 import { Dialog } from "siyuan";
-import { i18n } from "../pluginInstance";
+import { i18n } from "../../pluginInstance";
 /**
  * 块绑定对话框组件
  * 支持三种模式：绑定现有块、新建文档、新建标题
@@ -284,7 +284,7 @@ export class BlockBindingDialog {
             }
 
             try {
-                const { getBlockByID } = await import("../api");
+                const { getBlockByID } = await import("../../api");
                 const block = await getBlockByID(blockId);
 
                 if (block) {
@@ -401,7 +401,7 @@ export class BlockBindingDialog {
 
         // 加载笔记本列表
         try {
-            const { lsNotebooks, searchDocs, getBlockByID } = await import("../api");
+            const { lsNotebooks, searchDocs, getBlockByID } = await import("../../api");
             this.notebooks = await lsNotebooks();
 
             // 从设置中读取默认笔记本和路径
@@ -438,7 +438,7 @@ export class BlockBindingDialog {
                     const milestoneId = this.reminder?.milestoneId || this.reminder?.milestone;
                     if (milestoneId && this.defaultProjectId) {
                         try {
-                            const { ProjectManager } = await import('../utils/projectManager');
+                            const { ProjectManager } = await import('../../utils/projectManager');
                             const projectManager = ProjectManager.getInstance(this.plugin);
                             const milestone = await projectManager.getMilestoneById(this.defaultProjectId, milestoneId);
                             if (milestone?.blockId) {
@@ -468,7 +468,7 @@ export class BlockBindingDialog {
                     // 2. 项目自定义分组或项目绑定（参考 initHeadingTabDefaults 的逻辑）
                     if (!boundDocBlockId && this.defaultProjectId) {
                         try {
-                            const { ProjectManager } = await import('../utils/projectManager');
+                            const { ProjectManager } = await import('../../utils/projectManager');
                             const projectManager = ProjectManager.getInstance(this.plugin);
                             await projectManager.initialize();
 
@@ -739,12 +739,12 @@ export class BlockBindingDialog {
                 : (this.reminder?.milestoneId || this.reminder?.milestone);
             if (milestoneId && this.defaultProjectId) {
                 try {
-                    const { ProjectManager } = await import('../utils/projectManager');
+                    const { ProjectManager } = await import('../../utils/projectManager');
                     const projectManager = ProjectManager.getInstance(this.plugin);
                     const milestone = await projectManager.getMilestoneById(this.defaultProjectId, milestoneId);
                     if (milestone?.blockId) {
                         autoFillBlockId = milestone.blockId;
-                        const { getBlockByID } = await import("../api");
+                        const { getBlockByID } = await import("../../api");
                         const block = await getBlockByID(autoFillBlockId);
                         if (block) {
                             await this.adjustHeadingLevel(block, levelSelect);
@@ -757,7 +757,7 @@ export class BlockBindingDialog {
 
             // 1. 检查父任务绑定
             if (!autoFillBlockId && this.defaultParentId) {
-                const { getBlockByID } = await import("../api");
+                const { getBlockByID } = await import("../../api");
                 const parentReminder = await this.getParentReminder(this.defaultParentId);
                 if (parentReminder?.blockId) {
                     autoFillBlockId = parentReminder.blockId;
@@ -770,7 +770,7 @@ export class BlockBindingDialog {
 
             // 2. 检查项目自定义分组绑定
             if (!autoFillBlockId && this.defaultProjectId) {
-                const { ProjectManager } = await import('../utils/projectManager');
+                const { ProjectManager } = await import('../../utils/projectManager');
                 const projectManager = ProjectManager.getInstance(this.plugin);
                 await projectManager.initialize();
 
@@ -793,7 +793,7 @@ export class BlockBindingDialog {
 
                 // 如果找到了绑定块，调整层级
                 if (autoFillBlockId) {
-                    const { getBlockByID } = await import("../api");
+                    const { getBlockByID } = await import("../../api");
                     const block = await getBlockByID(autoFillBlockId);
                     if (block) {
                         await this.adjustHeadingLevel(block, levelSelect);
@@ -858,7 +858,7 @@ export class BlockBindingDialog {
         }
 
         try {
-            const { getBlockByID } = await import("../api");
+            const { getBlockByID } = await import("../../api");
             const block = await getBlockByID(blockId);
 
             if (block) {
@@ -904,7 +904,7 @@ export class BlockBindingDialog {
         onSelect: (block: any) => void
     ) {
         try {
-            const { sql } = await import("../api");
+            const { sql } = await import("../../api");
 
             // 构建SQL查询 - 支持空格分隔的AND搜索
             const keywords = query.trim().split(/\s+/).filter(k => k.length > 0);
@@ -1054,7 +1054,7 @@ export class BlockBindingDialog {
         }
 
         // 验证块是否存在
-        const { getBlockByID } = await import("../api");
+        const { getBlockByID } = await import("../../api");
         const block = await getBlockByID(blockId);
         if (!block) {
             throw new Error(i18n("blockNotExistError") || '块不存在');
@@ -1084,7 +1084,7 @@ export class BlockBindingDialog {
         // 处理/data/storage/petal/siyuan-plugin-task-note-management/assets到/data/assets的转换
         if (content.includes('/data/storage/petal/siyuan-plugin-task-note-management/assets/')) {
             try {
-                const { putFile } = await import('../api');
+                const { putFile } = await import('../../api');
                 const assetRegex = /\/data\/storage\/petal\/siyuan-plugin-task-note-management\/assets\/([^)"\s]+)/g;
                 let match;
                 while ((match = assetRegex.exec(content)) !== null) {
@@ -1141,7 +1141,7 @@ export class BlockBindingDialog {
         // 确保以 / 开头
         if (!parentPath.startsWith('/')) parentPath = '/' + parentPath;
 
-        const { createDocWithMd, renderSprig, lsNotebooks } = await import("../api");
+        const { createDocWithMd, renderSprig, lsNotebooks } = await import("../../api");
         let notebookList = this.getNotebookList();
         if (notebookList.length === 0) {
             try {
@@ -1236,7 +1236,7 @@ export class BlockBindingDialog {
         }
 
         // 验证父块是否存在
-        const { getBlockByID } = await import("../api");
+        const { getBlockByID } = await import("../../api");
         const parentBlock = await getBlockByID(parentId);
         if (!parentBlock) {
             throw new Error(i18n("parentBlockNotExist") || '父块不存在');
@@ -1258,7 +1258,7 @@ export class BlockBindingDialog {
         parentBlock: any,
         subContent?: string
     ): Promise<string> {
-        const { prependBlock, appendBlock, insertBlock, getHeadingChildrenDOM, getChildBlocks } = await import("../api");
+        const { prependBlock, appendBlock, insertBlock, getHeadingChildrenDOM, getChildBlocks } = await import("../../api");
 
         const hashes = '#'.repeat(level);
 
@@ -1266,7 +1266,7 @@ export class BlockBindingDialog {
         let processedSubContent = subContent || '';
         if (processedSubContent.includes('/data/storage/petal/siyuan-plugin-task-note-management/assets/')) {
             try {
-                const { putFile } = await import('../api');
+                const { putFile } = await import('../../api');
                 const assetRegex = /\/data\/storage\/petal\/siyuan-plugin-task-note-management\/assets\/([^)"\s]+)/g;
                 let match;
                 while ((match = assetRegex.exec(processedSubContent)) !== null) {

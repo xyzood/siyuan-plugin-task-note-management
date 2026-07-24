@@ -1,6 +1,6 @@
 <script lang="ts">
-    import { i18n, getPluginInstance } from '../pluginInstance';
-    import { ChangelogUtils } from '../utils/changelogNotify';
+    import { i18n, getPluginInstance } from '../../pluginInstance';
+    import { ChangelogUtils } from '../../utils/changelogNotify';
 
     const showChangelog = () => {
         const plugin = getPluginInstance();

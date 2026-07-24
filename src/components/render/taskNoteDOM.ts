@@ -68,8 +68,8 @@ export class TaskNoteDOMManager {
         if (this.dialogsPreloaded) return;
         this.dialogsPreloaded = true;
         void Promise.allSettled([
-            import("../BlockRemindersDialog"),
-            import("../PomodoroSessionsDialog"),
+            import("../dialog/BlockRemindersDialog"),
+            import("../dialog/PomodoroSessionsDialog"),
         ]);
     }
 
@@ -1588,7 +1588,7 @@ export class TaskNoteDOMManager {
                     showMessage(i18n("taskNotFound") || "任务不存在", 3000, "error");
                     return;
                 }
-                const { QuickReminderDialog } = await import("../QuickReminderDialog");
+                const { QuickReminderDialog } = await import("../dialog/QuickReminderDialog");
                 const dialog = new QuickReminderDialog(undefined, undefined, undefined, undefined, {
                     blockId,
                     reminder,
@@ -1680,7 +1680,7 @@ export class TaskNoteDOMManager {
             e.preventDefault();
             e.stopPropagation();
             try {
-                const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
+                const { PomodoroSessionsDialog } = await import("../dialog/PomodoroSessionsDialog");
                 const linkedEventIds = this.normalizeReminderIds(btn.dataset.pomodoroIncludeEventIds);
                 const includeInstances = btn.dataset.pomodoroIncludeInstances === "true";
                 const dialog = new PomodoroSessionsDialog(
@@ -1815,7 +1815,7 @@ export class TaskNoteDOMManager {
             e.preventDefault();
             e.stopPropagation();
             try {
-                const { BlockRemindersDialog } = await import("../BlockRemindersDialog");
+                const { BlockRemindersDialog } = await import("../dialog/BlockRemindersDialog");
                 const dialog = new BlockRemindersDialog(blockId, this.plugin);
                 await dialog.show();
             } catch (err) {

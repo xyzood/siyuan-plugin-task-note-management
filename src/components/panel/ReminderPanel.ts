@@ -3,11 +3,11 @@ import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, pushMsg, sql
 import { getLocalDateString, compareDateStrings, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../../utils/dateUtils";
 import { loadSortConfig, saveSortConfig, getSortCriterionName, SortCriterion, loadFilterConfig, saveFilterConfig } from "../../utils/sortConfig";
 import { getLuteInstance } from "../../utils/luteSingleton";
-import { SortMenuDialog } from "../SortMenuDialog";
-import { QuickReminderDialog } from "../QuickReminderDialog";
+import { SortMenuDialog } from "../dialog/SortMenuDialog";
+import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
 import { CategoryManager } from "../../utils/categoryManager";
-import { CategoryManageDialog } from "../CategoryManageDialog";
-import { BlockBindingDialog } from "../BlockBindingDialog";
+import { CategoryManageDialog } from "../dialog/CategoryManageDialog";
+import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
 import { showAddTaskReminderTimeDialog } from "../dialog/AddTaskReminderTimeDialog";
 import { i18n } from "../../pluginInstance";
 import { TaskRenderer } from "../render/TaskRenderer";
@@ -20,8 +20,8 @@ import { PomodoroRecordManager } from "../../utils/pomodoroRecord"; // Add impor
 import { getSolarDateLunarString, getNextLunarMonthlyDate, getNextLunarYearlyDate } from "../../utils/lunarUtils";
 import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
 import { isEventPast } from "../../utils/icsImport";
-import { PasteTaskDialog } from "../PasteTaskDialog";
-import LoadingDialog from '../LoadingDialog.svelte';
+import { PasteTaskDialog } from "../dialog/PasteTaskDialog";
+import LoadingDialog from '../dialog/LoadingDialog.svelte';
 import { createPomodoroStartSubmenu as createSharedPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
 import { buildProjectCategoryOrderMap, buildProjectStatusOrderMap, compareProjectsByPanelSort, normalizeProjectPanelSortCriteria } from "./ProjectPanel";
 import type { KanbanStatus } from "../../utils/projectManager";
@@ -1397,7 +1397,7 @@ export class ReminderPanel {
         dialog.element.classList.add('filter-management-dialog');
 
         // 动态导入 Svelte 组件
-        import('./FilterManagement.svelte').then((module) => {
+        import('../dialog/FilterManagement.svelte').then((module) => {
             const FilterManagement = module.default;
             new FilterManagement({
                 target: dialog.element.querySelector('#filterManagementContent'),
@@ -11786,7 +11786,7 @@ export class ReminderPanel {
      */
     private async showPomodoroSessions(reminder: any) {
         // 动态导入 PomodoroSessionsDialog
-        const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
+        const { PomodoroSessionsDialog } = await import("../dialog/PomodoroSessionsDialog");
 
         // 重复实例需要使用实例 ID，才能命中实例级番茄记录；
         // 普通任务和原始周期任务仍使用自身 ID。

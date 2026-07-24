@@ -1,8 +1,8 @@
 import { Dialog, showMessage } from "siyuan";
-import { i18n } from "../pluginInstance";
-import { autoDetectDateTimeFromTitle, getLocalDateTimeString } from "../utils/dateUtils";
-import { getBlockByID, updateBindBlockAtrrs, addBlockProjectId, putFile, getFile, readDir, removeFile } from "../api";
-import { getAllReminders, saveReminders } from "../utils/icsSubscription";
+import { i18n } from "../../pluginInstance";
+import { autoDetectDateTimeFromTitle, getLocalDateTimeString } from "../../utils/dateUtils";
+import { getBlockByID, updateBindBlockAtrrs, addBlockProjectId, putFile, getFile, readDir, removeFile } from "../../api";
+import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
 import LoadingDialog from './LoadingDialog.svelte';
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";

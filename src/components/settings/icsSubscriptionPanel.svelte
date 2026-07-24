@@ -1,8 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { Dialog, confirm } from 'siyuan';
-    import { i18n } from '../pluginInstance';
-    import { pushMsg, pushErrMsg } from '../api';
+    import { i18n } from '../../pluginInstance';
+    import { pushMsg, pushErrMsg } from '../../api';
 
     export let plugin: any;
 
@@ -25,9 +25,9 @@
     async function loadData(silent = false) {
         if (!silent) loading = true;
         try {
-            const { loadSubscriptions } = await import('../utils/icsSubscription');
-            const { ProjectManager } = await import('../utils/projectManager');
-            const { CategoryManager } = await import('../utils/categoryManager');
+            const { loadSubscriptions } = await import('../../utils/icsSubscription');
+            const { ProjectManager } = await import('../../utils/projectManager');
+            const { CategoryManager } = await import('../../utils/categoryManager');
 
             projectManager = ProjectManager.getInstance(plugin);
             await projectManager.initialize();
@@ -50,7 +50,7 @@
     }
 
     async function updateOrder() {
-        const { saveSubscriptions } = await import('../utils/icsSubscription');
+        const { saveSubscriptions } = await import('../../utils/icsSubscription');
         const newSubDict: { [id: string]: any } = {};
         subscriptions.forEach(sub => {
             newSubDict[sub.id] = sub;
@@ -123,7 +123,7 @@
     }
 
     async function handleToggle(sub: any) {
-        const { saveSubscriptions } = await import('../utils/icsSubscription');
+        const { saveSubscriptions } = await import('../../utils/icsSubscription');
         sub.enabled = !sub.enabled;
         data.subscriptions[sub.id] = sub;
         await saveSubscriptions(plugin, data);
@@ -136,7 +136,7 @@
         syncingSubIds[sub.id] = true;
         syncingSubIds = { ...syncingSubIds };
         try {
-            const { saveSubscriptions, syncSubscription } = await import('../utils/icsSubscription');
+            const { saveSubscriptions, syncSubscription } = await import('../../utils/icsSubscription');
             const result = await syncSubscription(plugin, sub);
 
             sub.lastSync = new Date().toISOString();
@@ -174,7 +174,7 @@
     }
 
     async function handleDelete(sub: any) {
-        const { removeSubscription, saveSubscriptions } = await import('../utils/icsSubscription');
+        const { removeSubscription, saveSubscriptions } = await import('../../utils/icsSubscription');
         await confirm(
             i18n('confirmDeleteTitle') || '确认删除',
             i18n('confirmDeleteSubscription').replace('${name}', sub.name),
@@ -215,7 +215,7 @@
     async function showEditSubscriptionDialog(subscription?: any) {
         const isEdit = !!subscription;
         const { saveSubscriptions, updateSubscriptionTaskMetadata } = await import(
-            '../utils/icsSubscription'
+            '../../utils/icsSubscription'
         );
 
         const editDialog = new Dialog({
@@ -510,7 +510,7 @@
             let projectId = subscription?.projectId || `quick_${Date.now()}`;
 
             // Load and ensure Folder "订阅日历" exists
-            const { ProjectFolderManager } = await import('../utils/projectFolderManager');
+            const { ProjectFolderManager } = await import('../../utils/projectFolderManager');
             const folderManager = ProjectFolderManager.getInstance(plugin);
             await folderManager.initialize();
             let folder = folderManager.getFolders().find(f => f.name === '订阅日历');

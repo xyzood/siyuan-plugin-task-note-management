@@ -1,12 +1,12 @@
 import { Dialog, showMessage } from "siyuan";
-import { i18n } from "../pluginInstance";
-import { updateBindBlockAtrrs, getBlockByID } from "../api";
-import { getRepeatDescription } from "../utils/repeatUtils";
-import { getLogicalDateString, parseNaturalDateTime, autoDetectDateTimeFromTitle, getLocaleTag } from "../utils/dateUtils";
+import { i18n } from "../../pluginInstance";
+import { updateBindBlockAtrrs, getBlockByID } from "../../api";
+import { getRepeatDescription } from "../../utils/repeatUtils";
+import { getLogicalDateString, parseNaturalDateTime, autoDetectDateTimeFromTitle, getLocaleTag } from "../../utils/dateUtils";
 import { RepeatConfig, RepeatSettingsDialog } from "./RepeatSettingsDialog";
 import { QuickReminderDialog } from "./QuickReminderDialog";
-import { CategoryManager } from "../utils/categoryManager";
-import { ProjectManager } from "../utils/projectManager";
+import { CategoryManager } from "../../utils/categoryManager";
+import { ProjectManager } from "../../utils/projectManager";
 import LoadingDialog from './LoadingDialog.svelte';
 
 export interface ListItemNode {
@@ -79,7 +79,7 @@ export class BatchReminderDialog {
 
     async autoDetectBatchDateTime(blockIds: string[]): Promise<AutoDetectResult[]> {
         const results = [];
-        const { sql, getBlockByID } = await import("../api");
+        const { sql, getBlockByID } = await import("../../api");
 
         // 合并查询：一次性获取所有选中块的记录
         try {
@@ -191,7 +191,7 @@ export class BatchReminderDialog {
         } catch (err) {
             console.error('批量识别块内容失败:', err);
             // 回退到逐个处理（兼容性保守策略）
-            const { getBlockByID } = await import("../api");
+            const { getBlockByID } = await import("../../api");
             for (const blockId of blockIds) {
                 try {
                     const block = await getBlockByID(blockId);
@@ -1619,7 +1619,7 @@ class SmartBatchDialog {
 
             // 批量获取所有相关块信息，减少多次单独查询
             const allBlockIds = Array.from(this.blockSettings.keys());
-            const { sql } = await import("../api");
+            const { sql } = await import("../../api");
             const blockIdListSql = allBlockIds.map(id => `'${id}'`).join(',');
             let blockRows: any[] = [];
             try {
@@ -1691,7 +1691,7 @@ class SmartBatchDialog {
 
                 // 如果是周期任务，自动完成所有过去的实例
                 if (setting.repeatConfig?.enabled && setting.date) {
-                    const { generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey } = await import("../utils/repeatUtils");
+                    const { generateRepeatInstances, setRepeatInstanceCompletion, getRepeatInstanceOriginalKey } = await import("../../utils/repeatUtils");
 
                     const today = getLogicalDateString();
 

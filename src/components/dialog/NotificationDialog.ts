@@ -1,7 +1,7 @@
-import { i18n } from "../pluginInstance";
+import { i18n } from "../../pluginInstance";
 import { openTab } from "siyuan";
-import { getLogicalDateString, getLocaleTag } from "../utils/dateUtils";
-import { openBlock } from "../api"
+import { getLogicalDateString, getLocaleTag } from "../../utils/dateUtils";
+import { openBlock } from "../../api"
 
 interface ReminderInfo {
     id: string;

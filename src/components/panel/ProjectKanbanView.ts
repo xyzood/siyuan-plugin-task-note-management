@@ -28,13 +28,13 @@ import {
     getInstanceField
 } from "../../utils/repeatUtils";
 import { getSolarDateLunarString } from "../../utils/lunarUtils";
-import { QuickReminderDialog } from "../QuickReminderDialog";
-import { BlockBindingDialog } from "../BlockBindingDialog";
+import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
+import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
 import { getAllReminders, saveReminders, loadSubscriptions, syncSubscription, deleteSubscriptionReminderTask } from '../../utils/icsSubscription';
 import { VipManager } from "../vip/vip";
 
-import { PasteTaskDialog } from "../PasteTaskDialog";
-import { ProjectDialog } from "../ProjectDialog";
+import { PasteTaskDialog } from "../dialog/PasteTaskDialog";
+import { ProjectDialog } from "../dialog/ProjectDialog";
 import { showProjectStatsDialog } from "../dialog/ProjectStatsDialog";
 import { showManageGroupsDialog } from "../dialog/ManageGroupsDialog";
 import { showManageKanbanStatusesDialog } from "../dialog/ManageStatusesDialog";
@@ -43,7 +43,7 @@ import { showManageTagsDialog } from "../dialog/ManageTagsDialog";
 import { showManageMilestonesDialog } from "../dialog/ManageMilestonesDialog";
 import { getFrontend, getBackend } from "siyuan";
 import { createPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
-import { SortMenuDialog } from "../SortMenuDialog";
+import { SortMenuDialog } from "../dialog/SortMenuDialog";
 import { SortCriterion, getSortCriterionName } from "../../utils/sortConfig";
 import { shouldTreatStartDateOnlyAsOverdue } from "../../utils/startDateOverdue";
 import { shouldSkipReminderOnDate, type HolidayData } from "../../utils/reminderSkipDate";
@@ -9555,7 +9555,7 @@ export class ProjectKanbanView {
      * 显示任务的番茄钟会话记录
      */
     private async showPomodoroSessions(task: any) {
-        const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
+        const { PomodoroSessionsDialog } = await import("../dialog/PomodoroSessionsDialog");
 
         // 重复实例需要使用实例 ID，才能命中实例级番茄记录；
         // 普通任务和原始周期任务仍使用自身 ID。

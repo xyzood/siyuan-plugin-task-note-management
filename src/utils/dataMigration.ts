@@ -1,6 +1,6 @@
 import { setBlockAttrs } from "../api";
 import { normalizeReminderSkipWeekendMode } from "./reminderSkipDate";
-import { RepeatInstanceState } from "../components/RepeatSettingsDialog";
+import { RepeatInstanceState } from "../components/dialog/RepeatSettingsDialog";
 
 interface AudioFileItemLike {
     path: string;

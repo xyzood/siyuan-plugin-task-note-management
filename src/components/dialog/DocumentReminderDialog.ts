@@ -1,12 +1,12 @@
 import { Dialog, showMessage, confirm } from "siyuan";
-import { updateBindBlockAtrrs, getBlockByID, openBlock } from "../api";
-import { getLocalDateString, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../utils/dateUtils";
-import { CategoryManager } from "../utils/categoryManager";
-import { ProjectManager } from "../utils/projectManager";
+import { updateBindBlockAtrrs, getBlockByID, openBlock } from "../../api";
+import { getLocalDateString, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../../utils/dateUtils";
+import { CategoryManager } from "../../utils/categoryManager";
+import { ProjectManager } from "../../utils/projectManager";
 import { QuickReminderDialog } from "./QuickReminderDialog";
-import { TaskRenderer } from "./render/TaskRenderer";
-import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, setRepeatInstanceCompletion, deleteRepeatInstanceState, addDaysToDate, getDaysDifference, resolveRepeatReminderTimes } from "../utils/repeatUtils";
-import { i18n } from "../pluginInstance";
+import { TaskRenderer } from "../render/TaskRenderer";
+import { generateRepeatInstancesWithFutureGuarantee, getRepeatInstanceOriginalKey, setRepeatInstanceCompletion, deleteRepeatInstanceState, addDaysToDate, getDaysDifference, resolveRepeatReminderTimes } from "../../utils/repeatUtils";
+import { i18n } from "../../pluginInstance";
 
 export class DocumentReminderDialog {
     private dialog: Dialog;

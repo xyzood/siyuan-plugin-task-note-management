@@ -3,7 +3,7 @@ import { i18n } from "../../pluginInstance";
 import { getLogicalDateString, getLocalDateTimeString } from "../../utils/dateUtils";
 import { ProjectManager } from "../../utils/projectManager";
 import { saveReminders } from "../../utils/icsSubscription";
-import { BlockBindingDialog } from "../BlockBindingDialog";
+import { BlockBindingDialog } from "./BlockBindingDialog";
 import { TaskRenderer } from "../render/TaskRenderer";
 
 export async function showManageMilestonesDialog(view: any, groupId?: string) {

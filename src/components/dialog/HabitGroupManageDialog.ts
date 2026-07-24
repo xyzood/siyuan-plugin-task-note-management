@@ -1,8 +1,8 @@
 ﻿import { Dialog, showMessage } from "siyuan";
-import { HabitGroupManager, HabitGroup } from "../utils/habitGroupManager";
+import { HabitGroupManager, HabitGroup } from "../../utils/habitGroupManager";
 import { confirm } from "siyuan";
-import { getLocaleTag } from "../utils/dateUtils";
-import { i18n } from "../pluginInstance";
+import { getLocaleTag } from "../../utils/dateUtils";
+import { i18n } from "../../pluginInstance";
 export class HabitGroupManageDialog {
     private dialog: Dialog;
     private groupManager: HabitGroupManager;

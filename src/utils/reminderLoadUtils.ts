@@ -1,5 +1,5 @@
 import { getLogicalDateString } from "./dateUtils";
-import { RepeatInstanceState } from "../components/RepeatSettingsDialog";
+import { RepeatInstanceState } from "../components/dialog/RepeatSettingsDialog";
 
 export function isSubscriptionEditable(subscription: any): boolean {
     if (!subscription || subscription.type !== 'caldav') return false;

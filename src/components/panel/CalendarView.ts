@@ -9,15 +9,15 @@ import { getLuteInstance } from "../../utils/luteSingleton";
 import { showMessage, confirm, openTab, Menu, Dialog, Constants, platformUtils } from "siyuan";
 import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, pushMsg, sql } from "../../api";
 import { getLocalDateString, getLocalDateTime, getLocalDateTimeString, compareDateStrings, getLogicalDateString, getRelativeDateString, getDayStartAdjustedDate, getLocaleTag } from "../../utils/dateUtils";
-import { QuickReminderDialog } from "../QuickReminderDialog";
-import { ProjectSelectorPopup } from "../ProjectSelectorPopup";
+import { QuickReminderDialog } from "../dialog/QuickReminderDialog";
+import { ProjectSelectorPopup } from "../dialog/ProjectSelectorPopup";
 import { CategoryManager, Category } from "../../utils/categoryManager";
 import { confirmDialog } from "../../libs/dialog";
 import { showAddTaskReminderTimeDialog } from "../dialog/AddTaskReminderTimeDialog";
 import { ProjectManager } from "../../utils/projectManager";
 import { StatusManager } from "../../utils/statusManager";
-import { CategoryManageDialog } from "../CategoryManageDialog";
-import { ProjectColorDialog } from "../ProjectColorDialog";
+import { CategoryManageDialog } from "../dialog/CategoryManageDialog";
+import { ProjectColorDialog } from "../dialog/ProjectColorDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
 import { i18n } from "../../pluginInstance";
 import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate, getMonthlyWeekRules, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../../utils/repeatUtils";
@@ -26,14 +26,14 @@ import { CalendarConfigManager, CALENDAR_CONFIG_UPDATED_EVENT } from "../../util
 import { showStatsDialog } from "../stats/ShowStatsDialog";
 import { PomodoroManager } from "../../utils/pomodoroManager";
 import { getNextLunarMonthlyDate, getNextLunarYearlyDate, getSolarDateLunarString } from "../../utils/lunarUtils";
-import { BlockBindingDialog } from "../BlockBindingDialog";
+import { BlockBindingDialog } from "../dialog/BlockBindingDialog";
 import { PomodoroRecordManager, type PomodoroSession } from "../../utils/pomodoroRecord";
 import { Solar } from 'lunar-typescript';
 
 import { createPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
-import { HabitEditDialog } from "../HabitEditDialog";
+import { HabitEditDialog } from "../dialog/HabitEditDialog";
 import { HabitStatsDialog } from "../stats/HabitStatsDialog";
-import { HabitDayDialog } from "../HabitDayDialog";
+import { HabitDayDialog } from "../dialog/HabitDayDialog";
 import { getHabitProgressOnDate, getHabitReminderTimes, getHabitReminderTimesForDate, shouldCheckInOnDate as shouldCheckInOnDateUtil, isHabitActiveOnDate } from "../../utils/habitUtils";
 import { HabitGroupManager } from "../../utils/habitGroupManager";
 import { normalizeReminderSkipWeekendMode, shouldSkipReminderOnDate, type HolidayData, getReminderSkipWeekendsEffective, getReminderSkipHolidaysEffective } from "../../utils/reminderSkipDate";
@@ -1550,7 +1550,7 @@ export class CalendarView {
             const summaryBtn = document.createElement('button');
             summaryBtn.className = 'b3-button b3-button--outline';
             summaryBtn.style.padding = '6px';
-            summaryBtn.innerHTML = '<svg class="b3-button__icon" style="margin-right: 0;"><use xlink:href="#iconFile"></use></svg>';
+            summaryBtn.innerHTML = '<svg class="b3-button__icon" style="margin-right: 0;"><use xlink:href="#iconTNStatistic"></use></svg>';
             summaryBtn.classList.add('ariaLabel'); summaryBtn.setAttribute('aria-label', i18n("taskSummary") || "任务摘要");
             summaryBtn.addEventListener('click', () => {
                 showStatsDialog(this.plugin, 'summary', this.calendar);
@@ -11071,7 +11071,7 @@ export class CalendarView {
     }
 
     private async showPomodoroSessions(calendarEvent: any) {
-        const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
+        const { PomodoroSessionsDialog } = await import("../dialog/PomodoroSessionsDialog");
         const reminderId = this.resolvePomodoroTargetEventId(calendarEvent);
         if (!reminderId) {
             showMessage(i18n("reminderNotExist") || "任务不存在");

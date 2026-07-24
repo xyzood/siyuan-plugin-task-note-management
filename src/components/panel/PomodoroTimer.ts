@@ -7760,7 +7760,7 @@ export class PomodoroTimer {
             const isHabit = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
 
             if (isHabit) {
-                const { HabitEditDialog } = await import("../HabitEditDialog");
+                const { HabitEditDialog } = await import("../dialog/HabitEditDialog");
                 const editDialog = new HabitEditDialog(
                     this.reminder,
                     async (updatedHabit) => {
@@ -7809,7 +7809,7 @@ export class PomodoroTimer {
             }
 
             // 动态引入 QuickReminderDialog，以防循环依赖
-            const { QuickReminderDialog } = await import("../QuickReminderDialog");
+            const { QuickReminderDialog } = await import("../dialog/QuickReminderDialog");
             
             const editDialog = new QuickReminderDialog(
                 undefined,
