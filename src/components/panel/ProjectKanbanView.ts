@@ -3188,6 +3188,22 @@ export class ProjectKanbanView {
         }
     }
 
+    /**
+     * 让出主线程，使浏览器有机会处理用户输入、绘制等事件，
+     * 从而避免长时间同步任务阻塞界面。
+     */
+    private yieldToMainThread(): Promise<void> {
+        return new Promise(resolve => {
+            if (typeof requestIdleCallback === 'function') {
+                requestIdleCallback(() => resolve(), { timeout: 16 });
+            } else if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => resolve());
+            } else {
+                setTimeout(resolve, 0);
+            }
+        });
+    }
+
     private async loadTasks() {
         if (this.isLoading) {
             return;
@@ -3542,6 +3558,11 @@ export class ProjectKanbanView {
                 });
             }));
 
+            // 任务数量大时，让出主线程以避免阻塞用户输入和绘制
+            if (this.tasks.length > 100) {
+                await this.yieldToMainThread();
+            }
+
             // [NEW] 搜索过滤逻辑
             if (this.searchKeyword) {
                 const keywords = this.searchKeyword.toLowerCase().split(/\s+/).filter(k => !!k);
@@ -3845,6 +3866,11 @@ export class ProjectKanbanView {
                 this.tasks = this.tasks.filter(t => finalIds.has(t.id));
             }
 
+            // 过滤逻辑较重时让出主线程，提升交互响应
+            if (this.tasks.length > 100) {
+                await this.yieldToMainThread();
+            }
+
             this.sortTasks();
 
             // 默认折叠逻辑：
@@ -3927,6 +3953,9 @@ export class ProjectKanbanView {
             } catch (err) {
                 // ignore
             }
+
+            // 在重新渲染看板前让出主线程，避免长时间同步 DOM 操作阻塞交互
+            await this.yieldToMainThread();
 
             this.renderKanban();
         } catch (error) {
@@ -9706,7 +9735,11 @@ export class ProjectKanbanView {
                         // 标记完成后不再触发整页 queueLoadTasks 刷新，避免滚动条跳动
                         // 但如果是父任务完成（有子任务被级联完成），必须刷新以保持子任务DOM和层级结构一致
                         // 取消完成时仍保留兜底刷新，确保状态回退一致
-                        if (!completed || (completed && childIds.length > 0) || task.parentId) {
+                        // 子任务完成且显示已完成子任务时，乐观更新已足够，无需整页刷新
+                        const needsFullReload = !completed ||
+                            (completed && childIds.length > 0) ||
+                            (completed && task.parentId && !this.showCompletedSubtasks);
+                        if (needsFullReload) {
                             if (completed && task.parentId && !this.showCompletedSubtasks) {
                                 // 不显示已完成子任务时，等勾选动画播放完再触发整页刷新，避免子任务提前消失
                                 window.setTimeout(() => this.queueLoadTasks(), 300);
