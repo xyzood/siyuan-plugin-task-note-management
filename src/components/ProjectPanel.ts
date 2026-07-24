@@ -345,7 +345,7 @@ export class ProjectPanel {
 
         const iconSpan = document.createElement('span');
         iconSpan.className = 'project-icon';
-        iconSpan.textContent = '📁';
+        iconSpan.innerHTML = '<svg style="width:16px;height:16px;vertical-align:-3px;"><use xlink:href="#iconTNProject"></use></svg>';
 
         const titleSpan = document.createElement('span');
         titleSpan.textContent = i18n("projectManagement") || "项目管理";

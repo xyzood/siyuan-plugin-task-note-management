@@ -176,7 +176,7 @@ export class HabitPanel {
 
         const iconSpan = document.createElement('span');
         iconSpan.className = 'habit-icon';
-        iconSpan.textContent = '✅';
+        iconSpan.innerHTML = '<svg style="width:16px;height:16px;vertical-align:-3px;"><use xlink:href="#iconTNHabit"></use></svg>';
 
         const titleSpan = document.createElement('span');
         titleSpan.textContent = i18n("habitPanelTitle");

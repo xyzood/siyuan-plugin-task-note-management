@@ -414,7 +414,7 @@ export class ReminderPanel {
 
         const iconSpan = document.createElement('span');
         iconSpan.className = 'reminder-icon';
-        iconSpan.textContent = '⏰';
+        iconSpan.innerHTML = '<svg style="width:16px;height:16px;vertical-align:-3px;"><use xlink:href="#iconTNTodoList"></use></svg>';
 
         const titleSpan = document.createElement('span');
         titleSpan.textContent = i18n('taskManagement');
