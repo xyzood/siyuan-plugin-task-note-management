@@ -897,22 +897,17 @@ export class CalendarView {
         const projectDropdown = document.createElement('div');
         projectDropdown.className = 'filter-dropdown-menu';
         projectDropdown.style.display = 'none';
-        projectDropdown.style.position = 'absolute';
-        projectDropdown.style.top = '100%';
-        if (this.isDockMode) {
-            projectDropdown.style.right = '0';
-            projectDropdown.style.width = '220px';
-        } else {
-            projectDropdown.style.left = '0';
-            projectDropdown.style.width = '260px';
-        }
+        // 使用 fixed 定位避免被父容器 overflow:hidden 裁剪，同时便于移动端视口适配
+        projectDropdown.style.position = 'fixed';
+        projectDropdown.style.width = this.isDockMode ? '220px' : '260px';
+        projectDropdown.style.maxWidth = 'calc(100vw - 16px)';
+        projectDropdown.style.maxHeight = '70vh';
+        projectDropdown.style.overflowY = 'auto';
         projectDropdown.style.zIndex = '1000';
         projectDropdown.style.backgroundColor = 'var(--b3-theme-background)';
         projectDropdown.style.border = '1px solid var(--b3-border-color)';
         projectDropdown.style.borderRadius = '4px';
         projectDropdown.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-        projectDropdown.style.maxHeight = 'none';
-        projectDropdown.style.overflow = 'visible';
         projectDropdown.style.padding = '0';
         projectFilterContainer.appendChild(projectDropdown);
 
@@ -939,22 +934,17 @@ export class CalendarView {
         const categoryDropdown = document.createElement('div');
         categoryDropdown.className = 'filter-dropdown-menu';
         categoryDropdown.style.display = 'none';
-        categoryDropdown.style.position = 'absolute';
-        categoryDropdown.style.top = '100%';
-        if (this.isDockMode) {
-            categoryDropdown.style.right = '0';
-            categoryDropdown.style.minWidth = '180px';
-        } else {
-            categoryDropdown.style.left = '0';
-            categoryDropdown.style.minWidth = '200px';
-        }
+        // 使用 fixed 定位避免被父容器 overflow:hidden 裁剪，同时便于移动端视口适配
+        categoryDropdown.style.position = 'fixed';
+        categoryDropdown.style.minWidth = this.isDockMode ? '180px' : '200px';
+        categoryDropdown.style.maxWidth = 'calc(100vw - 16px)';
+        categoryDropdown.style.maxHeight = 'min(400px, 70vh)';
+        categoryDropdown.style.overflowY = 'auto';
         categoryDropdown.style.zIndex = '1000';
         categoryDropdown.style.backgroundColor = 'var(--b3-theme-background)';
         categoryDropdown.style.border = '1px solid var(--b3-border-color)';
         categoryDropdown.style.borderRadius = '4px';
         categoryDropdown.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-        categoryDropdown.style.maxHeight = '400px';
-        categoryDropdown.style.overflowY = 'auto';
         categoryDropdown.style.padding = '8px';
         categoryFilterContainer.appendChild(categoryDropdown);
 
@@ -1464,6 +1454,9 @@ export class CalendarView {
             categoryDropdown.style.display = 'none';
             viewTypeDropdown.style.display = 'none';
             displaySettingsDropdown.style.display = 'none';
+            if (!isVisible) {
+                this.positionDropdown(projectDropdown, projectFilterButton);
+            }
         });
 
         categoryFilterButton.onclick = null;
@@ -1474,6 +1467,9 @@ export class CalendarView {
             projectDropdown.style.display = 'none';
             viewTypeDropdown.style.display = 'none';
             displaySettingsDropdown.style.display = 'none';
+            if (!isVisible) {
+                this.positionDropdown(categoryDropdown, categoryFilterButton);
+            }
         });
 
         // 更新视图类型按钮的点击事件
@@ -2609,6 +2605,7 @@ export class CalendarView {
                     selectedIds: this.currentProjectFilter,
                     excludeArchived: true,
                     includeNoProject: true,
+                    maxListHeight: 'min(250px, 50vh)',
                     onChange: async (selectedIds) => {
                         this.currentProjectFilter = selectedIds;
                         this.updateProjectFilterButtonText(button);
@@ -2854,6 +2851,11 @@ export class CalendarView {
         }
 
         this.resizeTimeout = window.setTimeout(() => {
+            // 窗口/面板大小变化时关闭下拉菜单，避免 fixed 定位的菜单停留在错误位置
+            this.container?.querySelectorAll('.filter-dropdown-menu').forEach((el) => {
+                (el as HTMLElement).style.display = 'none';
+            });
+
             if (this.calendar && this.isCalendarVisible()) {
                 try {
                     // 仅更新尺寸即可；调用 render() 容易与 refreshEvents/datesSet 形成渲染循环
@@ -9746,6 +9748,47 @@ export class CalendarView {
 
         this.tooltip.style.left = `${left}px`;
         this.tooltip.style.top = `${top}px`;
+    }
+
+    /**
+     * 将下拉菜单定位在锚点元素附近，并自动适配视口边界（主要用于移动端/小屏场景）。
+     * 采用 position: fixed，避免被父容器 overflow:hidden 裁剪。
+     */
+    private positionDropdown(dropdown: HTMLElement, anchor: HTMLElement, preferWidth?: number) {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const margin = 8;
+        const anchorRect = anchor.getBoundingClientRect();
+
+        // 确保元素可见以获取真实尺寸
+        dropdown.style.display = 'block';
+
+        const dropdownRect = dropdown.getBoundingClientRect();
+        const naturalWidth = dropdownRect.width || preferWidth || 260;
+        const naturalHeight = dropdownRect.height || 300;
+
+        // 宽度适配：不超过视口可用宽度
+        const width = Math.min(naturalWidth, viewportWidth - 2 * margin);
+
+        // 水平方向：默认与锚点左对齐，超出右边界时改为右对齐
+        let left = anchorRect.left;
+        if (left + width > viewportWidth - margin) {
+            left = anchorRect.right - width;
+        }
+        left = Math.max(margin, left);
+
+        // 垂直方向：默认在锚点下方，超出下边界时向上展开
+        let top = anchorRect.bottom + 4;
+        if (top + naturalHeight > viewportHeight - margin) {
+            top = anchorRect.top - naturalHeight - 4;
+        }
+        top = Math.max(margin, top);
+
+        dropdown.style.left = `${left}px`;
+        dropdown.style.top = `${top}px`;
+        dropdown.style.width = `${width}px`;
+        // 使用 !important 覆盖 SCSS 中 .filter-dropdown-menu 的默认 max-height
+        dropdown.style.setProperty('max-height', `${Math.min(70 * viewportHeight / 100, viewportHeight - top - margin)}px`, 'important');
     }
 
     private parseReminderInstanceInfo(taskId?: string | null): { originalId: string; instanceDate: string | null } {

@@ -18,6 +18,7 @@ export interface ProjectSelectorPopupOptions {
     allowedProjectIds?: string[];
     includeNoProject?: boolean; // render "No Project" item
     excludeSubscription?: boolean;
+    maxListHeight?: string;
     
     // Callbacks
     onSelect?: (projectId: string, projectName: string) => void | Promise<void>;
@@ -48,6 +49,7 @@ export class ProjectSelectorPopup {
     private allowedProjectIds?: string[];
     private includeNoProject: boolean;
     private excludeSubscription: boolean;
+    private maxListHeight: string;
     
     private onSelect?: (projectId: string, projectName: string) => void | Promise<void>;
     private onChange?: (selectedIds: Set<string>) => void | Promise<void>;
@@ -76,6 +78,7 @@ export class ProjectSelectorPopup {
         this.allowedProjectIds = options.allowedProjectIds;
         this.includeNoProject = options.includeNoProject !== false;
         this.excludeSubscription = !!options.excludeSubscription;
+        this.maxListHeight = options.maxListHeight || '250px';
         
         this.onSelect = options.onSelect;
         this.onChange = options.onChange;
@@ -166,7 +169,7 @@ export class ProjectSelectorPopup {
         
         const listWrap = document.createElement('div');
         listWrap.className = 'project-selector-list';
-        listWrap.style.cssText = 'max-height: 250px; overflow-y: auto; padding: 4px 0;';
+        listWrap.style.cssText = `max-height: ${this.maxListHeight}; overflow-y: auto; padding: 4px 0;`;
         this.container.appendChild(listWrap);
         this.listContainer = listWrap;
     }
