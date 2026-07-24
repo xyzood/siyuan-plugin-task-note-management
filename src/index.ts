@@ -12,12 +12,12 @@ import { VipManager } from "./components/vip/vip";
 import "./index.scss";
 
 import { QuickReminderDialog } from "./components/QuickReminderDialog";
-import { ReminderPanel } from "./components/ReminderPanel";
+import { ReminderPanel } from "./components/panel/ReminderPanel";
 import { MobileTaskShortcut } from "./components/render/MobileTaskShortcut";
 import { registerCustomIcons } from "./components/render/registerIcons";
-import { HabitPanel } from "./components/HabitPanel";
+import { HabitPanel } from "./components/panel/HabitPanel";
 import { BatchReminderDialog, ListItemNode } from "./components/BatchReminderDialog";
-import { CalendarView } from "./components/CalendarView";
+import { CalendarView } from "./components/panel/CalendarView";
 import { EisenhowerMatrixView } from "./components/EisenhowerMatrixView";
 import { CategoryManager } from "./utils/categoryManager";
 import { ProjectManager } from "./utils/projectManager";
@@ -30,8 +30,8 @@ import { HabitGroupManager } from "./utils/habitGroupManager";
 import { NotificationDialog } from "./components/NotificationDialog";
 import { DocumentReminderDialog } from "./components/DocumentReminderDialog";
 import { ProjectDialog } from "./components/ProjectDialog";
-import { ProjectPanel } from "./components/ProjectPanel";
-import { ProjectKanbanView } from "./components/ProjectKanbanView";
+import { ProjectPanel } from "./components/panel/ProjectPanel";
+import { ProjectKanbanView } from "./components/panel/ProjectKanbanView";
 import { PomodoroManager } from "./utils/pomodoroManager";
 import SettingPanelComponent from "./SettingPanel.svelte";
 import { exportIcsFile } from "./utils/icsUtils";
@@ -1713,7 +1713,7 @@ export default class ReminderPlugin extends Plugin {
         if (!this.isInMobileApp && !isBrowser) {
             // 尝试恢复已存在的番茄钟独立窗口
             // 先询问其他窗口是否已有活跃番茄钟，避免多窗口同时恢复导致重复计时
-            import("./components/PomodoroTimer").then(async ({ PomodoroTimer }) => {
+            import("./components/panel/PomodoroTimer").then(async ({ PomodoroTimer }) => {
                 try {
                     const hasActiveInOtherWindow = await new Promise<boolean>(resolve => {
                         const timeout = setTimeout(() => resolve(false), 500);
@@ -2490,7 +2490,7 @@ export default class ReminderPlugin extends Plugin {
 
 
                 // 动态导入PomodoroTimer避免循环依赖
-                import("./components/PomodoroTimer").then(({ PomodoroTimer }) => {
+                import("./components/panel/PomodoroTimer").then(({ PomodoroTimer }) => {
                     const pomodoroTimer = new PomodoroTimer(reminder, settings, isCountUp, inheritState, this, tab.element);
 
                     // 使用统一的tabId格式保存番茄钟实例引用
@@ -3722,7 +3722,7 @@ export default class ReminderPlugin extends Plugin {
         const pomodoroManager = PomodoroManager.getInstance();
         pomodoroManager.closeCurrentTimer();
 
-        const { PomodoroTimer } = await import("./components/PomodoroTimer");
+        const { PomodoroTimer } = await import("./components/panel/PomodoroTimer");
         const pomodoroTimer = new PomodoroTimer(reminder, runtimeSettings, false, inheritState, this);
         pomodoroManager.setCurrentPomodoroTimer(pomodoroTimer);
         pomodoroTimer.show();

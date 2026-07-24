@@ -1,37 +1,37 @@
 import { showMessage, confirm, Dialog, Menu, Constants, getFrontend, getBackend, platformUtils } from "siyuan";
-import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, pushMsg, sql } from "../api";
-import { getLocalDateString, compareDateStrings, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../utils/dateUtils";
-import { loadSortConfig, saveSortConfig, getSortCriterionName, SortCriterion, loadFilterConfig, saveFilterConfig } from "../utils/sortConfig";
-import { getLuteInstance } from "../utils/luteSingleton";
-import { SortMenuDialog } from "./SortMenuDialog";
-import { QuickReminderDialog } from "./QuickReminderDialog";
-import { CategoryManager } from "../utils/categoryManager";
-import { CategoryManageDialog } from "./CategoryManageDialog";
-import { BlockBindingDialog } from "./BlockBindingDialog";
-import { showAddTaskReminderTimeDialog } from "./dialog/AddTaskReminderTimeDialog";
-import { i18n } from "../pluginInstance";
-import { TaskRenderer } from "./render/TaskRenderer";
-import { generateRepeatInstances, generateRepeatInstancesWithFutureGuarantee, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, removeRepeatInstance, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
+import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, pushMsg, sql } from "../../api";
+import { getLocalDateString, compareDateStrings, getLocalDateTimeString, getLogicalDateString, getRelativeDateString, getLocaleTag } from "../../utils/dateUtils";
+import { loadSortConfig, saveSortConfig, getSortCriterionName, SortCriterion, loadFilterConfig, saveFilterConfig } from "../../utils/sortConfig";
+import { getLuteInstance } from "../../utils/luteSingleton";
+import { SortMenuDialog } from "../SortMenuDialog";
+import { QuickReminderDialog } from "../QuickReminderDialog";
+import { CategoryManager } from "../../utils/categoryManager";
+import { CategoryManageDialog } from "../CategoryManageDialog";
+import { BlockBindingDialog } from "../BlockBindingDialog";
+import { showAddTaskReminderTimeDialog } from "../dialog/AddTaskReminderTimeDialog";
+import { i18n } from "../../pluginInstance";
+import { TaskRenderer } from "../render/TaskRenderer";
+import { generateRepeatInstances, generateRepeatInstancesWithFutureGuarantee, getRepeatDescription, getDaysDifference, addDaysToDate, generateSubtreeInstances, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, removeRepeatInstance, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../../utils/repeatUtils";
 import { PomodoroTimer } from "./PomodoroTimer";
-import { getLastStatsMode } from "./stats/statsMode";
-import { showStatsDialog } from "./stats/ShowStatsDialog";
-import { PomodoroManager } from "../utils/pomodoroManager";
-import { PomodoroRecordManager } from "../utils/pomodoroRecord"; // Add import
-import { getSolarDateLunarString, getNextLunarMonthlyDate, getNextLunarYearlyDate } from "../utils/lunarUtils";
-import { getAllReminders, saveReminders } from "../utils/icsSubscription";
-import { isEventPast } from "../utils/icsImport";
-import { PasteTaskDialog } from "./PasteTaskDialog";
-import LoadingDialog from './LoadingDialog.svelte';
+import { getLastStatsMode } from "../stats/statsMode";
+import { showStatsDialog } from "../stats/ShowStatsDialog";
+import { PomodoroManager } from "../../utils/pomodoroManager";
+import { PomodoroRecordManager } from "../../utils/pomodoroRecord"; // Add import
+import { getSolarDateLunarString, getNextLunarMonthlyDate, getNextLunarYearlyDate } from "../../utils/lunarUtils";
+import { getAllReminders, saveReminders } from "../../utils/icsSubscription";
+import { isEventPast } from "../../utils/icsImport";
+import { PasteTaskDialog } from "../PasteTaskDialog";
+import LoadingDialog from '../LoadingDialog.svelte';
 import { createPomodoroStartSubmenu as createSharedPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
 import { buildProjectCategoryOrderMap, buildProjectStatusOrderMap, compareProjectsByPanelSort, normalizeProjectPanelSortCriteria } from "./ProjectPanel";
-import type { KanbanStatus } from "../utils/projectManager";
-import { isOpenEndedStartDateTask, shouldTreatStartDateOnlyAsOverdue } from "../utils/startDateOverdue";
+import type { KanbanStatus } from "../../utils/projectManager";
+import { isOpenEndedStartDateTask, shouldTreatStartDateOnlyAsOverdue } from "../../utils/startDateOverdue";
 import {
     getReminderSkipHolidaysEffective,
     getReminderSkipWeekendsEffective,
     shouldSkipReminderOnDate,
     type HolidayData,
-} from "../utils/reminderSkipDate";
+} from "../../utils/reminderSkipDate";
 
 interface ReminderPanelFilterSortConfig {
     sortMode?: 'global' | 'custom';
@@ -3383,7 +3383,7 @@ export class ReminderPanel {
 
             // 获取所有项目的分组信息，构建已归档分组的ID集合
             const archivedGroupIds = new Set<string>();
-            const { ProjectManager } = await import('../utils/projectManager');
+            const { ProjectManager } = await import('../../utils/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
 
             for (const projectId of projectIds) {
@@ -3616,7 +3616,7 @@ export class ReminderPanel {
     }
 
     public async getTaskCountByTabs(tabNames: string[], excludeDesserts: boolean = false): Promise<number> {
-        const { ReminderTaskLogic } = await import("../utils/reminderTaskLogic");
+        const { ReminderTaskLogic } = await import("../../utils/reminderTaskLogic");
         return ReminderTaskLogic.getTaskCountByTabs(this.plugin, tabNames, excludeDesserts);
     }
 
@@ -4029,7 +4029,7 @@ export class ReminderPanel {
                 )
             );
 
-            const { ProjectManager } = await import('../utils/projectManager');
+            const { ProjectManager } = await import('../../utils/projectManager');
             const projectManager = ProjectManager.getInstance(this.plugin);
             this.defaultKanbanStatusCache = new Map(
                 projectManager.getDefaultKanbanStatuses()
@@ -7421,7 +7421,7 @@ export class ReminderPanel {
         const currentStatus = this.getReminderKanbanStatusId(reminder);
         const projectId = reminder.projectId;
 
-        const { ProjectManager } = await import('../utils/projectManager');
+        const { ProjectManager } = await import('../../utils/projectManager');
         const projectManager = ProjectManager.getInstance(this.plugin);
 
         let statuses: KanbanStatus[] = [];
@@ -9081,7 +9081,7 @@ export class ReminderPanel {
 
                 // 批量 CalDAV 删除
                 if (caldavDeletions.length > 0) {
-                    const { deleteSubscriptionReminderTask } = await import('../utils/icsSubscription');
+                    const { deleteSubscriptionReminderTask } = await import('../../utils/icsSubscription');
                     await Promise.all(caldavDeletions.map(({ rem }) =>
                         deleteSubscriptionReminderTask(this.plugin, rem).catch((e: any) => {
                             console.warn('删除 CalDAV 订阅任务失败:', rem?.id, e);
@@ -10354,7 +10354,7 @@ export class ReminderPanel {
                 const instanceState = instanceDate ? getRepeatInstanceState(reminderData[reminderId], instanceDate) : undefined;
                 const projectId = getInstanceField(instanceState, 'projectId', reminderData[reminderId].projectId);
                 if (projectId) {
-                    const { addBlockProjectId } = await import('../api');
+                    const { addBlockProjectId } = await import('../../api');
                     await addBlockProjectId(blockId, projectId);
                     console.debug('ReminderPanel: bindReminderToBlock - 已为块设置项目ID', blockId, projectId);
                 }
@@ -10419,7 +10419,7 @@ export class ReminderPanel {
                 return;
             }
 
-            const { HabitStatsDialog } = await import("./stats/HabitStatsDialog");
+            const { HabitStatsDialog } = await import("../stats/HabitStatsDialog");
             const dialog = new HabitStatsDialog(habit, async (updatedHabit: any) => {
                 const latestData = await this.plugin.loadHabitData();
                 latestData[updatedHabit.id] = updatedHabit;
@@ -11786,7 +11786,7 @@ export class ReminderPanel {
      */
     private async showPomodoroSessions(reminder: any) {
         // 动态导入 PomodoroSessionsDialog
-        const { PomodoroSessionsDialog } = await import("./PomodoroSessionsDialog");
+        const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
 
         // 重复实例需要使用实例 ID，才能命中实例级番茄记录；
         // 普通任务和原始周期任务仍使用自身 ID。

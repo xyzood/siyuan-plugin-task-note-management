@@ -4,7 +4,7 @@ import { ProjectManager } from "../utils/projectManager";
 import { CategoryManager } from "../utils/categoryManager";
 import { QuickReminderDialog } from "./QuickReminderDialog";
 import { BlockBindingDialog } from "./BlockBindingDialog";
-import { PomodoroTimer } from "./PomodoroTimer";
+import { PomodoroTimer } from "./panel/PomodoroTimer";
 import { PomodoroManager } from "../utils/pomodoroManager";
 import { colorWithOpacity } from "../utils/uiUtils";
 import { getLuteInstance } from "../utils/luteSingleton";

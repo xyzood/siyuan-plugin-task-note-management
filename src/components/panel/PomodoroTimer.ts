@@ -1,9 +1,9 @@
 import { showMessage, confirm, getFrontend, getBackend, Dialog } from "siyuan";
-import { PomodoroRecordManager, type PomodoroSession } from "../utils/pomodoroRecord";
-import { getBlockByID, getBlockAttrs, setBlockAttrs, openBlock, sendNotification, cancelNotification } from "../api";
-import { i18n } from "../pluginInstance";
-import { resolveAudioPath } from "../utils/audioUtils";
-import { showStatsDialog } from "./stats/ShowStatsDialog";
+import { PomodoroRecordManager, type PomodoroSession } from "../../utils/pomodoroRecord";
+import { getBlockByID, getBlockAttrs, setBlockAttrs, openBlock, sendNotification, cancelNotification } from "../../api";
+import { i18n } from "../../pluginInstance";
+import { resolveAudioPath } from "../../utils/audioUtils";
+import { showStatsDialog } from "../stats/ShowStatsDialog";
 
 
 const BLOCK_POMODORO_COUNT_ATTR = "custom-task-pomodoro-count";
@@ -7760,7 +7760,7 @@ export class PomodoroTimer {
             const isHabit = this.reminder.type === 'habit' || !!this.reminder.isHabit || !!this.reminder.checkInEmojis;
 
             if (isHabit) {
-                const { HabitEditDialog } = await import("./HabitEditDialog");
+                const { HabitEditDialog } = await import("../HabitEditDialog");
                 const editDialog = new HabitEditDialog(
                     this.reminder,
                     async (updatedHabit) => {
@@ -7809,7 +7809,7 @@ export class PomodoroTimer {
             }
 
             // 动态引入 QuickReminderDialog，以防循环依赖
-            const { QuickReminderDialog } = await import("./QuickReminderDialog");
+            const { QuickReminderDialog } = await import("../QuickReminderDialog");
             
             const editDialog = new QuickReminderDialog(
                 undefined,

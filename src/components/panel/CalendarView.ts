@@ -4,41 +4,41 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import multiMonthPlugin from '@fullcalendar/multimonth';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import { colorWithOpacity } from "../utils/uiUtils";
-import { getLuteInstance } from "../utils/luteSingleton";
+import { colorWithOpacity } from "../../utils/uiUtils";
+import { getLuteInstance } from "../../utils/luteSingleton";
 import { showMessage, confirm, openTab, Menu, Dialog, Constants, platformUtils } from "siyuan";
-import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, pushMsg, sql } from "../api";
-import { getLocalDateString, getLocalDateTime, getLocalDateTimeString, compareDateStrings, getLogicalDateString, getRelativeDateString, getDayStartAdjustedDate, getLocaleTag } from "../utils/dateUtils";
-import { QuickReminderDialog } from "./QuickReminderDialog";
-import { ProjectSelectorPopup } from "./ProjectSelectorPopup";
-import { CategoryManager, Category } from "../utils/categoryManager";
-import { confirmDialog } from "../libs/dialog";
-import { showAddTaskReminderTimeDialog } from "./dialog/AddTaskReminderTimeDialog";
-import { ProjectManager } from "../utils/projectManager";
-import { StatusManager } from "../utils/statusManager";
-import { CategoryManageDialog } from "./CategoryManageDialog";
-import { ProjectColorDialog } from "./ProjectColorDialog";
+import { refreshSql, getBlockByID, updateBindBlockAtrrs, openBlock, pushMsg, sql } from "../../api";
+import { getLocalDateString, getLocalDateTime, getLocalDateTimeString, compareDateStrings, getLogicalDateString, getRelativeDateString, getDayStartAdjustedDate, getLocaleTag } from "../../utils/dateUtils";
+import { QuickReminderDialog } from "../QuickReminderDialog";
+import { ProjectSelectorPopup } from "../ProjectSelectorPopup";
+import { CategoryManager, Category } from "../../utils/categoryManager";
+import { confirmDialog } from "../../libs/dialog";
+import { showAddTaskReminderTimeDialog } from "../dialog/AddTaskReminderTimeDialog";
+import { ProjectManager } from "../../utils/projectManager";
+import { StatusManager } from "../../utils/statusManager";
+import { CategoryManageDialog } from "../CategoryManageDialog";
+import { ProjectColorDialog } from "../ProjectColorDialog";
 import { PomodoroTimer } from "./PomodoroTimer";
-import { i18n } from "../pluginInstance";
-import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate, getMonthlyWeekRules, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../utils/repeatUtils";
-import { getAllReminders, saveReminders, loadHolidays, loadSubscriptions } from "../utils/icsSubscription";
-import { CalendarConfigManager, CALENDAR_CONFIG_UPDATED_EVENT } from "../utils/calendarConfigManager";
-import { showStatsDialog } from "./stats/ShowStatsDialog";
-import { PomodoroManager } from "../utils/pomodoroManager";
-import { getNextLunarMonthlyDate, getNextLunarYearlyDate, getSolarDateLunarString } from "../utils/lunarUtils";
-import { BlockBindingDialog } from "./BlockBindingDialog";
-import { PomodoroRecordManager, type PomodoroSession } from "../utils/pomodoroRecord";
+import { i18n } from "../../pluginInstance";
+import { generateRepeatInstances, RepeatInstance, getDaysDifference, addDaysToDate, resolveRepeatReminderTimes, getMonthlyWeekdayDate, getMonthlyWeekRules, parseReminderInstanceId, getRepeatInstanceOriginalKey, isRepeatInstanceCompleted, getRepeatInstanceCompletedTime, setRepeatInstanceCompletion, setRepeatInstanceOverride, patchRepeatInstanceState, deleteRepeatInstanceState, getRepeatInstanceState, getInstanceField } from "../../utils/repeatUtils";
+import { getAllReminders, saveReminders, loadHolidays, loadSubscriptions } from "../../utils/icsSubscription";
+import { CalendarConfigManager, CALENDAR_CONFIG_UPDATED_EVENT } from "../../utils/calendarConfigManager";
+import { showStatsDialog } from "../stats/ShowStatsDialog";
+import { PomodoroManager } from "../../utils/pomodoroManager";
+import { getNextLunarMonthlyDate, getNextLunarYearlyDate, getSolarDateLunarString } from "../../utils/lunarUtils";
+import { BlockBindingDialog } from "../BlockBindingDialog";
+import { PomodoroRecordManager, type PomodoroSession } from "../../utils/pomodoroRecord";
 import { Solar } from 'lunar-typescript';
 
 import { createPomodoroStartSubmenu } from "@/utils/pomodoroPresets";
-import { HabitEditDialog } from "./HabitEditDialog";
-import { HabitStatsDialog } from "./stats/HabitStatsDialog";
-import { HabitDayDialog } from "./HabitDayDialog";
-import { getHabitProgressOnDate, getHabitReminderTimes, getHabitReminderTimesForDate, shouldCheckInOnDate as shouldCheckInOnDateUtil, isHabitActiveOnDate } from "../utils/habitUtils";
-import { HabitGroupManager } from "../utils/habitGroupManager";
-import { normalizeReminderSkipWeekendMode, shouldSkipReminderOnDate, type HolidayData, getReminderSkipWeekendsEffective, getReminderSkipHolidaysEffective } from "../utils/reminderSkipDate";
-import { syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../utils/habitMemoBlockSync";
-import { isOpenEndedStartDateTask } from "../utils/startDateOverdue";
+import { HabitEditDialog } from "../HabitEditDialog";
+import { HabitStatsDialog } from "../stats/HabitStatsDialog";
+import { HabitDayDialog } from "../HabitDayDialog";
+import { getHabitProgressOnDate, getHabitReminderTimes, getHabitReminderTimesForDate, shouldCheckInOnDate as shouldCheckInOnDateUtil, isHabitActiveOnDate } from "../../utils/habitUtils";
+import { HabitGroupManager } from "../../utils/habitGroupManager";
+import { normalizeReminderSkipWeekendMode, shouldSkipReminderOnDate, type HolidayData, getReminderSkipWeekendsEffective, getReminderSkipHolidaysEffective } from "../../utils/reminderSkipDate";
+import { syncHabitMemoBlock, type HabitMemoCheckInEntry, type HabitMemoEmojiConfig } from "../../utils/habitMemoBlockSync";
+import { isOpenEndedStartDateTask } from "../../utils/startDateOverdue";
 export class CalendarView {
     private container: HTMLElement;
     private calendar: Calendar;
@@ -5245,7 +5245,7 @@ export class CalendarView {
                     // 取消移动端通知
                     await this.plugin.cancelMobileNotification(reminderId);
                     if (reminder.isSubscribed && reminder.subscriptionType === 'caldav') {
-                        const { deleteSubscriptionReminderTask } = await import('../utils/icsSubscription');
+                        const { deleteSubscriptionReminderTask } = await import('../../utils/icsSubscription');
                         await deleteSubscriptionReminderTask(this.plugin, reminder);
                     }
                     delete reminderData[reminderId];
@@ -5652,7 +5652,7 @@ export class CalendarView {
             imgTags.forEach(img => {
                 const src = img.getAttribute('src');
                 if (src && src.startsWith('/data/storage/petal/siyuan-plugin-task-note-management/assets/')) {
-                    import('../api').then(({ getFileBlob }) => {
+                    import('../../api').then(({ getFileBlob }) => {
                         getFileBlob(src).then(blob => {
                             if (blob) {
                                 img.src = URL.createObjectURL(blob);
@@ -9665,7 +9665,7 @@ export class CalendarView {
                 imgTags.forEach(img => {
                     const src = img.getAttribute('src');
                     if (src && src.startsWith('/data/storage/petal/siyuan-plugin-task-note-management/assets/')) {
-                        import('../api').then(({ getFileBlob }) => {
+                        import('../../api').then(({ getFileBlob }) => {
                             getFileBlob(src).then(blob => {
                                 if (blob) {
                                     img.src = URL.createObjectURL(blob);
@@ -11025,7 +11025,7 @@ export class CalendarView {
                 // 将绑定的块添加项目ID属性 custom-task-projectId
                 const projectId = reminderData[reminderId].projectId;
                 if (projectId) {
-                    const { addBlockProjectId } = await import('../api');
+                    const { addBlockProjectId } = await import('../../api');
                     await addBlockProjectId(blockId, projectId);
                     console.debug('CalendarView: bindReminderToBlock - 已为块设置项目ID', blockId, projectId);
                 }
@@ -11071,7 +11071,7 @@ export class CalendarView {
     }
 
     private async showPomodoroSessions(calendarEvent: any) {
-        const { PomodoroSessionsDialog } = await import("./PomodoroSessionsDialog");
+        const { PomodoroSessionsDialog } = await import("../PomodoroSessionsDialog");
         const reminderId = this.resolvePomodoroTargetEventId(calendarEvent);
         if (!reminderId) {
             showMessage(i18n("reminderNotExist") || "任务不存在");

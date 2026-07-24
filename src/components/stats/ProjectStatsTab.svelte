@@ -6,7 +6,7 @@
     import { CategoryManager } from "../../utils/categoryManager";
     import { ProjectFolderManager } from "../../utils/projectFolderManager";
     import { PomodoroRecordManager } from "../../utils/pomodoroRecord";
-    import { ProjectKanbanView } from "../ProjectKanbanView";
+    import { ProjectKanbanView } from "../panel/ProjectKanbanView";
     import { ProjectDialog } from "../ProjectDialog";
     import { getAllReminders } from "../../utils/icsSubscription";
     import ProjectStatCard from "./ProjectStatCard.svelte";

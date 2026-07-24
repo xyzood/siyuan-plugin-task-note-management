@@ -1,4 +1,4 @@
-import { PomodoroTimer } from "../components/PomodoroTimer";
+import { PomodoroTimer } from "../components/panel/PomodoroTimer";
 
 /**
  * 全局番茄钟管理器

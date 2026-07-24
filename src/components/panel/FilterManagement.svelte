@@ -1,11 +1,11 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { i18n } from '../pluginInstance';
-    import { CategoryManager } from '../utils/categoryManager';
-    import { ProjectManager } from '../utils/projectManager';
+    import { i18n } from '../../pluginInstance';
+    import { CategoryManager } from '../../utils/categoryManager';
+    import { ProjectManager } from '../../utils/projectManager';
     import { showMessage, confirm } from 'siyuan';
-    import { AVAILABLE_SORT_METHODS } from '../utils/sortConfig';
-    import type { SortCriterion } from '../utils/sortConfig';
+    import { AVAILABLE_SORT_METHODS } from '../../utils/sortConfig';
+    import type { SortCriterion } from '../../utils/sortConfig';
 
     export let plugin: any;
     export let onFilterApplied: (filter: FilterConfig) => void;

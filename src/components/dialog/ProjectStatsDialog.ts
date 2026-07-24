@@ -1,6 +1,6 @@
 import { Dialog } from "siyuan";
 import { i18n } from "../../pluginInstance";
-import { ProjectKanbanView } from "../ProjectKanbanView";
+import { ProjectKanbanView } from "../panel/ProjectKanbanView";
 import { getAllReminders } from "../../utils/icsSubscription";
 
 export function parseTitle(title: string): { emoji: string; text: string } {

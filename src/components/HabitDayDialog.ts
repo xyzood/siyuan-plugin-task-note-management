@@ -1,5 +1,5 @@
 import { Dialog, showMessage, confirm } from "siyuan";
-import type { Habit, HabitCheckInEmoji } from "./HabitPanel";
+import type { Habit, HabitCheckInEmoji } from "./panel/HabitPanel";
 import { getLocalDateTimeString, getLogicalDateString } from "../utils/dateUtils";
 import { PomodoroRecordManager, type PomodoroSession } from "../utils/pomodoroRecord";
 import { i18n, getPluginInstance } from "../pluginInstance";

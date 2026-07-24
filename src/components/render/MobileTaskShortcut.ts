@@ -1,6 +1,6 @@
 import { Dialog, getFrontend } from "siyuan";
 import { i18n } from "../../pluginInstance";
-import { ReminderPanel } from "../ReminderPanel";
+import { ReminderPanel } from "../panel/ReminderPanel";
 import type ReminderPlugin from "../../index";
 
 const POSITION_STORAGE_KEY = "siyuan-task-shortcut-pos";

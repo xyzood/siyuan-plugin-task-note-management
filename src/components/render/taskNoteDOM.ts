@@ -1869,7 +1869,7 @@ export class TaskNoteDOMManager {
             return;
         }
 
-        const { ProjectKanbanView } = await import("../ProjectKanbanView");
+        const { ProjectKanbanView } = await import("../panel/ProjectKanbanView");
         const tempContainer = document.createElement("div");
         const tempView = new ProjectKanbanView(tempContainer, this.plugin, projectId);
         await tempView.showMilestoneTasksDialog(milestone, groupId);

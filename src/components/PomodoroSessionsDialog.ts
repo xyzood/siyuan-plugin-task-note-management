@@ -8,7 +8,7 @@
  */
 
 import { Dialog, Menu, confirm, showMessage } from "siyuan";
-import { PomodoroTimer } from "./PomodoroTimer";
+import { PomodoroTimer } from "./panel/PomodoroTimer";
 import { PomodoroManager } from "../utils/pomodoroManager";
 import { createPomodoroStartSubmenu } from "../utils/pomodoroPresets";
 import { PomodoroRecordManager, PomodoroSession } from "../utils/pomodoroRecord";

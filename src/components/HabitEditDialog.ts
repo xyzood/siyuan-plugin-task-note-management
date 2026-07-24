@@ -1,6 +1,6 @@
 import { Dialog, showMessage, platformUtils, openEmoji } from "siyuan";
 import { getBlockByID, getBlockDOM } from "../api";
-import { Habit } from "./HabitPanel";
+import { Habit } from "./panel/HabitPanel";
 import { getLocalDateTimeString, getLogicalDateString } from "../utils/dateUtils";
 import { HabitGroupManager } from "../utils/habitGroupManager";
 import { i18n } from "../pluginInstance";

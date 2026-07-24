@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount, tick } from "svelte";
-import type { Habit } from "../HabitPanel";
+import type { Habit } from "../panel/HabitPanel";
 import { HabitDayDialog } from "../HabitDayDialog";
 import { HabitStatsDialog } from "./HabitStatsDialog";
 import { HabitEditDialog } from "../HabitEditDialog";
