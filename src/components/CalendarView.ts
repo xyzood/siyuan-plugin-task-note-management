@@ -1018,6 +1018,54 @@ export class CalendarView {
             return item;
         };
 
+        // 任务显示开关
+        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showTasks") || "显示任务", this.showTasks, async (checked) => {
+            this.showTasks = checked;
+            await this.calendarConfigManager.setShowTasks(checked);
+            await this.refreshEvents();
+        }));
+
+        // 任务状态设置
+        const statusLabel = document.createElement('div');
+        statusLabel.style.padding = '4px 12px';
+        statusLabel.style.fontSize = '0.9em';
+        statusLabel.style.color = 'var(--b3-theme-on-surface-light)';
+        statusLabel.innerText = i18n("taskStatusFilter");
+        displaySettingsDropdown.appendChild(statusLabel);
+
+        const statusGroup = document.createElement('div');
+        statusGroup.className = 'fn__flex fn__flex-center';
+        statusGroup.style.padding = '4px 8px';
+        statusGroup.style.gap = '4px';
+
+        const createStatusBtn = (label: string, value: 'all' | 'completed' | 'incomplete') => {
+            const btn = document.createElement('button');
+            btn.className = `b3-button b3-button--small ${this.currentCompletionFilter === value ? '' : 'b3-button--outline'}`;
+            btn.style.flex = '1';
+            btn.innerText = label;
+            btn.addEventListener('click', async () => {
+                this.currentCompletionFilter = value;
+                await this.calendarConfigManager.setCompletionFilter(value);
+                // 更新下拉菜单中的按钮状态
+                Array.from(statusGroup.querySelectorAll('button')).forEach(b => b.classList.add('b3-button--outline'));
+                btn.classList.remove('b3-button--outline');
+                await this.refreshEvents();
+            });
+            return btn;
+        };
+
+        statusGroup.appendChild(createStatusBtn(i18n("all") || "全部", 'all'));
+        statusGroup.appendChild(createStatusBtn(i18n("completed") || "已完成", 'completed'));
+        statusGroup.appendChild(createStatusBtn(i18n("uncompleted") || "未完成", 'incomplete'));
+        displaySettingsDropdown.appendChild(statusGroup);
+
+        // 任务提醒时间显示开关
+        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showReminderTime") || "显示任务提醒时间", this.showReminderTime, async (checked) => {
+            this.showReminderTime = checked;
+            await this.calendarConfigManager.setShowReminderTime(checked);
+            await this.refreshEvents();
+        }));
+
         // 跨天任务设置
         displaySettingsDropdown.appendChild(createSwitchItem(i18n("showCrossDayTasks") || "显示跨天任务", this.showCrossDayTasks, async (checked) => {
             this.showCrossDayTasks = checked;
@@ -1101,53 +1149,6 @@ export class CalendarView {
             await this.refreshEvents();
         });
         displaySettingsDropdown.appendChild(eventMaxStackItem);
-
-        // 番茄专注设置
-        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showPomodoroRecords") || "显示番茄专注", this.showPomodoro, async (checked) => {
-            this.showPomodoro = checked;
-            await this.calendarConfigManager.setShowPomodoro(checked);
-            this.updatePomodoroButtonState();
-            // 显示/隐藏子选项
-            pomodoroBreakTimeItem.style.display = checked ? 'flex' : 'none';
-            pomodoroUseTaskColorItem.style.display = checked ? 'flex' : 'none';
-            await this.refreshEvents();
-        }));
-
-        // 番茄钟休息时间显示设置（子选项）
-        const pomodoroBreakTimeItem = document.createElement('div');
-        pomodoroBreakTimeItem.className = 'fn__flex fn__flex-center';
-        pomodoroBreakTimeItem.style.padding = '4px 12px 4px 32px';
-        pomodoroBreakTimeItem.style.gap = '8px';
-        pomodoroBreakTimeItem.style.display = this.showPomodoro ? 'flex' : 'none';
-        pomodoroBreakTimeItem.innerHTML = `
-            <input class="b3-switch" type="checkbox" ${this.showPomodoroBreakTime ? 'checked' : ''}>
-            <span style="font-size: 0.9em; color: var(--b3-theme-on-surface-light);">${i18n("showPomodoroBreakTime") || "显示休息时间"}</span>
-        `;
-        const pomodoroBreakTimeCheckbox = pomodoroBreakTimeItem.querySelector('input') as HTMLInputElement;
-        pomodoroBreakTimeCheckbox.addEventListener('change', async () => {
-            this.showPomodoroBreakTime = pomodoroBreakTimeCheckbox.checked;
-            await this.calendarConfigManager.setShowPomodoroBreakTime(pomodoroBreakTimeCheckbox.checked);
-            await this.refreshEvents();
-        });
-        displaySettingsDropdown.appendChild(pomodoroBreakTimeItem);
-
-        // 番茄钟使用任务上色方式设置（子选项）
-        const pomodoroUseTaskColorItem = document.createElement('div');
-        pomodoroUseTaskColorItem.className = 'fn__flex fn__flex-center';
-        pomodoroUseTaskColorItem.style.padding = '4px 12px 4px 32px';
-        pomodoroUseTaskColorItem.style.gap = '8px';
-        pomodoroUseTaskColorItem.style.display = this.showPomodoro ? 'flex' : 'none';
-        pomodoroUseTaskColorItem.innerHTML = `
-            <input class="b3-switch" type="checkbox" ${this.pomodoroUseTaskColor ? 'checked' : ''}>
-            <span style="font-size: 0.9em; color: var(--b3-theme-on-surface-light);">${i18n("pomodoroUseTaskColor") || "使用任务上色方式"}</span>
-        `;
-        const pomodoroUseTaskColorCheckbox = pomodoroUseTaskColorItem.querySelector('input') as HTMLInputElement;
-        pomodoroUseTaskColorCheckbox.addEventListener('change', async () => {
-            this.pomodoroUseTaskColor = pomodoroUseTaskColorCheckbox.checked;
-            await this.calendarConfigManager.setPomodoroUseTaskColor(pomodoroUseTaskColorCheckbox.checked);
-            await this.refreshEvents();
-        });
-        displaySettingsDropdown.appendChild(pomodoroUseTaskColorItem);
 
         // 完成任务时间设置 - 总开关
         displaySettingsDropdown.appendChild(createSwitchItem(i18n("showCompletedTaskTime") || "显示任务完成时间", this.showCompletedTaskTime, async (checked) => {
@@ -1233,25 +1234,58 @@ export class CalendarView {
         displaySettingsDropdown.appendChild(completedTaskTimeSubItems);
 
         // 隐藏任务设置（强制显示标记为不在日历显示的任务）
-        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showHiddenTasks") || "显示不在日历视图显示的任务", this.showHiddenTasks, async (checked) => {
+        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showHiddenTasks") || "显示日历隐藏任务", this.showHiddenTasks, async (checked) => {
             this.showHiddenTasks = checked;
             await this.calendarConfigManager.setShowHiddenTasks(checked);
             await this.refreshEvents();
         }));
 
-        // 任务提醒时间显示开关
-        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showReminderTime") || "显示任务提醒时间", this.showReminderTime, async (checked) => {
-            this.showReminderTime = checked;
-            await this.calendarConfigManager.setShowReminderTime(checked);
+        // 番茄专注设置
+        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showPomodoroRecords") || "显示番茄专注", this.showPomodoro, async (checked) => {
+            this.showPomodoro = checked;
+            await this.calendarConfigManager.setShowPomodoro(checked);
+            this.updatePomodoroButtonState();
+            // 显示/隐藏子选项
+            pomodoroBreakTimeItem.style.display = checked ? 'flex' : 'none';
+            pomodoroUseTaskColorItem.style.display = checked ? 'flex' : 'none';
             await this.refreshEvents();
         }));
 
-        // 任务显示开关
-        displaySettingsDropdown.appendChild(createSwitchItem(i18n("showTasks") || "显示任务", this.showTasks, async (checked) => {
-            this.showTasks = checked;
-            await this.calendarConfigManager.setShowTasks(checked);
+        // 番茄钟休息时间显示设置（子选项）
+        const pomodoroBreakTimeItem = document.createElement('div');
+        pomodoroBreakTimeItem.className = 'fn__flex fn__flex-center';
+        pomodoroBreakTimeItem.style.padding = '4px 12px 4px 32px';
+        pomodoroBreakTimeItem.style.gap = '8px';
+        pomodoroBreakTimeItem.style.display = this.showPomodoro ? 'flex' : 'none';
+        pomodoroBreakTimeItem.innerHTML = `
+            <input class="b3-switch" type="checkbox" ${this.showPomodoroBreakTime ? 'checked' : ''}>
+            <span style="font-size: 0.9em; color: var(--b3-theme-on-surface-light);">${i18n("showPomodoroBreakTime") || "显示休息时间"}</span>
+        `;
+        const pomodoroBreakTimeCheckbox = pomodoroBreakTimeItem.querySelector('input') as HTMLInputElement;
+        pomodoroBreakTimeCheckbox.addEventListener('change', async () => {
+            this.showPomodoroBreakTime = pomodoroBreakTimeCheckbox.checked;
+            await this.calendarConfigManager.setShowPomodoroBreakTime(pomodoroBreakTimeCheckbox.checked);
             await this.refreshEvents();
-        }));
+        });
+        displaySettingsDropdown.appendChild(pomodoroBreakTimeItem);
+
+        // 番茄钟使用任务上色方式设置（子选项）
+        const pomodoroUseTaskColorItem = document.createElement('div');
+        pomodoroUseTaskColorItem.className = 'fn__flex fn__flex-center';
+        pomodoroUseTaskColorItem.style.padding = '4px 12px 4px 32px';
+        pomodoroUseTaskColorItem.style.gap = '8px';
+        pomodoroUseTaskColorItem.style.display = this.showPomodoro ? 'flex' : 'none';
+        pomodoroUseTaskColorItem.innerHTML = `
+            <input class="b3-switch" type="checkbox" ${this.pomodoroUseTaskColor ? 'checked' : ''}>
+            <span style="font-size: 0.9em; color: var(--b3-theme-on-surface-light);">${i18n("pomodoroUseTaskColor") || "使用任务上色方式"}</span>
+        `;
+        const pomodoroUseTaskColorCheckbox = pomodoroUseTaskColorItem.querySelector('input') as HTMLInputElement;
+        pomodoroUseTaskColorCheckbox.addEventListener('change', async () => {
+            this.pomodoroUseTaskColor = pomodoroUseTaskColorCheckbox.checked;
+            await this.calendarConfigManager.setPomodoroUseTaskColor(pomodoroUseTaskColorCheckbox.checked);
+            await this.refreshEvents();
+        });
+        displaySettingsDropdown.appendChild(pomodoroUseTaskColorItem);
 
         // 习惯显示开关
         displaySettingsDropdown.appendChild(createSwitchItem(i18n("showHabits") || "显示习惯", this.showHabits, async (checked) => {
@@ -1405,46 +1439,6 @@ export class CalendarView {
         this.darkOpacitySlider = darkSlider;
         this.darkOpacityValueEl = darkValueEl;
         displaySettingsDropdown.appendChild(darkOpacityItem);
-
-        // 任务状态设置
-        const statusDivider = document.createElement('div');
-        statusDivider.style.height = '1px';
-        statusDivider.style.backgroundColor = 'var(--b3-border-color)';
-        statusDivider.style.margin = '8px 0';
-        displaySettingsDropdown.appendChild(statusDivider);
-
-        const statusLabel = document.createElement('div');
-        statusLabel.style.padding = '4px 12px';
-        statusLabel.style.fontSize = '0.9em';
-        statusLabel.style.color = 'var(--b3-theme-on-surface-light)';
-        statusLabel.innerText = i18n("taskStatusFilter");
-        displaySettingsDropdown.appendChild(statusLabel);
-
-        const statusGroup = document.createElement('div');
-        statusGroup.className = 'fn__flex fn__flex-center';
-        statusGroup.style.padding = '4px 8px';
-        statusGroup.style.gap = '4px';
-
-        const createStatusBtn = (label: string, value: 'all' | 'completed' | 'incomplete') => {
-            const btn = document.createElement('button');
-            btn.className = `b3-button b3-button--small ${this.currentCompletionFilter === value ? '' : 'b3-button--outline'}`;
-            btn.style.flex = '1';
-            btn.innerText = label;
-            btn.addEventListener('click', async () => {
-                this.currentCompletionFilter = value;
-                await this.calendarConfigManager.setCompletionFilter(value);
-                // 更新下拉菜单中的按钮状态
-                Array.from(statusGroup.querySelectorAll('button')).forEach(b => b.classList.add('b3-button--outline'));
-                btn.classList.remove('b3-button--outline');
-                await this.refreshEvents();
-            });
-            return btn;
-        };
-
-        statusGroup.appendChild(createStatusBtn(i18n("all") || "全部", 'all'));
-        statusGroup.appendChild(createStatusBtn(i18n("completed") || "已完成", 'completed'));
-        statusGroup.appendChild(createStatusBtn(i18n("uncompleted") || "未完成", 'incomplete'));
-        displaySettingsDropdown.appendChild(statusGroup);
 
         displaySettingsContainer.appendChild(displaySettingsDropdown);
         if (!this.isDockMode) {
